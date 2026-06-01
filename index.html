@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1B3A6B" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GABS 2026" />
+  <title>GABS 2026</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+    body { font-family: 'DM Sans', sans-serif; background: #1B3A6B; -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 0; height: 0; }
+    select, input, textarea, button { font-family: 'DM Sans', sans-serif; -webkit-appearance: none; }
+    @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%,100% { box-shadow: 0 4px 20px #5B9BB530; } 50% { box-shadow: 0 4px 30px #5B9BB560; } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const NAVY = "#1B3A6B";
+const STEEL = "#5B9BB5";
+const LIGHT = "#E8F2F8";
+
+const SAMPLE = [
+  { id:1, name:"Kwame Asante", company:"GoldCoast Ventures", sector:"Finance", country:"Ghana", title:"CEO", avatar:"KA" },
+  { id:2, name:"Hans Mueller", company:"Berlin Tech GmbH", sector:"Technology", country:"Germany", title:"Managing Director", avatar:"HM" },
+  { id:3, name:"Amara Diallo", company:"SahelTrade Co.", sector:"Agriculture", country:"Senegal", title:"Export Manager", avatar:"AD" },
+  { id:4, name:"Petra Hoffmann", company:"Hoffmann Logistics", sector:"Logistics", country:"Germany", title:"Business Development", avatar:"PH" },
+  { id:5, name:"Kofi Mensah", company:"Accra Digital Hub", sector:"Technology", country:"Ghana", title:"Founder", avatar:"KM" },
+  { id:6, name:"Sarah Weber", company:"Weber Energy AG", sector:"Energy", country:"Germany", title:"Head of Africa", avatar:"SW" },
+  { id:7, name:"Fatima Al-Hassan", company:"Lagos Connect Ltd", sector:"Trade", country:"Nigeria", title:"Director", avatar:"FA" },
+  { id:8, name:"Thomas Braun", company:"Braun Manufacturing", sector:"Manufacturing", country:"Germany", title:"Sales Director", avatar:"TB" },
+  { id:9, name:"Akosua Owusu", company:"GhanaCare Health", sector:"Healthcare", country:"Ghana", title:"COO", avatar:"AO" },
+  { id:10, name:"Klaus Fischer", company:"Fischer Finance", sector:"Finance", country:"Germany", title:"Partner", avatar:"KF" },
+  { id:11, name:"Yaw Darko", company:"Darko Renewables", sector:"Energy", country:"Ghana", title:"MD", avatar:"YD" },
+  { id:12, name:"Maria Schmidt", company:"Schmidt Consulting", sector:"Consulting", country:"Germany", title:"Senior Partner", avatar:"MS" },
+];
+
+const TABLES = ["Table A1","Table A2","Table B1","Table B2","Table C1","Table C2","Networking Lounge","Main Hall","Rooftop Terrace"];
+const TIMES  = ["09:00 – 09:30","09:30 – 10:00","10:30 – 11:00","11:00 – 11:30","12:00 – 12:30","14:00 – 14:30","14:30 – 15:00","15:30 – 16:00","16:00 – 16:30"];
+
+const T = {
+  en: {
+    discover:"Discover Participants", messages:"Messages",
+    search:"Search by name or company...",
+    meetingRequest:"Meeting Request", propose:"Propose Meeting",
+    send:"Send", cancel:"Cancel",
+    selectTable:"Select location", selectTime:"Select time slot",
+    addMessage:"Add a message (optional)",
+    noMessages:"No messages yet", startConv:"Start by proposing a meeting",
+    proposed:"Meeting proposed ✓", participants:"participants",
+    findMatch:"Find my best match", matching:"Finding your best match...",
+    yourMatch:"Best Match", requestSent:"Meeting request sent!",
+    lang:"DE", organisers:"Organisers", supporters:"Supporters & Partners",
+    allSectors:"All Sectors", allCountries:"All Countries",
+    adminTitle:"Admin Panel", loaded:"participants loaded",
+    downloadTpl:"↓ Download CSV Template", uploadCSV:"↑ Upload Participants CSV",
+    reset:"Reset to sample data", csvHint:"Required columns: name, company, sector, country, title",
+    close:"Close", matchReason:"Why this match?"
+  },
+  de: {
+    discover:"Teilnehmer entdecken", messages:"Nachrichten",
+    search:"Nach Name oder Unternehmen suchen...",
+    meetingRequest:"Treffen anfragen", propose:"Treffen vorschlagen",
+    send:"Senden", cancel:"Abbrechen",
+    selectTable:"Ort auswählen", selectTime:"Zeitfenster auswählen",
+    addMessage:"Nachricht hinzufügen (optional)",
+    noMessages:"Noch keine Nachrichten", startConv:"Beginnen Sie mit einem Treffenvorschlag",
+    proposed:"Treffen vorgeschlagen ✓", participants:"Teilnehmer",
+    findMatch:"Beste Übereinstimmung finden", matching:"Suche beste Übereinstimmung...",
+    yourMatch:"Beste Übereinstimmung", requestSent:"Treffen angefragt!",
+    lang:"EN", organisers:"Veranstalter", supporters:"Förderer & Partner",
+    allSectors:"Alle Sektoren", allCountries:"Alle Länder",
+    adminTitle:"Admin-Panel", loaded:"Teilnehmer geladen",
+    downloadTpl:"↓ CSV-Vorlage herunterladen", uploadCSV:"↑ Teilnehmer-CSV hochladen",
+    reset:"Beispieldaten zurücksetzen", csvHint:"Pflichtfelder: name, company, sector, country, title",
+    close:"Schließen", matchReason:"Warum diese Empfehlung?"
+  }
+};
+
+// ── Local AI matching algorithm ──────────────────────────────────────────────
+function findBestMatch(participants, lang) {
+  // Score each participant against AHK Ghana's profile
+  // Prioritise: cross-border (German↔African) connections, senior titles, complementary sectors
+  const sectorComplement = { Trade:"Finance", Finance:"Trade", Technology:"Manufacturing", Energy:"Agriculture", Logistics:"Trade", Healthcare:"Technology", Manufacturing:"Energy", Agriculture:"Finance", Consulting:"Technology" };
+  const seniorTitles = ["ceo","md","managing director","director","head","partner","founder","coo","cto","cfo","president","vp"];
+
+  const scored = participants.map(p => {
+    let score = 0;
+    const title = p.title.toLowerCase();
+    // Cross-border bonus: German participant for Ghanaian user
+    if (p.country === "Germany") score += 30;
+    // Complementary sector
+    if (sectorComplement["Trade"] === p.sector) score += 25;
+    // Same sector — useful too
+    if (p.sector === "Trade") score += 10;
+    // Senior title bonus
+    if (seniorTitles.some(t => title.includes(t))) score += 20;
+    // Slight randomisation so it doesn't always return the same person
+    score += Math.random() * 5;
+    return { ...p, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const match = scored[0];
+
+  const reasons = {
+    en: `${match.name} from ${match.company} (${match.country}) is an ideal GABS contact for AHK Ghana. Their focus on ${match.sector} creates a strong cross-border business development opportunity worth exploring at the summit.`,
+    de: `${match.name} von ${match.company} (${match.country}) ist ein idealer GABS-Kontakt für AHK Ghana. Ihr Fokus auf ${match.sector} schafft eine starke grenzüberschreitende Geschäftsentwicklungsmöglichkeit.`
+  };
+
+  return { match, reason: reasons[lang] };
+}
+
+// ── Components ───────────────────────────────────────────────────────────────
+function Avatar({ initials, size = 40 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%", flexShrink: 0,
+      background: `linear-gradient(135deg, ${NAVY}, ${STEEL})`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      color: "#fff", fontWeight: 700, fontSize: size * 0.34,
+      fontFamily: "'Playfair Display', serif",
+      boxShadow: `0 2px 8px ${NAVY}40`
+    }}>{initials}</div>
+  );
+}
+
+function Tag({ label }) {
+  return (
+    <span style={{
+      background: LIGHT, color: NAVY, fontSize: 11, fontWeight: 600,
+      padding: "3px 10px", borderRadius: 20, border: `1px solid ${STEEL}40`
+    }}>{label}</span>
+  );
+}
+
+function Btn({ onClick, children, variant = "primary", style: extra = {} }) {
+  const base = {
+    border: "none", borderRadius: 12, padding: "11px 0", fontWeight: 700,
+    fontSize: 14, cursor: "pointer", width: "100%",
+    fontFamily: "'Playfair Display', serif", transition: "opacity 0.15s"
+  };
+  const variants = {
+    primary: { background: `linear-gradient(90deg, ${NAVY}, ${STEEL})`, color: "#fff" },
+    ghost:   { background: "#fff", color: NAVY, border: `2px solid ${NAVY}20` },
+    dashed:  { background: LIGHT, color: NAVY, border: `2px dashed ${STEEL}`, fontFamily: "'DM Sans', sans-serif" },
+    muted:   { background: "#fff", color: "#aaa", border: "1px solid #eee", fontFamily: "'DM Sans', sans-serif" },
+  };
+  return (
+    <button onClick={onClick}
+      onTouchStart={e => e.currentTarget.style.opacity = "0.8"}
+      onTouchEnd={e => e.currentTarget.style.opacity = "1"}
+      style={{ ...base, ...variants[variant], ...extra }}
+    >{children}</button>
+  );
+}
+
+function ParticipantCard({ p, onPropose, t, isMatch }) {
+  return (
+    <div style={{
+      background: isMatch ? `linear-gradient(135deg,${NAVY}08,${STEEL}15)` : "#fff",
+      border: isMatch ? `2px solid ${STEEL}` : "1px solid #E2ECF4",
+      borderRadius: 16, padding: "16px 18px",
+      display: "flex", flexDirection: "column", gap: 10,
+      boxShadow: isMatch ? `0 4px 20px ${STEEL}30` : "0 2px 8px rgba(27,58,107,0.06)",
+      animation: isMatch ? "pulse 2s ease-in-out 3" : "none"
+    }}>
+      {isMatch && (
+        <div style={{
+          background: `linear-gradient(90deg,${NAVY},${STEEL})`,
+          color: "#fff", fontSize: 11, fontWeight: 700,
+          padding: "3px 10px", borderRadius: 20, alignSelf: "flex-start"
+        }}>✦ {t.yourMatch}</div>
+      )}
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <Avatar initials={p.avatar} size={46} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, color: NAVY, fontSize: 15, fontFamily: "'Playfair Display', serif" }}>{p.name}</div>
+          <div style={{ color: STEEL, fontSize: 13, fontWeight: 600 }}>{p.title}</div>
+          <div style={{ color: "#777", fontSize: 12 }}>{p.company}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <Tag label={p.sector} /><Tag label={p.country} />
+      </div>
+      <Btn onClick={() => onPropose(p)}>{t.propose} →</Btn>
+    </div>
+  );
+}
+
+function MeetingModal({ p, onClose, onSend, t }) {
+  const [table, setTable] = useState("");
+  const [time, setTime] = useState("");
+  const [msg, setMsg] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const ss = { width:"100%", padding:"12px 14px", borderRadius:10, border:`1.5px solid ${STEEL}60`, fontSize:14, color:NAVY, background:"#fff", outline:"none", marginBottom:10 };
+
+  const send = () => {
+    if (!table || !time) return;
+    onSend({ p, table, time, msg });
+    setSent(true);
+    setTimeout(onClose, 1800);
+  };
+
+  return (
+    <Overlay>
+      <Sheet>
+        {sent ? (
+          <div style={{ textAlign:"center", padding:"32px 0" }}>
+            <div style={{ fontSize:52 }}>✅</div>
+            <div style={{ color:NAVY, fontWeight:700, fontSize:17, fontFamily:"'Playfair Display',serif", marginTop:14 }}>{t.requestSent}</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:18 }}>
+              <Avatar initials={p.avatar} size={44} />
+              <div>
+                <div style={{ fontWeight:700, color:NAVY, fontFamily:"'Playfair Display',serif" }}>{p.name}</div>
+                <div style={{ color:"#777", fontSize:13 }}>{p.company}</div>
+              </div>
+            </div>
+            <div style={{ fontWeight:700, color:NAVY, fontSize:16, fontFamily:"'Playfair Display',serif", marginBottom:14 }}>{t.meetingRequest}</div>
+            <select value={table} onChange={e => setTable(e.target.value)} style={ss}>
+              <option value="">{t.selectTable}</option>
+              {TABLES.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <select value={time} onChange={e => setTime(e.target.value)} style={ss}>
+              <option value="">{t.selectTime}</option>
+              {TIMES.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <textarea value={msg} onChange={e => setMsg(e.target.value)} placeholder={t.addMessage} rows={3}
+              style={{ ...ss, resize:"none", marginBottom:16 }} />
+            <div style={{ display:"flex", gap:10 }}>
+              <Btn onClick={onClose} variant="ghost" style={{ flex:1 }}>{t.cancel}</Btn>
+              <Btn onClick={send} style={{ flex:2, opacity: table && time ? 1 : 0.4 }}>{t.send}</Btn>
+            </div>
+          </>
+        )}
+      </Sheet>
+    </Overlay>
+  );
+}
+
+function AIMatchModal({ onClose, onSelect, t, lang, participants }) {
+  const [done, setDone] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const { match, reason } = findBestMatch(participants, lang);
+      setResult({ match, reason });
+      setDone(true);
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Overlay center>
+      <div style={{
+        background:"#fff", borderRadius:24, width:"100%", maxWidth:420,
+        padding:28, boxShadow:"0 20px 60px rgba(27,58,107,0.3)",
+        animation:"slideUp 0.3s ease", margin:"0 16px"
+      }}>
+        <div style={{ fontWeight:700, color:NAVY, fontSize:17, fontFamily:"'Playfair Display',serif", marginBottom:20 }}>
+          ✦ {t.yourMatch}
+        </div>
+        {!done ? (
+          <div style={{ textAlign:"center", padding:"40px 0" }}>
+            <div style={{ fontSize:36, animation:"spin 1s linear infinite", display:"inline-block", color:STEEL }}>⟳</div>
+            <div style={{ color:"#999", marginTop:14, fontSize:14 }}>{t.matching}</div>
+          </div>
+        ) : result && (
+          <>
+            <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:14 }}>
+              <Avatar initials={result.match.avatar} size={54} />
+              <div>
+                <div style={{ fontWeight:700, color:NAVY, fontSize:15, fontFamily:"'Playfair Display',serif" }}>{result.match.name}</div>
+                <div style={{ color:STEEL, fontSize:13 }}>{result.match.title}</div>
+                <div style={{ color:"#777", fontSize:12 }}>{result.match.company}</div>
+              </div>
+            </div>
+            <div style={{ background:LIGHT, borderRadius:12, padding:"12px 14px", fontSize:13, color:NAVY, lineHeight:1.6, marginBottom:18, borderLeft:`3px solid ${STEEL}` }}>
+              {result.reason}
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <Btn onClick={onClose} variant="ghost" style={{ flex:1 }}>{t.cancel}</Btn>
+              <Btn onClick={() => { onSelect(result.match); onClose(); }} style={{ flex:2 }}>{t.propose} →</Btn>
+            </div>
+          </>
+        )}
+      </div>
+    </Overlay>
+  );
+}
+
+function AdminModal({ onClose, participants, setParticipants, t }) {
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");
+  const fileRef = useRef(null);
+
+  const parseCSV = (text) => {
+    const lines = text.trim().split("\n").filter(l => l.trim());
+    if (lines.length < 2) throw new Error("CSV must have a header and at least one row.");
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/"/g,""));
+    const required = ["name","company","sector","country","title"];
+    const missing = required.filter(r => !headers.includes(r));
+    if (missing.length) throw new Error(`Missing columns: ${missing.join(", ")}`);
+    return lines.slice(1).map((line, i) => {
+      const vals = line.split(",").map(v => v.trim().replace(/"/g,""));
+      const row = Object.fromEntries(headers.map((h,idx) => [h, vals[idx] || ""]));
+      const avatar = row.name.split(" ").slice(0,2).map(w => w[0]?.toUpperCase()||"").join("");
+      return { id: i+1, ...row, avatar };
+    }).filter(p => p.name);
+  };
+
+  const upload = e => {
+    const file = e.target.files[0]; if (!file) return;
+    setErr(""); setOk("");
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const parsed = parseCSV(ev.target.result);
+        setParticipants(parsed);
+        try { localStorage.setItem("gabs_participants", JSON.stringify(parsed)); } catch(e){}
+        setOk(`✓ ${parsed.length} ${t.loaded}`);
+      } catch(e) { setErr(e.message); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const reset = () => {
+    setParticipants(SAMPLE);
+    try { localStorage.removeItem("gabs_participants"); } catch(e){}
+    setOk("✓ Reset to sample data.");
+    setErr("");
+  };
+
+  const downloadTemplate = () => {
+    const csv = ["name,company,sector,country,title","Kwame Asante,GoldCoast Ventures,Finance,Ghana,CEO","Hans Mueller,Berlin Tech GmbH,Technology,Germany,Managing Director","Amara Diallo,SahelTrade Co.,Agriculture,Senegal,Export Manager"].join("\n");
+    const a = document.createElement("a");
+    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+    a.download = "GABS2026_participants_template.csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  return (
+    <Overlay>
+      <Sheet>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div>
+            <div style={{ fontWeight:800, color:NAVY, fontSize:16, fontFamily:"'Playfair Display',serif" }}>⚙️ {t.adminTitle}</div>
+            <div style={{ fontSize:12, color:"#999", marginTop:2 }}>{participants.length} {t.loaded}</div>
+          </div>
+          <Btn onClick={onClose} variant="ghost" style={{ width:"auto", padding:"6px 16px" }}>{t.close}</Btn>
+        </div>
+        <Btn onClick={downloadTemplate} variant="dashed" style={{ marginBottom:10 }}>{t.downloadTpl}</Btn>
+        <input ref={fileRef} type="file" accept=".csv" onChange={upload} style={{ display:"none" }} />
+        <Btn onClick={() => fileRef.current?.click()} style={{ marginBottom:10 }}>{t.uploadCSV}</Btn>
+        {ok && <div style={{ background:"#E8F5E9", border:"1px solid #A5D6A7", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#2E7D32", marginBottom:10 }}>{ok}</div>}
+        {err && <div style={{ background:"#FFEBEE", border:"1px solid #EF9A9A", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#C62828", marginBottom:10 }}>{err}</div>}
+        <Btn onClick={reset} variant="muted" style={{ marginBottom:10 }}>{t.reset}</Btn>
+        <div style={{ fontSize:11, color:"#ccc", textAlign:"center", marginTop:6 }}>{t.csvHint}</div>
+      </Sheet>
+    </Overlay>
+  );
+}
+
+function MessagesView({ convos, t }) {
+  const [active, setActive] = useState(null);
+  const conv = active ? convos.find(c => c.p.id === active) : null;
+
+  if (conv) return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px", borderBottom:`1px solid ${LIGHT}`, flexShrink:0 }}>
+        <button onClick={() => setActive(null)} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:NAVY, padding:"0 4px" }}>←</button>
+        <Avatar initials={conv.p.avatar} size={36} />
+        <div>
+          <div style={{ fontWeight:700, color:NAVY, fontSize:14, fontFamily:"'Playfair Display',serif" }}>{conv.p.name}</div>
+          <div style={{ fontSize:12, color:"#999" }}>{conv.p.company}</div>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", padding:18, display:"flex", flexDirection:"column", gap:12 }}>
+        {conv.msgs.map((m,i) => (
+          <div key={i} style={{
+            alignSelf: m.from==="me" ? "flex-end" : "flex-start",
+            background: m.from==="me" ? `linear-gradient(135deg,${NAVY},${STEEL})` : LIGHT,
+            color: m.from==="me" ? "#fff" : NAVY,
+            padding:"10px 14px",
+            borderRadius: m.from==="me" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+            maxWidth:"80%", fontSize:13, lineHeight:1.5
+          }}>
+            {m.text}
+            {m.meeting && (
+              <div style={{ marginTop:8, padding:"8px 10px", borderRadius:8, background: m.from==="me" ? "rgba(255,255,255,0.2)" : `${STEEL}20`, fontSize:12, fontWeight:600 }}>
+                📍 {m.meeting.table}<br/>🕐 {m.meeting.time}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ padding:"0 18px" }}>
+      <div style={{ fontWeight:700, color:NAVY, fontSize:20, fontFamily:"'Playfair Display',serif", padding:"18px 0 14px" }}>{t.messages}</div>
+      {convos.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"60px 20px", color:"#bbb" }}>
+          <div style={{ fontSize:48, marginBottom:14 }}>💬</div>
+          <div style={{ fontSize:14, color:"#999" }}>{t.noMessages}</div>
+          <div style={{ fontSize:12, marginTop:8 }}>{t.startConv}</div>
+        </div>
+      ) : convos.map(c => (
+        <div key={c.p.id} onClick={() => setActive(c.p.id)} style={{ display:"flex", gap:14, alignItems:"center", padding:"14px 0", borderBottom:`1px solid ${LIGHT}`, cursor:"pointer" }}>
+          <Avatar initials={c.p.avatar} size={44} />
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontWeight:700, color:NAVY, fontSize:14, fontFamily:"'Playfair Display',serif" }}>{c.p.name}</div>
+            <div style={{ color:"#999", fontSize:12, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.msgs[c.msgs.length-1]?.text}</div>
+          </div>
+          <div style={{ color:STEEL, fontSize:20 }}>›</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Overlay({ children, center }) {
+  return (
+    <div style={{
+      position:"fixed", inset:0, background:"rgba(27,58,107,0.6)",
+      display:"flex", alignItems: center ? "center" : "flex-end", justifyContent:"center",
+      zIndex:100, backdropFilter:"blur(5px)", padding: center ? 0 : 12
+    }}>{children}</div>
+  );
+}
+
+function Sheet({ children }) {
+  return (
+    <div style={{
+      background:"#fff", borderRadius:"24px 24px 16px 16px",
+      width:"100%", maxWidth:480, padding:24,
+      boxShadow:"0 -8px 40px rgba(27,58,107,0.2)",
+      animation:"slideUp 0.3s ease", maxHeight:"90vh", overflowY:"auto"
+    }}>{children}</div>
+  );
+}
+
+// ── Footer ───────────────────────────────────────────────────────────────────
+function Footer({ lang }) {
+  const pill = { padding:"5px 12px", borderRadius:8, border:`1px solid ${LIGHT}`, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center" };
+  return (
+    <div style={{ background:"#fff", borderTop:`1px solid ${LIGHT}`, padding:"18px 18px 28px", flexShrink:0 }}>
+      <div style={{ fontSize:9, fontWeight:700, letterSpacing:2, color:"#bbb", textTransform:"uppercase", textAlign:"center", marginBottom:12 }}>
+        {lang==="de" ? "Veranstalter" : "Organisers"}
+      </div>
+      <div style={{ display:"flex", gap:10, justifyContent:"center", alignItems:"center", marginBottom:14 }}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 12px", borderRadius:10, border:`1px solid ${LIGHT}` }}>
+          <div style={{ display:"flex", alignItems:"baseline" }}>
+            <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:800, fontSize:17, color:NAVY }}>S</span>
+            <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:800, fontSize:17, color:"#C49A2A" }}>A</span>
+            <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:800, fontSize:17, color:NAVY }}>FRI</span>
+          </div>
+          <div style={{ fontSize:7, color:"#999", letterSpacing:1, fontWeight:600, textTransform:"uppercase", marginTop:2 }}>Subsahara Afrika Initiative</div>
+        </div>
+        <div style={{ width:1, height:32, background:LIGHT }} />
+        <div style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 12px", borderRadius:10, border:`1px solid ${LIGHT}` }}>
+          <div style={{ width:30, height:30, background:STEEL, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <span style={{ color:"#fff", fontWeight:800, fontSize:11, fontFamily:"'Playfair Display',serif" }}>AHK</span>
+          </div>
+          <div style={{ fontSize:11, color:NAVY, fontWeight:700 }}>Ghana</div>
+        </div>
+      </div>
+      <div style={{ height:1, background:LIGHT, marginBottom:14 }} />
+      <div style={{ fontSize:9, fontWeight:700, letterSpacing:2, color:"#bbb", textTransform:"uppercase", textAlign:"center", marginBottom:12 }}>
+        {lang==="de" ? "Förderer & Partner" : "Supporters & Partners"}
+      </div>
+      <div style={{ display:"flex", gap:6, justifyContent:"center", flexWrap:"wrap" }}>
+        <div style={pill}><span style={{ color:"#0070B8", fontWeight:800, fontSize:12, fontFamily:"'Playfair Display',serif" }}>BDI</span></div>
+        <div style={pill}><span style={{ color:"#003DA6", fontWeight:800, fontSize:12, fontFamily:"'Playfair Display',serif" }}>BGA</span></div>
+        <div style={{ ...pill, background:NAVY }}><span style={{ color:"#fff", fontWeight:800, fontSize:12, fontFamily:"'Playfair Display',serif" }}>DIHK</span></div>
+        <div style={{ ...pill, padding:"5px 10px" }}><span style={{ color:"#111", fontWeight:700, fontSize:10 }}>Afrika-Verein</span></div>
+      </div>
+      <div style={{ textAlign:"center", fontSize:10, color:"#ddd", marginTop:14 }}>© 2026 GABS · 23–25 Nov · Accra, Ghana</div>
+    </div>
+  );
+}
+
+// ── Main App ─────────────────────────────────────────────────────────────────
+function App() {
+  const [lang, setLang]         = useState("en");
+  const [tab, setTab]           = useState("discover");
+  const [participants, setParticipants] = useState(SAMPLE);
+  const [search, setSearch]     = useState("");
+  const [sector, setSector]     = useState("");
+  const [country, setCountry]   = useState("");
+  const [convos, setConvos]     = useState([]);
+  const [modalP, setModalP]     = useState(null);
+  const [showAI, setShowAI]     = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [highlight, setHighlight] = useState(null);
+  const tapCount = useRef(0);
+  const tapTimer = useRef(null);
+  const t = T[lang];
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("gabs_participants");
+      if (saved) { const p = JSON.parse(saved); if (p?.length) setParticipants(p); }
+    } catch(e) {}
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  }, []);
+
+  const sectorKeys  = ["", ...Array.from(new Set(participants.map(p => p.sector))).sort()];
+  const countryKeys = ["", ...Array.from(new Set(participants.map(p => p.country))).sort()];
+
+  const handleTap = () => {
+    tapCount.current += 1;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 2000);
+    if (tapCount.current >= 5) { tapCount.current = 0; setShowAdmin(true); }
+  };
+
+  const sendMeeting = ({ p, table, time, msg }) => {
+    const m = { from:"me", text: msg || t.proposed, meeting:{ table, time } };
+    setConvos(prev => {
+      const ex = prev.find(c => c.p.id === p.id);
+      if (ex) return prev.map(c => c.p.id === p.id ? { ...c, msgs:[...c.msgs, m] } : c);
+      return [...prev, { p, msgs:[m] }];
+    });
+  };
+
+  const onAISelect = p => {
+    setHighlight(p.id); setTab("discover");
+    setTimeout(() => setHighlight(null), 6000);
+  };
+
+  const filtered = participants.filter(p => {
+    const q = search.toLowerCase();
+    return (!q || p.name.toLowerCase().includes(q) || p.company.toLowerCase().includes(q))
+      && (!sector  || p.sector  === sector)
+      && (!country || p.country === country);
+  });
+
+  const selectStyle = { width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${STEEL}50`, fontSize:14, color:NAVY, background:"#fff", outline:"none" };
+
+  return (
+    <div style={{ height:"100vh", display:"flex", flexDirection:"column", background:"#F4F8FC", maxWidth:480, margin:"0 auto", overflow:"hidden" }}>
+
+      {/* Header */}
+      <div style={{ background:`linear-gradient(135deg,${NAVY} 0%,#2A5298 60%,${STEEL} 100%)`, padding:"18px 18px 0", flexShrink:0, position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", top:-30, right:-30, width:110, height:110, borderRadius:"50%", background:"rgba(255,255,255,0.05)" }} />
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
+          <div onClick={handleTap} style={{ userSelect:"none" }}>
+            <div style={{ color:STEEL, fontSize:9, fontWeight:700, letterSpacing:2, textTransform:"uppercase", marginBottom:4 }}>6TH EDITION · ACCRA 2026</div>
+            <div style={{ color:"#fff", fontSize:19, fontWeight:800, fontFamily:"'Playfair Display',serif", lineHeight:1.2 }}>German-African<br/>Business Summit</div>
+          </div>
+          <button onClick={() => setLang(l => l==="en"?"de":"en")} style={{ background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", color:"#fff", borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{t.lang}</button>
+        </div>
+        <div style={{ display:"flex", gap:4 }}>
+          {[{key:"discover",label:t.discover},{key:"messages",label:t.messages,badge:convos.length}].map(({key,label,badge})=>(
+            <button key={key} onClick={()=>setTab(key)} style={{ flex:1, padding:"10px 4px", border:"none", cursor:"pointer", background:tab===key?"#fff":"transparent", color:tab===key?NAVY:"rgba(255,255,255,0.7)", fontWeight:700, fontSize:13, borderRadius:"10px 10px 0 0", transition:"all 0.2s", position:"relative", fontFamily:tab===key?"'Playfair Display',serif":"'DM Sans',sans-serif" }}>
+              {label}
+              {badge>0 && <span style={{ position:"absolute", top:6, right:8, background:STEEL, color:"#fff", borderRadius:"50%", width:16, height:16, fontSize:10, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>{badge}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex:1, overflowY:"auto" }}>
+        {tab==="discover" && (
+          <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:10 }}>
+            <Btn onClick={()=>setShowAI(true)}>✦ {t.findMatch}</Btn>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.search} style={{ ...selectStyle, marginBottom:0 }} />
+            <div style={{ display:"flex", gap:8 }}>
+              <select value={sector} onChange={e=>setSector(e.target.value)} style={{ ...selectStyle, flex:1 }}>
+                {sectorKeys.map(k=><option key={k} value={k}>{k||t.allSectors}</option>)}
+              </select>
+              <select value={country} onChange={e=>setCountry(e.target.value)} style={{ ...selectStyle, flex:1 }}>
+                {countryKeys.map(k=><option key={k} value={k}>{k||t.allCountries}</option>)}
+              </select>
+            </div>
+            <div style={{ color:"#aaa", fontSize:12, fontWeight:600 }}>{filtered.length} {t.participants}</div>
+            {filtered.map((p,i)=>(
+              <div key={p.id} style={{ animation:`fadeIn 0.3s ease ${i*0.04}s both` }}>
+                <ParticipantCard p={p} onPropose={setModalP} t={t} isMatch={highlight===p.id} />
+              </div>
+            ))}
+          </div>
+        )}
+        {tab==="messages" && <MessagesView convos={convos} t={t} />}
+      </div>
+
+      <Footer lang={lang} />
+
+      {/* Modals */}
+      {modalP && <MeetingModal p={modalP} onClose={()=>setModalP(null)} onSend={sendMeeting} t={t} />}
+      {showAI  && <AIMatchModal onClose={()=>setShowAI(false)} onSelect={p=>{onAISelect(p);setModalP(p);}} t={t} lang={lang} participants={participants} />}
+      {showAdmin && <AdminModal onClose={()=>setShowAdmin(false)} participants={participants} setParticipants={setParticipants} t={t} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
