@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#1B3A6B"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="GABS 2026"/>
+<title>GABS 2026</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet"/>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,collection,addDoc,onSnapshot,query,orderBy,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
+const db=getFirestore(app);
+window._fb={db,collection,addDoc,onSnapshot,query,orderBy,serverTimestamp};
+window.dispatchEvent(new Event("fb-ready"));
+</script>
+<style>
+:root{
+  --navy:#1B3A6B;--steel:#5B9BB5;--light:#E8F2F8;--gold:#C49A2A;
+  --r:16px;--rs:10px;
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%;overflow:hidden}
+body{height:100%;width:100%;font-family:'DM Sans',sans-serif;background:var(--navy);overflow:hidden;-webkit-text-size-adjust:100%}
+#app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;background:#F4F8FC;overflow:hidden}
+button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appearance:none}
+::-webkit-scrollbar{display:none}
+img{user-select:none}
+
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{box-shadow:0 4px 20px #5B9BB530}50%{box-shadow:0 4px 32px #5B9BB570}}
+@keyframes pop{0%{transform:scale(0.92);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* ── Loader ── */
+#loader{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity 0.4s}
+#loader.hidden{opacity:0;pointer-events:none}
+.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.2);border-top-color:var(--steel);border-radius:50%;animation:spin 0.8s linear infinite}
+
+/* ── Shared ── */
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;background:#F4F8FC;animation:fadeUp 0.3s ease both}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;padding:14px;border:none;border-radius:var(--r);font-weight:700;font-size:15px;cursor:pointer;transition:opacity 0.15s,transform 0.1s;letter-spacing:0.01em;touch-action:manipulation}
+.btn:active{opacity:0.75;transform:scale(0.98)}
+.btn-primary{background:linear-gradient(100deg,var(--navy),var(--steel));color:#fff;font-family:'Playfair Display',serif}
+.btn-ghost{background:#fff;color:var(--navy);border:2px solid rgba(27,58,107,0.15)}
+.btn-steel{background:var(--steel);color:#fff}
+.btn-muted{background:#F0F0F0;color:#888}
+.btn:disabled{opacity:0.4;cursor:default}
+.input{width:100%;padding:13px 16px;border-radius:var(--r);border:1.5px solid rgba(91,155,181,0.4);font-size:15px;color:var(--navy);background:#fff;outline:none;transition:border-color 0.2s}
+.input:focus{border-color:var(--steel)}
+.chip{display:inline-flex;align-items:center;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:600;background:var(--light);color:var(--navy);border:1px solid rgba(91,155,181,0.3)}
+
+/* ── Header ── */
+#header{background:linear-gradient(135deg,var(--navy) 0%,#253F82 55%,var(--steel) 100%);padding:16px 18px 0;flex-shrink:0;position:relative;overflow:hidden}
+#header::before{content:'';position:absolute;top:-40px;right:-40px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.04)}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.header-title{cursor:default;user-select:none}
+.header-eyebrow{color:var(--steel);font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:5px}
+.header-name{color:#fff;font-size:19px;font-weight:800;font-family:'Playfair Display',serif;line-height:1.2}
+.lang-btn{background:rgba(255,255,255,0.16);border:1.5px solid rgba(255,255,255,0.3);color:#fff;border-radius:20px;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;transition:background 0.2s;touch-action:manipulation}
+.lang-btn:active{background:rgba(255,255,255,0.28)}
+.tabs{display:flex;gap:2px}
+.tab{flex:1;padding:10px 4px;border:none;background:transparent;color:rgba(255,255,255,0.65);font-weight:600;font-size:12px;border-radius:10px 10px 0 0;cursor:pointer;transition:all 0.2s;touch-action:manipulation;position:relative;letter-spacing:0.02em}
+.tab.active{background:#F4F8FC;color:var(--navy);font-family:'Playfair Display',serif;font-weight:700}
+.tab .badge{position:absolute;top:6px;right:6px;background:var(--steel);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700}
+
+/* ── Profile Picker ── */
+#picker-screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;background:linear-gradient(160deg,var(--navy) 0%,#253F82 50%,var(--steel) 100%)}
+.picker-hero{padding:48px 28px 24px;flex-shrink:0}
+.picker-card{flex:1;background:#F4F8FC;border-radius:28px 28px 0 0;display:flex;flex-direction:column;padding:24px 18px 0;overflow:hidden}
+.picker-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:16px}
+.picker-item{display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:14px;border:1.5px solid #E2ECF4;background:#fff;cursor:pointer;transition:all 0.15s;touch-action:manipulation}
+.picker-item.selected{border-color:var(--steel);background:rgba(91,155,181,0.08)}
+.picker-item:active{transform:scale(0.98)}
+.picker-confirm{flex-shrink:0;padding:16px 0 calc(16px + var(--safe-bottom))}
+.check{width:22px;height:22px;border-radius:50%;background:var(--steel);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;flex-shrink:0;animation:pop 0.2s ease both}
+
+/* ── Demo banner ── */
+.demo-banner{background:linear-gradient(90deg,#C49A2A,#E8B84B);color:#fff;padding:10px 16px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.demo-banner span{flex:1;line-height:1.4}
+
+/* ── Scroll area ── */
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+/* ── Discover ── */
+.discover-inner{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.count-label{color:#aaa;font-size:12px;font-weight:600;padding:2px 0}
+.p-card{background:#fff;border:1px solid #E2ECF4;border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 8px rgba(27,58,107,0.05);animation:fadeUp 0.3s ease both}
+.p-card.match{background:linear-gradient(135deg,rgba(27,58,107,0.04),rgba(91,155,181,0.1));border-color:var(--steel);box-shadow:0 4px 20px rgba(91,155,181,0.2);animation:pulse 2s ease-in-out 3,fadeUp 0.3s ease both}
+.p-card.self{opacity:0.5}
+.p-card-top{display:flex;gap:12px;align-items:center}
+.p-info{flex:1;min-width:0}
+.p-name{font-weight:700;color:var(--navy);font-size:15px;font-family:'Playfair Display',serif;line-height:1.2}
+.p-title{color:var(--steel);font-size:13px;font-weight:600;margin-top:2px}
+.p-company{color:#888;font-size:12px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-chips{display:flex;gap:6px;flex-wrap:wrap}
+.p-actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+
+/* ── Avatar ── */
+.avatar{border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,var(--navy),var(--steel));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:'Playfair Display',serif;box-shadow:0 2px 8px rgba(27,58,107,0.35)}
+
+/* ── Overlay & Sheet ── */
+.overlay{position:fixed;inset:0;background:rgba(27,58,107,0.6);display:flex;align-items:flex-end;justify-content:center;z-index:200;backdrop-filter:blur(6px);padding:12px}
+.overlay.center{align-items:center;padding:20px}
+.sheet{background:#fff;border-radius:24px 24px 16px 16px;width:100%;max-width:480px;padding:24px;box-shadow:0 -8px 40px rgba(27,58,107,0.2);animation:slideUp 0.28s ease;max-height:90vh;overflow-y:auto}
+.sheet.center-card{border-radius:24px;animation:pop 0.25s ease}
+
+/* ── Messages ── */
+.messages-inbox{padding:0 18px}
+.inbox-header{font-weight:800;color:var(--navy);font-size:20px;font-family:'Playfair Display',serif;padding:18px 0 14px}
+.inbox-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;gap:10px}
+.inbox-item{display:flex;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--light);cursor:pointer;touch-action:manipulation}
+.inbox-item:active{background:rgba(91,155,181,0.05)}
+.inbox-meta{flex:1;min-width:0}
+.inbox-name{font-weight:700;color:var(--navy);font-size:14px;font-family:'Playfair Display',serif}
+.inbox-preview{color:#999;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+
+/* ── Thread ── */
+.thread{display:flex;flex-direction:column;height:100%}
+.thread-header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--light);flex-shrink:0;background:#fff}
+.thread-back{background:none;border:none;font-size:24px;cursor:pointer;color:var(--navy);padding:4px 8px 4px 0;touch-action:manipulation;line-height:1}
+.thread-info{flex:1;min-width:0}
+.thread-name{font-weight:700;color:var(--navy);font-size:14px;font-family:'Playfair Display',serif}
+.thread-sub{font-size:12px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thread-meet-btn{background:var(--light);border:none;border-radius:8px;padding:8px 12px;font-size:12px;color:var(--navy);font-weight:700;cursor:pointer;flex-shrink:0;touch-action:manipulation}
+.messages-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:#F4F8FC}
+.bubble-wrap{display:flex;flex-direction:column;gap:3px;max-width:78%}
+.bubble-wrap.mine{align-self:flex-end;align-items:flex-end}
+.bubble-wrap.theirs{align-self:flex-start;align-items:flex-start}
+.bubble-sender{font-size:11px;color:#aaa;padding:0 4px}
+.bubble{padding:10px 14px;font-size:14px;line-height:1.5;word-break:break-word}
+.bubble.mine{background:linear-gradient(135deg,var(--navy),var(--steel));color:#fff;border-radius:18px 18px 4px 18px}
+.bubble.theirs{background:var(--light);color:var(--navy);border-radius:18px 18px 18px 4px}
+.bubble-time{font-size:10px;color:#ccc;padding:0 4px}
+.meeting-pill{margin-top:8px;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:600;line-height:1.6}
+.meeting-pill.mine{background:rgba(255,255,255,0.18);color:#fff}
+.meeting-pill.theirs{background:rgba(91,155,181,0.15);color:var(--navy)}
+.compose{display:flex;gap:10px;padding:10px 14px;border-top:1px solid var(--light);background:#fff;flex-shrink:0;align-items:flex-end;padding-bottom:calc(10px + var(--safe-bottom))}
+.compose-input{flex:1;padding:11px 16px;border-radius:22px;border:1.5px solid rgba(91,155,181,0.4);font-size:15px;color:var(--navy);background:#fff;outline:none;resize:none;max-height:100px;overflow-y:auto;line-height:1.45;transition:border-color 0.2s}
+.compose-input:focus{border-color:var(--steel)}
+.send-btn{width:44px;height:44px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;flex-shrink:0;transition:background 0.2s,transform 0.1s;touch-action:manipulation}
+.send-btn:active{transform:scale(0.9)}
+.send-btn.active{background:linear-gradient(135deg,var(--navy),var(--steel));color:#fff}
+.send-btn.inactive{background:#E8E8E8;color:#ccc;cursor:default}
+
+/* ── QR ── */
+.qr-wrap{display:flex;flex-direction:column;align-items:center;padding:32px 24px;gap:20px}
+
+/* ── Footer ── */
+#footer{background:#fff;border-top:1px solid var(--light);padding:8px 18px calc(8px + var(--safe-bottom));flex-shrink:0}
+.footer-profile{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--light)}
+.footer-me{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--navy);font-weight:600}
+.footer-switch{background:none;border:none;color:var(--steel);font-size:12px;cursor:pointer;font-weight:600;touch-action:manipulation}
+.footer-logos{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:8px}
+.logo-safri{display:flex;flex-direction:column;align-items:center;padding:5px 10px;border-radius:8px;border:1px solid var(--light)}
+.logo-safri-text{display:flex;align-items:baseline}
+.logo-ahk{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;border:1px solid var(--light)}
+.footer-partners{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:6px}
+.partner-pill{padding:4px 10px;border-radius:7px;border:1px solid var(--light);background:#fff;font-size:11px;font-weight:700}
+.footer-copy{text-align:center;font-size:10px;color:#ccc}
+
+/* ── Modal form ── */
+.form-label{font-size:12px;color:#888;font-weight:600;margin-bottom:5px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal-actions{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:4px}
+
+/* ── AI modal ── */
+.ai-reason{background:var(--light);border-radius:12px;padding:13px 15px;font-size:13px;color:var(--navy);line-height:1.6;border-left:3px solid var(--steel)}
+
+/* ── Select fix on iOS ── */
+select.input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235B9BB5' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+</style>
+</head>
+<body>
+<div id="loader"><div class="spinner"></div><div style="color:rgba(255,255,255,0.5);font-size:13px;margin-top:16px">GABS 2026</div></div>
+<div id="app" style="display:none"></div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const NAVY="#1B3A6B",STEEL="#5B9BB5",LIGHT="#E8F2F8";
+const APP_URL="https://douglasamesinu.github.io/gabs2026/";
+
+const DEFAULT_TABLES=["Kempinski – Table A1","Kempinski – Table A2","Kempinski – Table B1","Kempinski – Table B2","Networking Lounge","Main Hall – Ground Floor","Rooftop Terrace","Pool Deck"];
+const DEFAULT_TIMES=["09:00 – 09:30","09:30 – 10:00","10:30 – 11:00","11:00 – 11:30","12:00 – 12:30","14:00 – 14:30","14:30 – 15:00","15:30 – 16:00"];
+
+const SAMPLE=[
+  {id:"1",name:"Kwame Asante",company:"GoldCoast Ventures",sector:"Finance",country:"Ghana",title:"CEO",av:"KA"},
+  {id:"2",name:"Hans Mueller",company:"Berlin Tech GmbH",sector:"Technology",country:"Germany",title:"Managing Director",av:"HM"},
+  {id:"3",name:"Amara Diallo",company:"SahelTrade Co.",sector:"Agriculture",country:"Senegal",title:"Export Manager",av:"AD"},
+  {id:"4",name:"Petra Hoffmann",company:"Hoffmann Logistics",sector:"Logistics",country:"Germany",title:"Business Development",av:"PH"},
+  {id:"5",name:"Kofi Mensah",company:"Accra Digital Hub",sector:"Technology",country:"Ghana",title:"Founder",av:"KM"},
+  {id:"6",name:"Sarah Weber",company:"Weber Energy AG",sector:"Energy",country:"Germany",title:"Head of Africa",av:"SW"},
+  {id:"7",name:"Fatima Al-Hassan",company:"Lagos Connect Ltd",sector:"Trade",country:"Nigeria",title:"Director",av:"FA"},
+  {id:"8",name:"Thomas Braun",company:"Braun Manufacturing",sector:"Manufacturing",country:"Germany",title:"Sales Director",av:"TB"},
+  {id:"9",name:"Akosua Owusu",company:"GhanaCare Health",sector:"Healthcare",country:"Ghana",title:"COO",av:"AO"},
+  {id:"10",name:"Klaus Fischer",company:"Fischer Finance",sector:"Finance",country:"Germany",title:"Partner",av:"KF"},
+  {id:"11",name:"Yaw Darko",company:"Darko Renewables",sector:"Energy",country:"Ghana",title:"MD",av:"YD"},
+  {id:"12",name:"Maria Schmidt",company:"Schmidt Consulting",sector:"Consulting",country:"Germany",title:"Senior Partner",av:"MS"},
+];
+
+const S={
+  en:{
+    discover:"Discover",messages:"Messages",qr:"QR Code",
+    search:"Search name or company…",allSectors:"All Sectors",allCountries:"All Countries",
+    findMatch:"✦ Find my best match",matching:"Analysing participants…",yourMatch:"Your Best Match",
+    propose:"Propose Meeting",message:"Message",you:"You",
+    meetReq:"Meeting Request",selectTable:"Select location",selectTime:"Select time",
+    addMsg:"Add a message (optional)",send:"Send",cancel:"Cancel",sent:"✓ Meeting request sent!",
+    noMsgs:"No conversations yet",startConv:"Go to Discover and message a participant",
+    typeMsg:"Message…",langBtn:"DE",
+    whoAreYou:"Who are you?",whoSub:"Select your name to get started",
+    searchName:"Search your name…",confirm:"This is me — Continue",
+    switchProfile:"Switch",
+    organizers:"Organisers",partners:"Partners",
+    demoTitle:"🧪 Demo mode",
+    demoMsg:"Open a second browser tab, pick a different name, and message yourself in real time.",
+    qrTitle:"Scan to join GABS 2026",qrSub:"Camera → scan → app opens instantly",
+    howTitle:"Install on your phone",
+    howA:"Android: Chrome → ⋮ → Add to Home Screen",
+    howI:"iPhone: Safari → Share → Add to Home Screen",
+    adminTitle:"Admin Panel",loaded:"participants loaded",
+    dlTpl:"↓ Download CSV Template",upCSV:"↑ Upload Participants CSV",
+    reset:"Reset to sample data",csvHint:"Required columns: name, company, sector, country, title",
+    close:"Close",editRooms:"Edit Rooms & Times",
+    roomsLbl:"Meeting Rooms (one per line)",timesLbl:"Time Slots (one per line)",
+    saveRooms:"Save",
+  },
+  de:{
+    discover:"Entdecken",messages:"Nachrichten",qr:"QR-Code",
+    search:"Name oder Unternehmen…",allSectors:"Alle Sektoren",allCountries:"Alle Länder",
+    findMatch:"✦ Beste Übereinstimmung",matching:"Analysiere Teilnehmer…",yourMatch:"Beste Übereinstimmung",
+    propose:"Treffen vorschlagen",message:"Nachricht",you:"Sie",
+    meetReq:"Treffen anfragen",selectTable:"Treffpunkt wählen",selectTime:"Zeit wählen",
+    addMsg:"Nachricht hinzufügen (optional)",send:"Senden",cancel:"Abbrechen",sent:"✓ Anfrage gesendet!",
+    noMsgs:"Noch keine Unterhaltungen",startConv:"Entdecken Sie Teilnehmer und senden Sie eine Nachricht",
+    typeMsg:"Nachricht…",langBtn:"EN",
+    whoAreYou:"Wer sind Sie?",whoSub:"Wählen Sie Ihren Namen",
+    searchName:"Namen suchen…",confirm:"Das bin ich — Weiter",
+    switchProfile:"Wechseln",
+    organizers:"Veranstalter",partners:"Partner",
+    demoTitle:"🧪 Demo-Modus",
+    demoMsg:"Öffnen Sie einen zweiten Browser-Tab, wählen Sie einen anderen Namen und schreiben Sie sich selbst in Echtzeit.",
+    qrTitle:"QR-Code für GABS 2026 scannen",qrSub:"Kamera → scannen → App öffnet sich",
+    howTitle:"App installieren",
+    howA:"Android: Chrome → ⋮ → Zum Startbildschirm",
+    howI:"iPhone: Safari → Teilen → Zum Home-Bildschirm",
+    adminTitle:"Admin-Panel",loaded:"Teilnehmer geladen",
+    dlTpl:"↓ CSV-Vorlage herunterladen",upCSV:"↑ Teilnehmer-CSV hochladen",
+    reset:"Zurücksetzen",csvHint:"Pflichtfelder: name, company, sector, country, title",
+    close:"Schließen",editRooms:"Räume & Zeiten",
+    roomsLbl:"Räume (je eine Zeile)",timesLbl:"Zeitfenster (je eine Zeile)",
+    saveRooms:"Speichern",
+  }
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let lang=localStorage.getItem("gabs_lang")||"en";
+let me=null; try{const s=localStorage.getItem("gabs_me");if(s)me=JSON.parse(s);}catch(e){}
+let participants=SAMPLE; try{const s=localStorage.getItem("gabs_participants");if(s){const p=JSON.parse(s);if(p?.length)participants=p;}}catch(e){}
+let tables=DEFAULT_TABLES; try{const s=localStorage.getItem("gabs_tables");if(s){const p=JSON.parse(s);if(p?.length)tables=p;}}catch(e){}
+let times=DEFAULT_TIMES; try{const s=localStorage.getItem("gabs_times");if(s){const p=JSON.parse(s);if(p?.length)times=p;}}catch(e){}
+
+let currentTab="discover";
+let activeThreadId=null; // participant id string
+let threadUnsubs={};
+let inboxUnsubs=[];
+let inboxData={};
+let threadMessages=[];
+let draftText="";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const t=()=>S[lang];
+const tid=(a,b)=>[a,b].sort().join("__");
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const fmtTime=ts=>{if(!ts?.seconds)return"";return new Date(ts.seconds*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});};
+
+function avatarHTML(av,size=40){
+  const fs=Math.round(size*0.35);
+  return`<div class="avatar" style="width:${size}px;height:${size}px;font-size:${fs}px">${esc(av)}</div>`;
+}
+
+function bestMatch(){
+  const senior=["ceo","md","managing director","director","head","partner","founder","coo","cto","cfo","president","vp"];
+  return [...participants].map(p=>{
+    let sc=0;
+    if(p.country==="Germany")sc+=30;
+    if(p.sector==="Finance")sc+=25;
+    if(senior.some(s=>p.title.toLowerCase().includes(s)))sc+=20;
+    sc+=Math.random()*8;
+    return{...p,sc};
+  }).sort((a,b)=>b.sc-a.sc)[0];
+}
+
+let tapCount=0,tapTimer=null;
+function handleHeaderTap(){
+  tapCount++;
+  clearTimeout(tapTimer);
+  tapTimer=setTimeout(()=>{tapCount=0;},2000);
+  if(tapCount>=5){tapCount=0;showAdminModal();}
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+function renderApp(){
+  const app=document.getElementById("app");
+  app.innerHTML=`
+    ${renderHeader()}
+    <div class="scroll-area" id="tab-content">${renderTabContent()}</div>
+    ${renderFooter()}
+  `;
+  bindHeaderEvents();
+  bindTabEvents();
+  bindFooterEvents();
+  if(currentTab==="messages")initInboxListeners();
+}
+
+function renderHeader(){
+  const tabs=[
+    {key:"discover",label:t().discover},
+    {key:"messages",label:t().messages},
+    {key:"qr",label:t().qr},
+  ];
+  return`
+  <div id="header">
+    <div class="header-top">
+      <div class="header-title" id="header-title">
+        <div class="header-eyebrow">6TH EDITION · ACCRA 2026</div>
+        <div class="header-name">German-African<br/>Business Summit</div>
+      </div>
+      <button class="lang-btn" id="lang-btn">${esc(t().langBtn)}</button>
+    </div>
+    <div class="tabs">
+      ${tabs.map(tb=>`<button class="tab${currentTab===tb.key?" active":""}" data-tab="${tb.key}">${esc(tb.label)}</button>`).join("")}
+    </div>
+  </div>`;
+}
+
+function renderFooter(){
+  const profile=me?`
+    <div class="footer-profile">
+      <div class="footer-me">${avatarHTML(me.av,22)}<span>${esc(me.name)}</span></div>
+      <button class="footer-switch" id="switch-btn">↩ ${esc(t().switchProfile)}</button>
+    </div>`:"";
+  return`
+  <div id="footer">
+    ${profile}
+    <div class="footer-logos">
+      <div class="logo-safri">
+        <div class="logo-safri-text">
+          <span style="font-family:'Playfair Display',serif;font-weight:800;font-size:15px;color:${NAVY}">S</span>
+          <span style="font-family:'Playfair Display',serif;font-weight:800;font-size:15px;color:#C49A2A">A</span>
+          <span style="font-family:'Playfair Display',serif;font-weight:800;font-size:15px;color:${NAVY}">FRI</span>
+        </div>
+        <div style="font-size:7px;color:#999;letter-spacing:1px;font-weight:600;text-transform:uppercase;margin-top:2px">Subsahara Afrika Initiative</div>
+      </div>
+      <div style="width:1px;height:30px;background:var(--light)"></div>
+      <div class="logo-ahk">
+        <div style="width:28px;height:28px;background:${STEEL};border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:10px;font-family:'Playfair Display',serif">AHK</div>
+        <span style="font-size:11px;color:${NAVY};font-weight:700">Ghana</span>
+      </div>
+    </div>
+    <div class="footer-partners">
+      <span class="partner-pill" style="color:#0070B8">BDI</span>
+      <span class="partner-pill" style="color:#003DA6">BGA</span>
+      <span class="partner-pill" style="background:${NAVY};color:#fff">DIHK</span>
+      <span class="partner-pill">Afrika-Verein</span>
+    </div>
+    <div class="footer-copy">© 2026 GABS · 23–25 Nov · Accra, Ghana</div>
+  </div>`;
+}
+
+function bindHeaderEvents(){
+  document.getElementById("lang-btn").addEventListener("click",()=>{
+    lang=lang==="en"?"de":"en";
+    localStorage.setItem("gabs_lang",lang);
+    renderApp();
+  });
+  document.getElementById("header-title").addEventListener("click",handleHeaderTap);
+  document.querySelectorAll(".tab").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      currentTab=btn.dataset.tab;
+      activeThreadId=null;
+      renderApp();
+    });
+  });
+}
+
+function bindFooterEvents(){
+  document.getElementById("switch-btn")?.addEventListener("click",()=>{
+    me=null;localStorage.removeItem("gabs_me");
+    showPicker();
+  });
+}
+
+// ── Tab content ───────────────────────────────────────────────────────────────
+function renderTabContent(){
+  if(currentTab==="discover")return renderDiscover();
+  if(currentTab==="messages")return renderInbox();
+  if(currentTab==="qr")return renderQR();
+  return"";
+}
+
+function bindTabEvents(){
+  if(currentTab==="discover")bindDiscoverEvents();
+  if(currentTab==="messages")bindInboxEvents();
+}
+
+// ── Discover ──────────────────────────────────────────────────────────────────
+let discoverSearch="",discoverSector="",discoverCountry="";
+
+function filteredParticipants(){
+  const q=discoverSearch.toLowerCase();
+  return participants.filter(p=>
+    (!q||p.name.toLowerCase().includes(q)||p.company.toLowerCase().includes(q))&&
+    (!discoverSector||p.sector===discoverSector)&&
+    (!discoverCountry||p.country===discoverCountry)
+  );
+}
+
+function renderParticipantCard(p){
+  const isSelf=me&&p.id===me.id;
+  const matchBadge=`<div class="chip" style="background:linear-gradient(90deg,${NAVY},${STEEL});color:#fff;border:none">${esc(t().yourMatch)}</div>`;
+  const selfBadge=`<div class="chip" style="background:${LIGHT};color:${STEEL}">👤 ${esc(t().you)}</div>`;
+  const actions=isSelf?"":`
+    <div class="p-actions">
+      <button class="btn btn-ghost p-msg" data-id="${p.id}" style="padding:10px 8px;font-size:13px">💬 ${esc(t().message)}</button>
+      <button class="btn btn-primary p-meet" data-id="${p.id}" style="padding:10px 8px;font-size:13px">📅 ${esc(t().propose)} →</button>
+    </div>`;
+  return`
+  <div class="p-card${isSelf?" self":""}">
+    ${p._isMatch?matchBadge:""}${isSelf?selfBadge:""}
+    <div class="p-card-top">
+      ${avatarHTML(p.av,46)}
+      <div class="p-info">
+        <div class="p-name">${esc(p.name)}</div>
+        <div class="p-title">${esc(p.title)}</div>
+        <div class="p-company">${esc(p.company)}</div>
+      </div>
+    </div>
+    <div class="p-chips">
+      <span class="chip">${esc(p.sector)}</span>
+      <span class="chip">${esc(p.country)}</span>
+    </div>
+    ${actions}
+  </div>`;
+}
+
+function renderDiscover(){
+  const sectors=["", ...Array.from(new Set(participants.map(p=>p.sector))).sort()];
+  const countries=["", ...Array.from(new Set(participants.map(p=>p.country))).sort()];
+  const list=filteredParticipants();
+  return`
+  <div class="discover-inner">
+    <div class="demo-banner">
+      <span>🧪 <strong>${esc(t().demoTitle.replace("🧪 ",""))}</strong> ${esc(t().demoMsg)}</span>
+    </div>
+    <button class="btn btn-primary" id="ai-btn">${esc(t().findMatch)}</button>
+    <input class="input" id="search-input" placeholder="${esc(t().search)}" value="${esc(discoverSearch)}"/>
+    <div class="filters">
+      <select class="input" id="sector-select">
+        ${sectors.map(s=>`<option value="${esc(s)}"${discoverSector===s?" selected":""}>${esc(s||t().allSectors)}</option>`).join("")}
+      </select>
+      <select class="input" id="country-select">
+        ${countries.map(c=>`<option value="${esc(c)}"${discoverCountry===c?" selected":""}>${esc(c||t().allCountries)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="count-label">${list.length} ${esc(t().discover.toLowerCase())}</div>
+    ${list.map(p=>renderParticipantCard(p)).join("")}
+  </div>`;
+}
+
+function bindDiscoverEvents(){
+  document.getElementById("ai-btn")?.addEventListener("click",showAIModal);
+  const si=document.getElementById("search-input");
+  if(si){si.addEventListener("input",e=>{discoverSearch=e.target.value;refreshDiscoverList();});}
+  document.getElementById("sector-select")?.addEventListener("change",e=>{discoverSector=e.target.value;refreshDiscoverList();});
+  document.getElementById("country-select")?.addEventListener("change",e=>{discoverCountry=e.target.value;refreshDiscoverList();});
+  bindCardButtons();
+}
+
+function refreshDiscoverList(){
+  // Re-render only the cards, not the whole page
+  const list=filteredParticipants();
+  const container=document.querySelector(".discover-inner");
+  if(!container)return;
+  // remove old cards
+  container.querySelectorAll(".p-card,.count-label").forEach(el=>el.remove());
+  const countEl=document.createElement("div");
+  countEl.className="count-label";
+  countEl.textContent=`${list.length} ${t().discover.toLowerCase()}`;
+  container.appendChild(countEl);
+  list.forEach(p=>{
+    const div=document.createElement("div");
+    div.innerHTML=renderParticipantCard(p);
+    container.appendChild(div.firstElementChild);
+  });
+  bindCardButtons();
+}
+
+function bindCardButtons(){
+  document.querySelectorAll(".p-msg").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const p=participants.find(x=>x.id===btn.dataset.id);
+      if(p)openThread(p);
+    });
+  });
+  document.querySelectorAll(".p-meet").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const p=participants.find(x=>x.id===btn.dataset.id);
+      if(p)showMeetingModal(p);
+    });
+  });
+}
+
+// ── Open thread ───────────────────────────────────────────────────────────────
+function openThread(p){
+  currentTab="messages";
+  activeThreadId=p.id;
+  renderApp();
+  // After render, init thread listener
+  initThreadListener(p);
+}
+
+// ── Messages / Inbox ──────────────────────────────────────────────────────────
+function renderInbox(){
+  if(activeThreadId){
+    const p=participants.find(x=>x.id===activeThreadId);
+    if(p)return renderThread(p);
+  }
+  const entries=Object.values(inboxData).sort((a,b)=>(b.ts?.seconds||0)-(a.ts?.seconds||0));
+  if(!entries.length)return`
+    <div class="messages-inbox">
+      <div class="inbox-header">${esc(t().messages)}</div>
+      <div class="inbox-empty">
+        <div style="font-size:52px">💬</div>
+        <div style="color:#999;font-size:14px">${esc(t().noMsgs)}</div>
+        <div style="color:#bbb;font-size:12px;line-height:1.6">${esc(t().startConv)}</div>
+      </div>
+    </div>`;
+  return`
+    <div class="messages-inbox">
+      <div class="inbox-header">${esc(t().messages)}</div>
+      ${entries.map(({p,text,ts})=>`
+        <div class="inbox-item" data-thread="${p.id}">
+          ${avatarHTML(p.av,44)}
+          <div class="inbox-meta">
+            <div class="inbox-name">${esc(p.name)}</div>
+            <div class="inbox-preview">${esc(text||"")}</div>
+          </div>
+          <span style="color:${STEEL};font-size:22px">›</span>
+        </div>`).join("")}
+    </div>`;
+}
+
+function bindInboxEvents(){
+  document.querySelectorAll(".inbox-item").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const p=participants.find(x=>x.id===el.dataset.thread);
+      if(p){activeThreadId=p.id;openThread(p);}
+    });
+  });
+}
+
+function initInboxListeners(){
+  if(!me||!window._fb)return;
+  // Clean up old
+  inboxUnsubs.forEach(u=>u());
+  inboxUnsubs=[];
+  inboxData={};
+  const fb=window._fb;
+  participants.filter(p=>p.id!==me.id).forEach(p=>{
+    const threadId2=tid(me.id,p.id);
+    const q=fb.query(fb.collection(fb.db,"threads",threadId2,"messages"),fb.orderBy("ts","desc"));
+    const unsub=fb.onSnapshot(q,snap=>{
+      if(!snap.empty){
+        const d=snap.docs[0].data();
+        inboxData[p.id]={p,text:d.text,ts:d.ts};
+      } else {
+        delete inboxData[p.id];
+      }
+      // Update inbox badge
+      updateInboxBadge();
+      // If inbox tab is visible and no active thread, re-render list
+      if(currentTab==="messages"&&!activeThreadId){
+        document.getElementById("tab-content").innerHTML=renderInbox();
+        bindInboxEvents();
+      }
+    });
+    inboxUnsubs.push(unsub);
+  });
+}
+
+function updateInboxBadge(){
+  const count=Object.keys(inboxData).length;
+  const tabs=document.querySelectorAll(".tab");
+  tabs.forEach(tab=>{
+    if(tab.dataset.tab==="messages"){
+      const existing=tab.querySelector(".badge");
+      if(existing)existing.remove();
+      if(count>0){
+        const badge=document.createElement("span");
+        badge.className="badge";
+        badge.textContent=count;
+        tab.appendChild(badge);
+      }
+    }
+  });
+}
+
+// ── Thread view ───────────────────────────────────────────────────────────────
+function renderThread(p){
+  return`
+  <div class="thread">
+    <div class="thread-header">
+      <button class="thread-back" id="thread-back">←</button>
+      ${avatarHTML(p.av,36)}
+      <div class="thread-info">
+        <div class="thread-name">${esc(p.name)}</div>
+        <div class="thread-sub">${esc(p.title)} · ${esc(p.company)}</div>
+      </div>
+      <button class="thread-meet-btn" id="thread-meet">📅 Meet</button>
+    </div>
+    <div class="messages-list" id="messages-list">
+      ${renderMessages()}
+    </div>
+    <div class="compose">
+      <textarea class="compose-input" id="compose-input" placeholder="${esc(t().typeMsg)}" rows="1">${esc(draftText)}</textarea>
+      <button class="send-btn ${draftText.trim()?"active":"inactive"}" id="send-btn">➤</button>
+    </div>
+  </div>`;
+}
+
+function renderMessages(){
+  if(!threadMessages.length)return`<div style="text-align:center;color:#bbb;font-size:13px;margin-top:48px;line-height:2">💬<br/>Start the conversation</div>`;
+  return threadMessages.map(m=>{
+    const mine=m.fromId===me.id;
+    const cls=mine?"mine":"theirs";
+    return`
+    <div class="bubble-wrap ${cls}">
+      ${!mine?`<div class="bubble-sender">${esc(m.fromName||"")}</div>`:""}
+      <div class="bubble ${cls}">
+        ${esc(m.text)}
+        ${m.meeting?`<div class="meeting-pill ${cls}">📍 ${esc(m.meeting.table)}<br/>🕐 ${esc(m.meeting.time)}</div>`:""}
+      </div>
+      <div class="bubble-time">${fmtTime(m.ts)}</div>
+    </div>`;
+  }).join("");
+}
+
+function scrollToBottom(){
+  const list=document.getElementById("messages-list");
+  if(list)list.scrollTop=list.scrollHeight;
+}
+
+function initThreadListener(p){
+  if(!me||!window._fb)return;
+  const threadId2=tid(me.id,p.id);
+  // Cancel existing
+  if(threadUnsubs[threadId2])threadUnsubs[threadId2]();
+  const fb=window._fb;
+  const q=fb.query(fb.collection(fb.db,"threads",threadId2,"messages"),fb.orderBy("ts","asc"));
+  threadUnsubs[threadId2]=fb.onSnapshot(q,snap=>{
+    threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const list=document.getElementById("messages-list");
+    if(list){
+      list.innerHTML=renderMessages();
+      scrollToBottom();
+    }
+  });
+  // Bind compose events
+  setTimeout(()=>{
+    bindComposeEvents(p);
+    scrollToBottom();
+  },50);
+}
+
+function bindComposeEvents(p){
+  document.getElementById("thread-back")?.addEventListener("click",()=>{
+    activeThreadId=null;
+    threadMessages=[];
+    draftText="";
+    document.getElementById("tab-content").innerHTML=renderInbox();
+    bindInboxEvents();
+  });
+  document.getElementById("thread-meet")?.addEventListener("click",()=>showMeetingModal(p,true));
+  const input=document.getElementById("compose-input");
+  const sendBtn=document.getElementById("send-btn");
+  if(!input||!sendBtn)return;
+  // Auto-resize textarea
+  input.addEventListener("input",()=>{
+    draftText=input.value;
+    sendBtn.className=`send-btn ${draftText.trim()?"active":"inactive"}`;
+    input.style.height="auto";
+    input.style.height=Math.min(input.scrollHeight,100)+"px";
+  });
+  input.addEventListener("keydown",e=>{
+    if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();doSend(p);}
+  });
+  sendBtn.addEventListener("click",()=>doSend(p));
+}
+
+async function doSend(p,textOverride,meeting){
+  const text=(textOverride||draftText).trim();
+  if(!text||!me||!window._fb)return;
+  draftText="";
+  const input=document.getElementById("compose-input");
+  if(input){input.value="";input.style.height="auto";}
+  const sendBtn=document.getElementById("send-btn");
+  if(sendBtn)sendBtn.className="send-btn inactive";
+  const fb=window._fb;
+  const threadId2=tid(me.id,p.id);
+  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av,ts:fb.serverTimestamp()};
+  if(meeting)payload.meeting=meeting;
+  await fb.addDoc(fb.collection(fb.db,"threads",threadId2,"messages"),payload);
+}
+
+// ── QR ────────────────────────────────────────────────────────────────────────
+function renderQR(){
+  return`
+  <div class="qr-wrap">
+    <div style="background:linear-gradient(135deg,${NAVY},${STEEL});border-radius:24px;padding:20px;box-shadow:0 8px 32px rgba(27,58,107,0.4)">
+      <div id="qr-code" style="background:#fff;border-radius:12px;padding:10px;display:flex;align-items:center;justify-content:center"></div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-weight:700;color:${NAVY};font-size:16px;font-family:'Playfair Display',serif;margin-bottom:6px">${esc(t().qrTitle)}</div>
+      <div style="font-size:13px;color:#888">${esc(t().qrSub)}</div>
+      <div style="font-size:10px;color:#bbb;margin-top:6px;word-break:break-all">${APP_URL}</div>
+    </div>
+    <div style="background:var(--light);border-radius:16px;padding:14px 18px;width:100%">
+      <div style="font-size:13px;color:${NAVY};font-weight:700;margin-bottom:8px">📱 ${esc(t().howTitle)}</div>
+      <div style="font-size:12px;color:#555;line-height:1.9">${esc(t().howA)}<br/>${esc(t().howI)}</div>
+    </div>
+  </div>`;
+}
+
+function initQR(){
+  if(currentTab!=="qr")return;
+  const el=document.getElementById("qr-code");
+  if(!el||!window.QRCode)return;
+  el.innerHTML="";
+  new QRCode(el,{text:APP_URL,width:200,height:200,colorDark:NAVY,colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.H});
+}
+
+// ── Profile picker ────────────────────────────────────────────────────────────
+function showPicker(){
+  let pickerSearch="",selected=null;
+  const overlay=document.createElement("div");
+  overlay.id="picker-screen";
+  overlay.innerHTML=`
+    <div class="picker-hero">
+      <div style="color:${STEEL};font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:10px">6TH EDITION · ACCRA 2026</div>
+      <div style="color:#fff;font-size:24px;font-weight:800;font-family:'Playfair Display',serif;line-height:1.2;margin-bottom:6px">German-African<br/>Business Summit</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:13px">23 – 25 November 2026 · Accra, Ghana</div>
+    </div>
+    <div class="picker-card">
+      <div style="font-weight:800;color:${NAVY};font-size:17px;font-family:'Playfair Display',serif;margin-bottom:4px">${esc(S[lang].whoAreYou)}</div>
+      <div style="color:#888;font-size:13px;margin-bottom:14px">${esc(S[lang].whoSub)}</div>
+      <input class="input" id="picker-search" placeholder="${esc(S[lang].searchName)}" style="margin-bottom:12px;flex-shrink:0"/>
+      <div class="picker-list" id="picker-list"></div>
+      <div class="picker-confirm">
+        <button class="btn btn-primary" id="picker-confirm" disabled>${esc(S[lang].whoAreYou)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  function renderList(){
+    const q=pickerSearch.toLowerCase();
+    const filtered=participants.filter(p=>!q||p.name.toLowerCase().includes(q)||p.company.toLowerCase().includes(q));
+    const list=document.getElementById("picker-list");
+    if(!list)return;
+    list.innerHTML=filtered.map(p=>`
+      <div class="picker-item${selected?.id===p.id?" selected":""}" data-id="${p.id}">
+        ${avatarHTML(p.av,42)}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:${NAVY};font-size:14px;font-family:'Playfair Display',serif">${esc(p.name)}</div>
+          <div style="color:#888;font-size:12px">${esc(p.title)} · ${esc(p.company)}</div>
+        </div>
+        ${selected?.id===p.id?`<div class="check">✓</div>`:""}
+      </div>`).join("");
+    list.querySelectorAll(".picker-item").forEach(el=>{
+      el.addEventListener("click",()=>{
+        selected=participants.find(p=>p.id===el.dataset.id)||null;
+        const confirmBtn=document.getElementById("picker-confirm");
+        if(confirmBtn){confirmBtn.disabled=!selected;confirmBtn.textContent=selected?S[lang].confirm:S[lang].whoAreYou;}
+        renderList();
+      });
+    });
+  }
+
+  renderList();
+  document.getElementById("picker-search")?.addEventListener("input",e=>{pickerSearch=e.target.value;selected=null;const c=document.getElementById("picker-confirm");if(c){c.disabled=true;c.textContent=S[lang].whoAreYou;}renderList();});
+  document.getElementById("picker-confirm")?.addEventListener("click",()=>{
+    if(!selected)return;
+    me=selected;
+    try{localStorage.setItem("gabs_me",JSON.stringify(me));}catch(e){}
+    overlay.style.opacity="0";overlay.style.transition="opacity 0.25s";
+    setTimeout(()=>{overlay.remove();renderApp();},250);
+  });
+}
+
+// ── Meeting modal ─────────────────────────────────────────────────────────────
+function showMeetingModal(p,fromThread=false){
+  const overlay=makeOverlay();
+  overlay.innerHTML=`<div class="sheet"><div id="meeting-content"></div></div>`;
+  document.body.appendChild(overlay);
+
+  function renderForm(){
+    document.getElementById("meeting-content").innerHTML=`
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:18px">
+        ${avatarHTML(p.av,44)}
+        <div>
+          <div style="font-weight:700;color:${NAVY};font-family:'Playfair Display',serif">${esc(p.name)}</div>
+          <div style="color:#888;font-size:13px">${esc(p.company)}</div>
+        </div>
+      </div>
+      <div style="font-weight:700;color:${NAVY};font-size:16px;font-family:'Playfair Display',serif;margin-bottom:14px">${esc(t().meetReq)}</div>
+      <div class="form-label">${esc(t().selectTable)}</div>
+      <select class="input" id="m-table" style="margin-bottom:12px">
+        <option value="">${esc(t().selectTable)}</option>
+        ${tables.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("")}
+      </select>
+      <div class="form-label">${esc(t().selectTime)}</div>
+      <select class="input" id="m-time" style="margin-bottom:12px">
+        <option value="">${esc(t().selectTime)}</option>
+        ${times.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("")}
+      </select>
+      <div class="form-label">${esc(t().addMsg)}</div>
+      <textarea class="input" id="m-msg" rows="3" style="resize:none;margin-bottom:16px"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">${esc(t().cancel)}</button>
+        <button class="btn btn-primary" id="m-send" disabled>${esc(t().send)}</button>
+      </div>`;
+    const tableEl=document.getElementById("m-table");
+    const timeEl=document.getElementById("m-time");
+    const sendEl=document.getElementById("m-send");
+    const check=()=>{if(sendEl)sendEl.disabled=!tableEl.value||!timeEl.value;};
+    tableEl?.addEventListener("change",check);
+    timeEl?.addEventListener("change",check);
+    document.getElementById("m-cancel")?.addEventListener("click",()=>overlay.remove());
+    sendEl?.addEventListener("click",async()=>{
+      const table=tableEl.value,time=timeEl.value,msg=document.getElementById("m-msg").value.trim();
+      if(!table||!time)return;
+      document.getElementById("meeting-content").innerHTML=`<div style="text-align:center;padding:40px 0"><div style="font-size:52px">✅</div><div style="color:${NAVY};font-weight:700;font-size:16px;font-family:'Playfair Display',serif;margin-top:14px">${esc(t().sent)}</div></div>`;
+      // Send to Firestore
+      if(fromThread){
+        await doSend(p,msg||"Meeting proposed ✓",{table,time});
+      } else {
+        openThread(p);
+        setTimeout(async()=>{await doSend(p,msg||"Meeting proposed ✓",{table,time});},300);
+      }
+      setTimeout(()=>overlay.remove(),1600);
+    });
+  }
+  renderForm();
+  overlay.addEventListener("click",e=>{if(e.target===overlay)overlay.remove();});
+}
+
+// ── AI match modal ────────────────────────────────────────────────────────────
+function showAIModal(){
+  const overlay=makeOverlay(true);
+  overlay.innerHTML=`
+    <div class="sheet center-card" style="max-width:420px">
+      <div style="font-weight:700;color:${NAVY};font-size:17px;font-family:'Playfair Display',serif;margin-bottom:20px">${esc(t().yourMatch)}</div>
+      <div id="ai-content" style="text-align:center;padding:40px 0">
+        <div class="spinner" style="margin:0 auto;border-top-color:${STEEL}"></div>
+        <div style="color:#999;margin-top:16px;font-size:14px">${esc(t().matching)}</div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(()=>{
+    const m=bestMatch();
+    document.getElementById("ai-content").innerHTML=`
+      <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px;text-align:left">
+        ${avatarHTML(m.av,54)}
+        <div>
+          <div style="font-weight:700;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif">${esc(m.name)}</div>
+          <div style="color:${STEEL};font-size:13px">${esc(m.title)}</div>
+          <div style="color:#888;font-size:12px">${esc(m.company)}</div>
+        </div>
+      </div>
+      <div class="ai-reason" style="text-align:left;margin-bottom:18px">
+        ${esc(lang==="de"?`${m.name} von ${m.company} (${m.country}) ist ein idealer GABS-Kontakt. Fokus auf ${m.sector} mit starker Entscheidungsbefugnis.`:`${m.name} from ${m.company} (${m.country}) is an ideal GABS contact. Their ${m.sector} focus and seniority create a strong cross-border opportunity.`)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px">
+        <button class="btn btn-ghost" id="ai-cancel">${esc(t().cancel)}</button>
+        <button class="btn btn-primary" id="ai-propose">${esc(t().propose)} →</button>
+      </div>`;
+    document.getElementById("ai-cancel")?.addEventListener("click",()=>overlay.remove());
+    document.getElementById("ai-propose")?.addEventListener("click",()=>{overlay.remove();showMeetingModal(m);});
+  },1400);
+  overlay.addEventListener("click",e=>{if(e.target===overlay)overlay.remove();});
+}
+
+// ── Admin modal ───────────────────────────────────────────────────────────────
+function showAdminModal(){
+  const overlay=makeOverlay();
+  function renderMain(){
+    overlay.innerHTML=`
+    <div class="sheet">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-weight:800;color:${NAVY};font-size:16px;font-family:'Playfair Display',serif">⚙️ ${esc(t().adminTitle)}</div>
+          <div style="font-size:12px;color:#999;margin-top:2px">${participants.length} ${esc(t().loaded)}</div>
+        </div>
+        <button class="btn btn-ghost" id="a-close" style="width:auto;padding:7px 16px">${esc(t().close)}</button>
+      </div>
+      <button class="btn" style="background:${LIGHT};color:${NAVY};border:2px dashed ${STEEL};margin-bottom:10px" id="a-dl">${esc(t().dlTpl)}</button>
+      <input type="file" id="csv-file" accept=".csv" style="display:none"/>
+      <button class="btn btn-primary" style="margin-bottom:10px" id="a-upload">${esc(t().upCSV)}</button>
+      <button class="btn btn-ghost" style="margin-bottom:10px" id="a-rooms">🏨 ${esc(t().editRooms)}</button>
+      <div id="a-feedback" style="margin-bottom:8px"></div>
+      <button class="btn btn-muted" style="margin-bottom:10px" id="a-reset">${esc(t().reset)}</button>
+      <div style="font-size:11px;color:#ccc;text-align:center">${esc(t().csvHint)}</div>
+    </div>`;
+    document.getElementById("a-close")?.addEventListener("click",()=>overlay.remove());
+    document.getElementById("a-dl")?.addEventListener("click",()=>{
+      const csv=["name,company,sector,country,title","Kwame Asante,GoldCoast Ventures,Finance,Ghana,CEO"].join("\n");
+      const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="GABS2026_template.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+    });
+    document.getElementById("a-upload")?.addEventListener("click",()=>document.getElementById("csv-file")?.click());
+    document.getElementById("csv-file")?.addEventListener("change",e=>{
+      const file=e.target.files[0];if(!file)return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        try{
+          const lines=ev.target.result.trim().split("\n").filter(l=>l.trim());
+          if(lines.length<2)throw new Error("Need header + at least 1 row");
+          const headers=lines[0].split(",").map(h=>h.trim().toLowerCase().replace(/"/g,""));
+          const req=["name","company","sector","country","title"];
+          const miss=req.filter(r=>!headers.includes(r));
+          if(miss.length)throw new Error("Missing: "+miss.join(", "));
+          const parsed=lines.slice(1).map((line,i)=>{
+            const vals=line.split(",").map(v=>v.trim().replace(/"/g,""));
+            const row=Object.fromEntries(headers.map((h,idx)=>[h,vals[idx]||""]));
+            return{id:String(i+1),...row,av:row.name.split(" ").slice(0,2).map(w=>w[0]?.toUpperCase()||"").join("")};
+          }).filter(p=>p.name);
+          participants=parsed;
+          try{localStorage.setItem("gabs_participants",JSON.stringify(parsed));}catch(e){}
+          const fb=document.getElementById("a-feedback");
+          if(fb)fb.innerHTML=`<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;font-size:13px;color:#2E7D32">✓ ${parsed.length} ${t().loaded}</div>`;
+        }catch(err){
+          const fb=document.getElementById("a-feedback");
+          if(fb)fb.innerHTML=`<div style="background:#FFEBEE;border-radius:10px;padding:10px 14px;font-size:13px;color:#C62828">${esc(err.message)}</div>`;
+        }
+      };
+      reader.readAsText(file);e.target.value="";
+    });
+    document.getElementById("a-reset")?.addEventListener("click",()=>{
+      participants=SAMPLE;try{localStorage.removeItem("gabs_participants");}catch(e){}
+      const fb=document.getElementById("a-feedback");
+      if(fb)fb.innerHTML=`<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;font-size:13px;color:#2E7D32">✓ Reset</div>`;
+    });
+    document.getElementById("a-rooms")?.addEventListener("click",renderRooms);
+  }
+
+  function renderRooms(){
+    overlay.innerHTML=`
+    <div class="sheet">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <button id="rooms-back" style="background:none;border:none;font-size:22px;cursor:pointer;color:${NAVY}">←</button>
+        <div style="font-weight:800;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif">${esc(t().editRooms)}</div>
+      </div>
+      <div class="form-label">${esc(t().roomsLbl)}</div>
+      <textarea class="input" id="rooms-txt" rows="8" style="resize:none;margin-bottom:12px;font-size:13px;line-height:1.8">${esc(tables.join("\n"))}</textarea>
+      <div class="form-label">${esc(t().timesLbl)}</div>
+      <textarea class="input" id="times-txt" rows="7" style="resize:none;margin-bottom:16px;font-size:13px;line-height:1.8">${esc(times.join("\n"))}</textarea>
+      <button class="btn btn-primary" id="rooms-save">${esc(t().saveRooms)}</button>
+    </div>`;
+    document.getElementById("rooms-back")?.addEventListener("click",renderMain);
+    document.getElementById("rooms-save")?.addEventListener("click",()=>{
+      const nr=document.getElementById("rooms-txt").value.split("\n").map(r=>r.trim()).filter(Boolean);
+      const nt=document.getElementById("times-txt").value.split("\n").map(r=>r.trim()).filter(Boolean);
+      if(!nr.length||!nt.length)return;
+      tables=nr;times=nt;
+      try{localStorage.setItem("gabs_tables",JSON.stringify(nr));localStorage.setItem("gabs_times",JSON.stringify(nt));}catch(e){}
+      overlay.remove();
+    });
+  }
+
+  document.body.appendChild(overlay);
+  renderMain();
+  overlay.addEventListener("click",e=>{if(e.target===overlay)overlay.remove();});
+}
+
+// ── Overlay helper ────────────────────────────────────────────────────────────
+function makeOverlay(center=false){
+  const el=document.createElement("div");
+  el.className="overlay"+(center?" center":"");
+  return el;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+function boot(){
+  const app=document.getElementById("app");
+  app.style.display="flex";
+  document.getElementById("loader").classList.add("hidden");
+  if(!me){showPicker();return;}
+  renderApp();
+}
+
+// Wait for Firebase
+if(window._fb){
+  boot();
+} else {
+  window.addEventListener("fb-ready",boot,{once:true});
+  // Fallback: boot without Firebase after 3s
+  setTimeout(()=>{if(!window._fb){console.warn("Firebase timeout — booting without");boot();}},3000);
+}
+
+// QR after render
+const _origRenderApp=renderApp;
+window.renderApp=function(){_origRenderApp();if(currentTab==="qr")setTimeout(initQR,100);};
+
+// SW
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
