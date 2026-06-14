@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#1B3A6B"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="GABS 2026"/>
+<title>GABS 2026</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
+const db=getFirestore(app);
+window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
+window.dispatchEvent(new Event("fb-ready"));
+</script>
+<style>
+:root{--n:#1B3A6B;--s:#5B9BB5;--l:#E8F2F8;--g:#2E7D32;--r:#C62828;--gold:#C49A2A;--safe-b:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--n)}
+#app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;background:#F4F8FC;overflow:hidden;position:relative}
+button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appearance:none;border:none;background:none}
+::-webkit-scrollbar{display:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{box-shadow:0 4px 20px rgba(91,155,181,.2)}50%{box-shadow:0 4px 32px rgba(91,155,181,.5)}}
+@keyframes badgePop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+#loader{position:fixed;inset:0;background:var(--n);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .35s}
+#loader.gone{opacity:0;pointer-events:none}
+.spin{width:38px;height:38px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--s);border-radius:50%;animation:spin .8s linear infinite}
+
+/* Buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:13px 16px;border-radius:14px;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .15s,transform .1s;touch-action:manipulation}
+.btn:active{opacity:.75;transform:scale(.98)}
+.btn:disabled{opacity:.35;pointer-events:none}
+.bp{background:linear-gradient(100deg,var(--n),var(--s));color:#fff;font-family:'Playfair Display',serif}
+.bg{background:#fff;color:var(--n);border:2px solid rgba(27,58,107,.15)}
+.bs{background:var(--s);color:#fff}
+.bm{background:#EFEFEF;color:#999}
+.bgn{background:#E8F5E9;color:var(--g);border:1.5px solid #A5D6A7}
+.brd{background:#FFEBEE;color:var(--r);border:1.5px solid #EF9A9A}
+.bsm{padding:8px 14px;font-size:13px;width:auto;border-radius:10px}
+
+/* Inputs */
+.inp{width:100%;padding:12px 15px;border-radius:14px;border:1.5px solid rgba(91,155,181,.35);font-size:15px;color:var(--n);background:#fff;outline:none;transition:border-color .2s}
+.inp:focus{border-color:var(--s)}
+select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath fill='%235B9BB5' d='M5.5 7L0 0h11z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:34px}
+.lbl{font-size:12px;color:#888;font-weight:600;margin-bottom:5px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--l);color:var(--n);border:1px solid rgba(91,155,181,.25)}
+.err{background:#FFEBEE;border-radius:10px;padding:10px 14px;font-size:13px;color:var(--r);margin-top:8px}
+.ok{background:#E8F5E9;border-radius:10px;padding:10px 14px;font-size:13px;color:var(--g);margin-top:8px}
+
+/* Header */
+#hdr{background:linear-gradient(135deg,var(--n) 0%,#253F82 55%,var(--s) 100%);padding:14px 18px 0;flex-shrink:0;overflow:hidden;position:relative}
+#hdr::before{content:'';position:absolute;top:-40px;right:-40px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.04)}
+.hdr-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.hdr-title{user-select:none;cursor:default;touch-action:manipulation;-webkit-user-select:none}
+.eyebrow{color:var(--s);font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:4px}
+.hdr-name{color:#fff;font-size:18px;font-weight:800;font-family:'Playfair Display',serif;line-height:1.2}
+.lang-btn{background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.28)!important;color:#fff;border-radius:20px;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;width:auto}
+.lang-btn:active{opacity:.7}
+.tabs{display:flex;gap:2px}
+.tab{flex:1;padding:10px 2px;background:transparent;color:rgba(255,255,255,.6);font-weight:600;font-size:12px;border-radius:10px 10px 0 0;cursor:pointer;touch-action:manipulation;position:relative;letter-spacing:.02em}
+.tab.on{background:#F4F8FC;color:var(--n);font-family:'Playfair Display',serif;font-weight:700}
+.badge{position:absolute;top:5px;right:4px;background:var(--s);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;animation:badgePop .3s ease}
+.badge.red{background:#E53935}
+
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+/* Participant card */
+.p-card{background:#fff;border:1px solid #E2ECF4;border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:9px;box-shadow:0 2px 8px rgba(27,58,107,.05);animation:fadeUp .25s ease both}
+.p-card.hi{border-color:var(--s);animation:pulse 2s ease-in-out 3,fadeUp .25s ease both}
+.p-card.self{opacity:.45}
+.p-top{display:flex;gap:11px;align-items:center}
+.p-info{flex:1;min-width:0}
+.p-name{font-weight:700;color:var(--n);font-size:15px;font-family:'Playfair Display',serif;line-height:1.2}
+.p-role{color:var(--s);font-size:12px;font-weight:600;margin-top:2px}
+.p-co{color:#888;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-acts{display:grid;grid-template-columns:1fr 2fr;gap:7px}
+
+/* Avatar */
+.av{border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,var(--n),var(--s));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:'Playfair Display',serif;box-shadow:0 2px 8px rgba(27,58,107,.3)}
+
+/* Overlay */
+.ov{position:fixed;inset:0;background:rgba(27,58,107,.58);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(6px);padding:10px}
+.ov.ctr{align-items:center;padding:18px}
+.sheet{background:#fff;border-radius:22px 22px 14px 14px;width:100%;max-width:480px;padding:22px;box-shadow:0 -8px 40px rgba(27,58,107,.2);animation:slideUp .26s ease;max-height:92vh;overflow-y:auto}
+.sheet.pop{border-radius:22px;animation:popIn .22s ease}
+
+/* Landing / Entry screen */
+#entry{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:linear-gradient(160deg,var(--n) 0%,#253F82 48%,var(--s) 100%)}
+.entry-hero{padding:44px 26px 22px;flex-shrink:0}
+.entry-card{flex:1;background:#F4F8FC;border-radius:26px 26px 0 0;display:flex;flex-direction:column;padding:22px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.entry-tabs{display:flex;background:#E8EFF8;border-radius:12px;padding:3px;margin-bottom:20px;flex-shrink:0}
+.entry-tab{flex:1;padding:9px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;touch-action:manipulation;color:#888}
+.entry-tab.on{background:#fff;color:var(--n);box-shadow:0 2px 8px rgba(27,58,107,.1)}
+
+/* Picker list */
+.picker-list{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.pi{display:flex;align-items:center;gap:12px;padding:12px 13px;border-radius:13px;border:1.5px solid #E2ECF4;background:#fff;cursor:pointer;transition:all .15s;touch-action:manipulation}
+.pi.sel{border-color:var(--s);background:rgba(91,155,181,.08)}
+.pi:active{transform:scale(.98)}
+.chk{width:20px;height:20px;border-radius:50%;background:var(--s);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;flex-shrink:0;animation:popIn .18s ease}
+
+/* Messages */
+.inbox{padding:0 16px}
+.inbox-hdr{font-weight:800;color:var(--n);font-size:20px;font-family:'Playfair Display',serif;padding:16px 0 12px}
+.inbox-empty{display:flex;flex-direction:column;align-items:center;padding:56px 20px;text-align:center;gap:8px}
+.inbox-row{display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--l);cursor:pointer;touch-action:manipulation}
+.inbox-row:active{background:rgba(91,155,181,.05)}
+.inbox-meta{flex:1;min-width:0}
+.inbox-name{font-weight:700;color:var(--n);font-size:14px;font-family:'Playfair Display',serif}
+.inbox-prev{color:#999;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+
+/* Thread */
+.thread{display:flex;flex-direction:column;height:100%}
+.t-hdr{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--l);flex-shrink:0;background:#fff}
+.t-back{font-size:22px;cursor:pointer;color:var(--n);padding:4px 8px 4px 0;touch-action:manipulation;line-height:1;flex-shrink:0}
+.t-info{flex:1;min-width:0}
+.t-name{font-weight:700;color:var(--n);font-size:14px;font-family:'Playfair Display',serif}
+.t-sub{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-meet{background:var(--l);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--n);font-weight:700;cursor:pointer;flex-shrink:0;touch-action:manipulation}
+.msgs{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 15px;display:flex;flex-direction:column;gap:9px;background:#F0F5FA}
+.bw{display:flex;flex-direction:column;gap:3px;max-width:80%}
+.bw.me{align-self:flex-end;align-items:flex-end}
+.bw.them{align-self:flex-start;align-items:flex-start}
+.bsender{font-size:11px;color:#bbb;padding:0 4px}
+.bub{padding:10px 13px;font-size:14px;line-height:1.5;word-break:break-word}
+.bub.me{background:linear-gradient(135deg,var(--n),var(--s));color:#fff;border-radius:17px 17px 4px 17px}
+.bub.them{background:#fff;color:var(--n);border-radius:17px 17px 17px 4px;border:1px solid #E2ECF4}
+.btime{font-size:10px;color:#ccc;padding:0 4px}
+.mpill{margin-top:7px;padding:8px 11px;border-radius:9px;font-size:12px;font-weight:600;line-height:1.7}
+.mpill.me{background:rgba(255,255,255,.18);color:#fff}
+.mpill.them{background:rgba(91,155,181,.12);color:var(--n)}
+.mresp{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.mresp-btn{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;border:1.5px solid;transition:opacity .15s}
+.mresp-btn:active{opacity:.7}
+.mresp-status{font-size:12px;font-weight:700;padding:4px 10px;border-radius:8px;margin-top:6px;display:inline-flex;align-items:center;gap:4px}
+
+.compose{display:flex;gap:9px;padding:10px 13px;border-top:1px solid var(--l);background:#fff;flex-shrink:0;align-items:flex-end;padding-bottom:calc(10px + var(--safe-b))}
+.cinp{flex:1;padding:10px 15px;border-radius:21px;border:1.5px solid rgba(91,155,181,.35);font-size:15px;color:var(--n);background:#fff;outline:none;resize:none;max-height:96px;overflow-y:auto;line-height:1.45;transition:border-color .2s}
+.cinp:focus{border-color:var(--s)}
+.sbtn{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;flex-shrink:0;transition:background .2s,transform .1s;touch-action:manipulation}
+.sbtn:active{transform:scale(.88)}
+.sbtn.on{background:linear-gradient(135deg,var(--n),var(--s));color:#fff}
+.sbtn.off{background:#E5E5E5;color:#ccc;cursor:default}
+
+/* Schedule */
+.sched-inner{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.day-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(27,58,107,.06)}
+.day-hdr{background:linear-gradient(90deg,var(--n),#253F82);color:#fff;padding:10px 15px;font-weight:700;font-size:13px;font-family:'Playfair Display',serif}
+.sesh{padding:11px 15px;border-bottom:1px solid var(--l);display:flex;gap:10px}
+.sesh:last-child{border-bottom:none}
+.sesh-time{font-size:11px;color:var(--s);font-weight:700;min-width:72px;padding-top:2px;flex-shrink:0}
+.sesh-title{font-size:13px;font-weight:700;color:var(--n);line-height:1.3}
+.sesh-loc{font-size:11px;color:#aaa;margin-top:2px}
+.sesh-type{display:inline-flex;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-top:4px}
+
+/* Footer */
+#ftr{background:#fff;border-top:1px solid var(--l);padding:8px 16px calc(8px + var(--safe-b));flex-shrink:0}
+.ftr-me{display:flex;justify-content:space-between;align-items:center;padding-bottom:7px;margin-bottom:7px;border-bottom:1px solid var(--l)}
+.ftr-name{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--n);font-weight:600}
+.ftr-sw{color:var(--s);font-size:11px;cursor:pointer;font-weight:600;touch-action:manipulation;padding:4px 0}
+.ftr-logos{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:7px}
+.ftr-pts{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:5px}
+.pt{padding:3px 9px;border-radius:7px;border:1px solid var(--l);background:#fff;font-size:11px;font-weight:700}
+.ftr-copy{text-align:center;font-size:9px;color:#ddd;cursor:default;user-select:none;touch-action:manipulation}
+
+/* Admin pending */
+.pending-card{background:#fff;border:1px solid #E2ECF4;border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.pending-info{display:flex;gap:10px;align-items:center}
+.pending-acts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+
+/* Discover inner */
+.disc-inner{padding:13px 15px;display:flex;flex-direction:column;gap:9px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.cnt{color:#bbb;font-size:12px;font-weight:600}
+</style>
+</head>
+<body>
+<div id="loader"><div class="spin"></div><div style="color:rgba(255,255,255,.45);font-size:12px;margin-top:14px;letter-spacing:1px">GABS 2026</div></div>
+<div id="app" style="display:none"></div>
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const NAVY="#1B3A6B",STEEL="#5B9BB5",LIGHT="#E8F2F8";
+const APP_URL="https://douglasamesinu.github.io/gabs2026/";
+const DURATIONS=[15,20,30,45,60];
+// No fixed venue list — participants agree their own meeting spot
+// Meeting days — Day 1 is informal, B2B on Day 2 & 3
+const MEETING_DAYS=[
+  {label:"Tue 24 Nov 2026 — Day One",date:"20261124"},
+  {label:"Wed 25 Nov 2026 — Day Two",date:"20261125"},
+];
+// EmailJS credentials — replace with your own from emailjs.com
+const EMAILJS_SERVICE_ID="service_3aowa2a";
+const EMAILJS_TEMPLATE_ID="template_gec29jf";
+const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
+// Valid ticket references — upload via admin panel
+let validTicketRefs=[];
+try{const s=localStorage.getItem("gabs_tickets");if(s)validTicketRefs=JSON.parse(s);}catch(e){}
+const SECTORS=["Agriculture","Consulting","Construction","Energy","Finance","Healthcare","Logistics","Manufacturing","Mining","Technology","Trade","Other"];
+const COUNTRIES=["Germany","Ghana","Nigeria","Senegal","Kenya","South Africa","Cameroon","Côte d'Ivoire","Ethiopia","Tanzania","Other"];
+
+function allSlots(){const s=[];for(let h=8;h<18;h++){s.push(`${String(h).padStart(2,"0")}:00`);s.push(`${String(h).padStart(2,"0")}:30`);}return s;}
+
+const SCHEDULE=[
+  {day:"MON 23 NOV 2026 · INFORMAL OPENING",sessions:[
+    {time:"19:00–22:00",title:"Welcome Reception",loc:"Garden & Reception Hall",type:"social"},
+  ]},
+  {day:"TUE 24 NOV 2026 · DAY ONE",sessions:[
+    {time:"09:00",title:"Opening by VIP Speakers",loc:"Main Hall",type:"plenary"},
+    {time:"10:00",title:"Opening Panel: The future of African German Business Relations in a changing world: More Opportunities than Challenges!?",loc:"Main Hall",type:"panel"},
+    {time:"11:00",title:"VIP Speaker: Business Key Note",loc:"Main Hall",type:"plenary"},
+    {time:"11:20",title:"Fireside Chat: How we can change the world — The perspective of young entrepreneurs from Africa and Germany",loc:"Main Hall",type:"fireside"},
+    {time:"12:00",title:"Lunch Break — Visit to the Startup Villages",loc:"Asana Bar & Restaurant",type:"networking"},
+    {time:"14:00",title:"Panel: Africa in the World of Tomorrow – How is the continent preparing technologically for the future?",loc:"Main Hall",type:"panel"},
+    {time:"15:15",title:"Panel 2: Natural Resources and Mining",loc:"Main Hall",type:"panel"},
+    {time:"16:30",title:"Fireside Chat with VIP Speaker",loc:"Main Hall",type:"fireside"},
+    {time:"17:00–18:00",title:"Transfer to German Ambassador Residence (by invitation only)",loc:"German Ambassador Residence",type:"logistics"},
+    {time:"18:30",title:"Dinner Reception hosted by the German Ambassador",loc:"German Ambassador Residence",type:"social"},
+    {time:"21:30",title:"Transfer back to Hotels",loc:"Various Hotels",type:"logistics"},
+  ]},
+  {day:"WED 25 NOV 2026 · DAY TWO",sessions:[
+    {time:"08:00",title:"Breakfast Meeting with German Ambassadors in Africa and Investment Promotion Agencies",loc:"Garden / Asana Bar",type:"networking"},
+    {time:"09:30",title:"Panel 3: Financing your African Business",loc:"Main Hall",type:"panel"},
+    {time:"10:45",title:"Panel 4: Regulations and Legal Context",loc:"Main Hall",type:"panel"},
+    {time:"12:00",title:"Fireside Chat with VIP Speaker: AfCFTA — From Borders to Business: How AfCFTA shapes African Trade",loc:"Main Hall",type:"fireside"},
+    {time:"12:30",title:"Lunch Break",loc:"Asana Bar & Restaurant & Board Room",type:"networking"},
+    {time:"14:00",title:"Panel 5: Automotive",loc:"Main Hall",type:"panel"},
+    {time:"15:15",title:"Closing Panel: Made in Africa - Made by Germany: German Investment on the Rise",loc:"Main Hall",type:"panel"},
+    {time:"16:30",title:"Closing Remarks and Farewell Drinks",loc:"Main Hall",type:"plenary"},
+    {time:"17:30",title:"Buses leaving for Moevenpick Hotel",loc:"Moevenpick Hotel",type:"logistics"},
+    {time:"19:00",title:"educataGhana Kickoff (see separate program)",loc:"Moevenpick Hotel / Piazza",type:"social"},
+  ]},
+];
+const SC={plenary:{bg:"#E3EAF8",c:NAVY},panel:{bg:"#E8F2F8",c:STEEL},networking:{bg:"#F0F7F0",c:"#2E7D32"},b2b:{bg:"#FFF8E1",c:"#E65100"},workshop:{bg:"#F3E5F5",c:"#6A1B9A"},social:{bg:"#FCE4EC",c:"#AD1457"},logistics:{bg:"#F5F5F5",c:"#757575"},fireside:{bg:"#FFF3E0",c:"#E65100"},reception:{bg:"#FCE4EC",c:"#AD1457"},closing:{bg:"#E3EAF8",c:NAVY},breakfast:{bg:"#F0F7F0",c:"#2E7D32"},lunch:{bg:"#F0F7F0",c:"#2E7D32"}};
+
+// ── State ──────────────────────────────────────────────────────────────────
+let lang=localStorage.getItem("gabs_lang")||"en";
+let me=null;try{const s=localStorage.getItem("gabs_me");if(s)me=JSON.parse(s);}catch(e){}
+let participants=[];
+let currentTab="discover";
+let activeThreadId=null;
+let threadMessages=[];
+let draftText="";
+let inboxData={};
+let threadUnsub=null;
+let inboxUnsubs=[];
+let inboxStarted=false;
+let pendingRegs=[];
+let participantsUnsub=null;
+let discSearch="",discSector="",discCountry="";
+let tapCount=0,tapTimer=null;
+let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
+
+// ── Strings ────────────────────────────────────────────────────────────────
+const S={
+  en:{
+    discover:"Discover",messages:"Messages",schedule:"Schedule",
+    search:"Search name or company…",allSectors:"All Sectors",allCountries:"All Countries",
+    findMatch:"✦ Find my best match",matching:"Analysing…",yourMatch:"Your Best Match",
+    propose:"Propose Meeting",message:"Message",you:"You",
+    meetReq:"Propose a Meeting",selectLoc:"Select venue",startTime:"Start time",
+    duration:"Duration",addMsg:"Add a note (optional)",send:"Send Request",
+    cancel:"Cancel",sent:"✓ Request sent!",
+    noMsgs:"No conversations yet",startConv:"Go to Discover and tap Message",
+    typeMsg:"Message…",langBtn:"DE",
+    alreadyReg:"I'm already registered",registerNew:"Register for GABS 2026",
+    whoSub:"Select your name to continue",searchName:"Search your name…",
+    confirm:"This is me — Continue",switchProfile:"Switch",
+    regTitle:"Register for GABS 2026",regSub:"Create your profile to connect with participants",
+    fname:"Full name",company:"Company / Organisation",title:"Job title",
+    sector:"Sector",country:"Country",email:"Email address",
+    regBtn:"Submit Registration",regPending:"Registration submitted!",
+    regPendingMsg:"Your profile is under review. AHK Ghana will approve your access shortly.",
+    accept:"✓ Accept",decline:"✗ Decline",busy:"⏱ Busy",
+    accepted:"✓ Accepted",declined:"✗ Declined",busySt:"⏱ Busy",pending:"Awaiting response",
+    mins:"min",organizers:"Organisers",partners:"Partners",
+    phone:"Phone number",linkedin:"LinkedIn profile",ticketRef:"GABS Ticket Reference",ticketHint:"Check your confirmation email for your ticket reference",addToCalendar:"📅 Add to Calendar",ticketInvalid:"Ticket reference not found. Your registration will be reviewed manually.",
+    adminTitle:"Admin Panel",close:"Close",
+    pendingTab:"Pending",participantsTab:"Participants",
+    approveBtn:"Approve",rejectBtn:"Reject",
+    noPending:"No pending registrations",
+    exportCSV:"↓ Export participant CSV",uploadCSV:"↑ Upload participant CSV",
+    dlTpl:"↓ CSV Template",reset:"Reset data",
+    csvHint:"Columns: name,company,sector,country,title,email",
+    allTimes:"All times are GMT (Accra time)",
+    noParticipants:"No participants yet",noParticipantsSub:"Register or ask your admin to upload a participant list",
+    pendingApproval:"⏳ Pending approval",
+    showQR:"Show QR Code",
+  },
+  de:{
+    discover:"Entdecken",messages:"Nachrichten",schedule:"Programm",
+    search:"Name oder Unternehmen…",allSectors:"Alle Sektoren",allCountries:"Alle Länder",
+    findMatch:"✦ Beste Übereinstimmung",matching:"Analysiere…",yourMatch:"Beste Übereinstimmung",
+    propose:"Treffen vorschlagen",message:"Nachricht",you:"Sie",
+    meetReq:"Treffen vorschlagen",selectLoc:"Veranstaltungsort",startTime:"Startzeit",
+    duration:"Dauer",addMsg:"Notiz hinzufügen (optional)",send:"Anfrage senden",
+    cancel:"Abbrechen",sent:"✓ Anfrage gesendet!",
+    noMsgs:"Noch keine Unterhaltungen",startConv:"Entdecken Sie Teilnehmer",
+    typeMsg:"Nachricht…",langBtn:"EN",
+    alreadyReg:"Ich bin bereits registriert",registerNew:"Für GABS 2026 registrieren",
+    whoSub:"Wählen Sie Ihren Namen",searchName:"Namen suchen…",
+    confirm:"Das bin ich — Weiter",switchProfile:"Wechseln",
+    regTitle:"Für GABS 2026 registrieren",regSub:"Erstellen Sie Ihr Profil",
+    fname:"Vollständiger Name",company:"Unternehmen / Organisation",title:"Berufsbezeichnung",
+    sector:"Sektor",country:"Land",email:"E-Mail-Adresse",
+    regBtn:"Registrierung einreichen",regPending:"Registrierung eingereicht!",
+    regPendingMsg:"Ihr Profil wird geprüft. AHK Ghana wird Ihren Zugang in Kürze freischalten.",
+    accept:"✓ Annehmen",decline:"✗ Ablehnen",busy:"⏱ Beschäftigt",
+    accepted:"✓ Angenommen",declined:"✗ Abgelehnt",busySt:"⏱ Beschäftigt",pending:"Ausstehend",
+    mins:"Min.",organizers:"Veranstalter",partners:"Partner",
+    phone:"Telefonnummer",linkedin:"LinkedIn-Profil",ticketRef:"GABS-Ticketreferenz",ticketHint:"Prüfen Sie Ihre Bestätigungs-E-Mail",addToCalendar:"📅 Zum Kalender",ticketInvalid:"Ticketreferenz nicht gefunden. Ihre Registrierung wird manuell geprüft.",
+    adminTitle:"Admin-Panel",close:"Schließen",
+    pendingTab:"Ausstehend",participantsTab:"Teilnehmer",
+    approveBtn:"Genehmigen",rejectBtn:"Ablehnen",
+    noPending:"Keine ausstehenden Anmeldungen",
+    exportCSV:"↓ Teilnehmer-CSV exportieren",uploadCSV:"↑ Teilnehmer-CSV hochladen",
+    dlTpl:"↓ CSV-Vorlage",reset:"Zurücksetzen",
+    csvHint:"Spalten: name,company,sector,country,title,email",
+    allTimes:"Alle Zeiten in GMT (Accra-Zeit)",
+    noParticipants:"Noch keine Teilnehmer",noParticipantsSub:"Registrieren Sie sich oder bitten Sie den Admin",
+    pendingApproval:"⏳ Ausstehend",
+    showQR:"QR-Code anzeigen",
+  }
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const t=()=>S[lang];
+const tid=(a,b)=>[a,b].sort().join("__");
+const esc=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const fmtTime=ts=>ts?.seconds?new Date(ts.seconds*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
+function avHTML(av,sz=40){const fs=Math.round(sz*.35);return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px">${esc(av)}</div>`;}
+function initials(name){return name.trim().split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");}
+function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
+
+function bestMatch(){
+  const s=["ceo","md","managing director","director","head","partner","founder","coo","cto","cfo","president","vp"];
+  const pool=participants.filter(p=>p.id!==me?.id);
+  if(!pool.length)return null;
+  return pool.map(p=>{let sc=0;if(p.country==="Germany")sc+=30;if(p.sector==="Finance")sc+=25;if(s.some(x=>p.title?.toLowerCase().includes(x)))sc+=20;sc+=Math.random()*8;return{...p,sc};}).sort((a,b)=>b.sc-a.sc)[0];
+}
+
+// Slot blocking
+function saveSlots(){try{localStorage.setItem("gabs_slots",JSON.stringify(bookedSlots));}catch(e){}}
+function timeToMins(t){const[h,m]=t.split(":").map(Number);return h*60+m;}
+function minsToTime(m){return`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;}
+function bookSlot(myId,theirId,startTime,durMins){
+  const end=minsToTime(timeToMins(startTime)+durMins);
+  [myId,theirId].forEach(id=>{if(!bookedSlots[id])bookedSlots[id]=[];bookedSlots[id].push({start:startTime,end});});
+  saveSlots();
+}
+function isBlocked(pid,start,dur){
+  return(bookedSlots[pid]||[]).some(s=>{const bs=timeToMins(s.start),be=timeToMins(s.end),ns=timeToMins(start),ne=ns+dur;return ns<be&&ne>bs;});
+}
+
+// ── Firestore participant sync ──────────────────────────────────────────────
+function startParticipantListener(){
+  if(!window._fb)return;
+  const fb=window._fb;
+  // Listen to approved participants only
+  const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
+  participantsUnsub=fb.onSnapshot(q,snap=>{
+    participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    // Update discover if on that tab
+    if(currentTab==="discover"){
+      const di=document.querySelector(".disc-inner");
+      if(di)refreshDisc();
+    }
+    // Update picker list if entry screen is showing
+    const pl=document.getElementById("picker-list");
+    if(pl)renderPickerList();
+  });
+
+  // Listen to pending registrations (admin only)
+  const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
+  fb.onSnapshot(q2,snap=>{
+    pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    updateAdminBadge();
+  });
+}
+
+function updateAdminBadge(){
+  // No visible badge — admin accesses via 5-tap or footer ⚙
+}
+
+// ── Language — apply in place, no full re-render ───────────────────────────
+function applyLang(){
+  const lb=document.getElementById("lbtn");if(lb)lb.textContent=t().langBtn;
+  // If on schedule, re-render it (static content, simplest fix)
+  if(currentTab==="schedule"){const tc=document.getElementById("tc");if(tc)tc.innerHTML=renderSchedule();}
+  const tabKeys=["discover","messages","schedule"];
+  const tabLabels=[t().discover,t().messages,t().schedule];
+  document.querySelectorAll(".tab").forEach(b=>{const i=tabKeys.indexOf(b.dataset.tab);if(i>=0){const badge=b.querySelector(".badge");b.textContent=tabLabels[i];if(badge)b.appendChild(badge);}});
+  const si=document.getElementById("si");if(si)si.placeholder=t().search;
+  const ss=document.getElementById("sec-sel");if(ss&&ss.options[0])ss.options[0].text=t().allSectors;
+  const cs=document.getElementById("cnt-sel");if(cs&&cs.options[0])cs.options[0].text=t().allCountries;
+  const ai=document.getElementById("ai-btn");if(ai)ai.textContent=t().findMatch;
+  const sw=document.getElementById("sw-btn");if(sw)sw.textContent="↩ "+t().switchProfile;
+  const ih=document.getElementById("inbox-hdr");if(ih)ih.textContent=t().messages;
+  const tt=document.getElementById("allTimes");if(tt)tt.textContent="🕐 "+t().allTimes;
+}
+
+// ── App render ──────────────────────────────────────────────────────────────
+function renderApp(){
+  const app=document.getElementById("app");
+  app.innerHTML=renderHdr()+`<div class="scroll" id="tc">${renderTab()}</div>`+renderFtr();
+  bindHdr();bindFtr();bindTab();
+  if(!inboxStarted&&me)startInbox();
+}
+
+function renderHdr(){
+  const tabs=[{k:"discover",l:t().discover},{k:"messages",l:t().messages},{k:"schedule",l:t().schedule}];
+  const msgCount=Object.keys(inboxData).length;
+  return`<div id="hdr">
+    <div class="hdr-top">
+      <div class="hdr-title" id="htitle"><div class="eyebrow">6TH EDITION · ACCRA 2026</div><div class="hdr-name">German-African<br/>Business Summit</div></div>
+      <button class="btn lang-btn" id="lbtn">${esc(t().langBtn)}</button>
+    </div>
+    <div class="tabs">${tabs.map(tb=>`<button class="tab${currentTab===tb.k?" on":""}" data-tab="${tb.k}">${esc(tb.l)}${tb.k==="messages"&&msgCount>0?`<span class="badge">${msgCount}</span>`:""}</button>`).join("")}</div>
+  </div>`;
+}
+
+function bindHdr(){
+  // Event delegation — survives any re-render
+  const lbtnEl=document.getElementById("lbtn");
+  if(lbtnEl){lbtnEl.onclick=()=>{lang=lang==="en"?"de":"en";localStorage.setItem("gabs_lang",lang);renderApp();};}
+  // Header title tap kept for legacy — PIN prompt is primary admin access
+  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";renderApp();});
+}
+
+function renderFtr(){
+  const p=me?`<div class="ftr-me"><div class="ftr-name">${avHTML(me.av||initials(me.name),20)}<span>${esc(me.name)}</span></div><button class="ftr-sw" id="sw-btn">↩ ${esc(t().switchProfile)}</button></div>`:"";
+  return`<div id="ftr">${p}
+    <div class="ftr-logos">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:5px 9px;border-radius:8px;border:1px solid var(--l)">
+        <div style="display:flex;align-items:baseline"><span style="font-family:'Playfair Display',serif;font-weight:800;font-size:14px;color:${NAVY}">S</span><span style="font-family:'Playfair Display',serif;font-weight:800;font-size:14px;color:#C49A2A">A</span><span style="font-family:'Playfair Display',serif;font-weight:800;font-size:14px;color:${NAVY}">FRI</span></div>
+        <div style="font-size:7px;color:#aaa;letter-spacing:1px;font-weight:600;text-transform:uppercase;margin-top:2px">Subsahara Afrika</div>
+      </div>
+      <div style="width:1px;height:28px;background:var(--l)"></div>
+      <div style="display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;border:1px solid var(--l)">
+        <img src="data:image/jpeg;base64,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" alt="AHK Ghana" style="height:28px;width:auto;object-fit:contain;border-radius:3px"/>
+      </div>
+    </div>
+    <div class="ftr-pts"><span class="pt" style="color:#0070B8">BDI</span><span class="pt" style="color:#003DA6">BGA</span><span class="pt" style="background:${NAVY};color:#fff">DIHK</span><span class="pt">Afrika-Verein</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center"><div class="ftr-copy">© 2026 GABS · 23–25 Nov · Accra, Ghana</div><button id="admin-access" style="background:none;border:none;color:transparent;font-size:10px;padding:4px 8px;cursor:pointer;touch-action:manipulation;user-select:none">⚙</button></div>
+  </div>`;
+}
+
+const ADMIN_PIN="2026";
+function bindFtr(){
+  document.getElementById("sw-btn")?.addEventListener("click",()=>{me=null;localStorage.removeItem("gabs_me");inboxStarted=false;inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};showEntry();});
+  document.getElementById("admin-access")?.addEventListener("click",()=>{
+    showPinPrompt();
+  });
+}
+function showPinPrompt(){
+  const ov=makeOv(true);
+  ov.innerHTML=`<div class="sheet pop" style="max-width:320px;text-align:center">
+    <div style="font-size:28px;margin-bottom:8px">🔐</div>
+    <div style="font-weight:700;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif;margin-bottom:6px">Admin Access</div>
+    <div style="color:#888;font-size:13px;margin-bottom:16px">Enter your 4-digit PIN</div>
+    <input class="inp" id="pin-inp" type="password" inputmode="numeric" maxlength="4" placeholder="••••" style="text-align:center;font-size:22px;letter-spacing:8px;margin-bottom:12px"/>
+    <div id="pin-err" style="color:var(--r);font-size:12px;min-height:16px;margin-bottom:8px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn bg" id="pin-cancel">Cancel</button>
+      <button class="btn bp" id="pin-ok">Enter</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const inp=document.getElementById("pin-inp");
+  setTimeout(()=>inp?.focus(),100);
+  const tryPin=()=>{
+    if(inp.value===ADMIN_PIN){ov.remove();showAdmin();}
+    else{const err=document.getElementById("pin-err");if(err)err.textContent="Incorrect PIN. Try again.";inp.value="";}
+  };
+  inp?.addEventListener("keydown",e=>{if(e.key==="Enter")tryPin();});
+  document.getElementById("pin-ok")?.addEventListener("click",tryPin);
+  document.getElementById("pin-cancel")?.addEventListener("click",()=>ov.remove());
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── Tab content ────────────────────────────────────────────────────────────
+function renderTab(){
+  if(currentTab==="discover")return renderDiscover();
+  if(currentTab==="messages")return activeThreadId?renderThread():renderInbox();
+  if(currentTab==="schedule")return renderSchedule();
+  return"";
+}
+function bindTab(){
+  if(currentTab==="discover")bindDiscover();
+  else if(currentTab==="messages"){if(activeThreadId){const p=participants.find(x=>x.id===activeThreadId);if(p){initThread(p);bindCompose(p);}}else bindInboxRows();}
+}
+
+// ── Discover ───────────────────────────────────────────────────────────────
+function filtered(){
+  const q=discSearch.toLowerCase();
+  return participants.filter(p=>
+    (!q||p.name.toLowerCase().includes(q)||p.company?.toLowerCase().includes(q))&&
+    (!discSector||p.sector===discSector)&&
+    (!discCountry||p.country===discCountry)
+  );
+}
+
+function pCardHTML(p){
+  const self=me&&p.id===me.id;
+  return`<div class="p-card${self?" self":""}" data-pid="${p.id}">
+    ${self?`<span class="chip" style="background:var(--l);color:var(--s)">👤 ${esc(t().you)}</span>`:""}
+    <div class="p-top">${avHTML(p.av||initials(p.name||"?"),46)}<div class="p-info"><div class="p-name">${esc(p.name)}</div><div class="p-role">${esc(p.title||"")}</div><div class="p-co">${esc(p.company||"")}</div></div></div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="chip">${esc(p.sector||"")}</span><span class="chip">${esc(p.country||"")}</span></div>
+    ${(p.phone||p.linkedin)?`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">
+      ${p.phone?`<a href="tel:${esc(p.phone)}" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--s);text-decoration:none;font-weight:600">📞 ${esc(p.phone)}</a>`:""}
+      ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--s);text-decoration:none;font-weight:600">🔗 LinkedIn</a>`:""}
+    </div>`:""}
+    ${self?"":`<div class="p-acts"><button class="btn bg p-msg" data-id="${p.id}" style="padding:9px 8px;font-size:13px">💬 ${esc(t().message)}</button><button class="btn bp p-mt" data-id="${p.id}" style="padding:9px 8px;font-size:13px">📅 ${esc(t().propose)} →</button></div>`}
+  </div>`;
+}
+
+function renderDiscover(){
+  const secs=["", ...Array.from(new Set(participants.map(p=>p.sector).filter(Boolean))).sort()];
+  const cnts=["", ...Array.from(new Set(participants.map(p=>p.country).filter(Boolean))).sort()];
+  const list=filtered();
+  if(participants.length===0){
+    return`<div class="disc-inner"><div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-weight:700;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif">${esc(t().noParticipants)}</div><div style="color:#aaa;font-size:13px;margin-top:6px;line-height:1.6">${esc(t().noParticipantsSub)}</div></div></div>`;
+  }
+  return`<div class="disc-inner">
+    <button class="btn bp" id="ai-btn">${esc(t().findMatch)}</button>
+    <input class="inp" id="si" placeholder="${esc(t().search)}" value="${esc(discSearch)}" autocomplete="off"/>
+    <div class="filters">
+      <select class="inp" id="sec-sel">${secs.map(s=>`<option value="${esc(s)}"${discSector===s?" selected":""}>${esc(s||t().allSectors)}</option>`).join("")}</select>
+      <select class="inp" id="cnt-sel">${cnts.map(c=>`<option value="${esc(c)}"${discCountry===c?" selected":""}>${esc(c||t().allCountries)}</option>`).join("")}</select>
+    </div>
+    <div class="cnt" id="p-cnt">${list.length} ${esc(t().discover.toLowerCase())}</div>
+    <div id="cards-wrap">${list.map(p=>pCardHTML(p)).join("")}</div>
+  </div>`;
+}
+
+function bindDiscover(){
+  document.getElementById("ai-btn")?.addEventListener("click",showAI);
+  const si=document.getElementById("si");
+  if(si){
+    si.oninput=e=>{
+      discSearch=e.target.value.toLowerCase();
+      // CSS filter — no DOM rebuild, keyboard stays open
+      document.querySelectorAll(".p-card").forEach(card=>{
+        const id=card.dataset.pid;
+        const p=participants.find(x=>x.id===id);
+        if(!p){card.style.display="";return;}
+        const match=!discSearch||p.name.toLowerCase().includes(discSearch)||p.company?.toLowerCase().includes(discSearch);
+        card.style.display=match?"":"none";
+      });
+      const visible=document.querySelectorAll("#cards-wrap .p-card:not([style*='display: none']):not([style*='display:none'])").length;
+      const cnt=document.getElementById("p-cnt");
+      if(cnt)cnt.textContent=`${visible} ${t().discover.toLowerCase()}`;
+    };
+  }
+  const ss=document.getElementById("sec-sel");
+  if(ss)ss.onchange=e=>{discSector=e.target.value;refreshDisc();};
+  const cs=document.getElementById("cnt-sel");
+  if(cs)cs.onchange=e=>{discCountry=e.target.value;refreshDisc();};
+  bindCards();
+}
+
+function refreshDisc(){
+  const wrap=document.getElementById("cards-wrap");if(!wrap)return;
+  const list=filtered();
+  wrap.innerHTML=list.map(p=>pCardHTML(p)).join("");
+  const cnt=document.getElementById("p-cnt");
+  if(cnt)cnt.textContent=`${list.length} ${t().discover.toLowerCase()}`;
+  bindCards();
+  // Reset search filter display
+  if(discSearch){
+    document.querySelectorAll(".p-card").forEach(card=>{
+      const id=card.dataset.pid;
+      const p=participants.find(x=>x.id===id);
+      if(!p)return;
+      const match=p.name.toLowerCase().includes(discSearch)||p.company?.toLowerCase().includes(discSearch);
+      card.style.display=match?"":"none";
+    });
+  }
+}
+
+function bindCards(){
+  document.querySelectorAll(".p-msg").forEach(b=>b.onclick=()=>{const p=participants.find(x=>x.id===b.dataset.id);if(p)openThread(p);});
+  document.querySelectorAll(".p-mt").forEach(b=>b.onclick=()=>{const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);});
+}
+
+// ── Schedule ───────────────────────────────────────────────────────────────
+function renderSchedule(){
+  return`<div class="sched-inner">
+    <div id="allTimes" style="background:var(--l);border-radius:10px;padding:9px 14px;font-size:12px;color:${NAVY};font-weight:600">🕐 ${esc(t().allTimes)}</div>
+    ${SCHEDULE.map(day=>`
+    <div class="day-card">
+      <div class="day-hdr">📅 ${esc(day.day)}</div>
+      ${day.sessions.map(s=>{const col=SC[s.type]||{bg:"#F5F5F5",c:"#555"};return`<div class="sesh"><div class="sesh-time">${esc(s.time)}</div><div style="flex:1"><div class="sesh-title">${esc(s.title)}</div><div class="sesh-loc">📍 ${esc(s.loc)}</div><span class="sesh-type" style="background:${col.bg};color:${col.c}">${esc(s.type)}</span></div></div>`;}).join("")}
+    </div>`).join("")}
+  </div>`;
+}
+
+// ── Thread ─────────────────────────────────────────────────────────────────
+function openThread(p){currentTab="messages";activeThreadId=p.id;renderApp();}
+
+function renderThread(){
+  const p=participants.find(x=>x.id===activeThreadId);
+  if(!p)return renderInbox();
+  return`<div class="thread">
+    <div class="t-hdr">
+      <span class="t-back" id="t-back">←</span>
+      ${avHTML(p.av||initials(p.name||"?"),36)}
+      <div class="t-info"><div class="t-name">${esc(p.name)}</div><div class="t-sub">${esc(p.title||"")} · ${esc(p.company||"")}</div></div>
+      <button class="t-meet" id="t-meet">📅 Meet</button>
+    </div>
+    <div class="msgs" id="msgs">${renderMsgs()}</div>
+    <div class="compose">
+      <textarea class="cinp" id="cinp" placeholder="${esc(t().typeMsg)}" rows="1">${esc(draftText)}</textarea>
+      <div class="sbtn ${draftText.trim()?"on":"off"}" id="sbtn">➤</div>
+    </div>
+  </div>`;
+}
+
+
+
+// ── EmailJS confirmation email ─────────────────────────────────────────────
+// Init EmailJS once when page loads
+if(window.emailjs){try{window.emailjs.init(EMAILJS_PUBLIC_KEY);}catch(e){}}
+else{document.addEventListener("DOMContentLoaded",()=>{if(window.emailjs)try{window.emailjs.init(EMAILJS_PUBLIC_KEY);}catch(e){}});}
+
+function sendConfirmationEmail({name,email,company,title,ticket,status}){
+  if(!window.emailjs){console.warn("EmailJS not loaded");return;}
+  _sendEmail({name,email,company,title,ticket,status});
+}
+function _sendEmail({name,email,company,title,ticket,status}){
+  if(EMAILJS_SERVICE_ID==="YOUR_SERVICE_ID")return; // Not configured yet
+  const templateParams={
+    to_name:name,
+    to_email:email,
+    company,
+    title,
+    ticket_ref:ticket,
+    status:status==="approved"?"Confirmed ✓":"Pending review",
+    app_url:APP_URL,
+    event_dates:"23–25 November 2026",
+    event_venue:"Accra, Ghana",
+  };
+  window.emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,templateParams)
+    .then(()=>console.log("Confirmation email sent"))
+    .catch(e=>console.warn("Email failed:",e));
+}
+// ── ICS calendar file generator ───────────────────────────────────────────
+function generateGoogleCalURL(meeting, fromName, toName){
+  const date=meeting.day||"20261124";
+  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const pad=n=>String(n).padStart(2,"0");
+  const startStr=`${date}T${pad(h)}${pad(m)}00`;
+  const endMins=h*60+m+(meeting.dur||30);
+  const endStr=`${date}T${pad(Math.floor(endMins/60))}${pad(endMins%60)}00`;
+  const title=encodeURIComponent(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`);
+  const details=encodeURIComponent(`B2B Meeting at GABS 2026\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`);
+  const loc=encodeURIComponent(meeting.loc||"GABS 2026 Venue, Accra");
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}&location=${loc}`;
+}
+
+function generateICS(meeting, fromName, toName){
+  // Use the actual meeting day if available, fallback to Day 2
+  const base=meeting.day||"20261124";
+  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const startDt=`${base}T${String(h).padStart(2,"0")}${String(m).padStart(2,"0")}00`;
+  const endMins=h*60+m+(meeting.dur||30);
+  const endH=Math.floor(endMins/60),endM=endMins%60;
+  const endDt=`${base}T${String(endH).padStart(2,"0")}${String(endM).padStart(2,"0")}00`;
+  const uid=`gabs2026-${Date.now()}@gabsb2b`;
+  const ics=[
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//GABS 2026//B2B Networking//EN",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTART:${startDt}`,
+    `DTEND:${endDt}`,
+    `SUMMARY:GABS 2026 B2B Meeting: ${fromName} & ${toName}`,
+    `LOCATION:${meeting.loc||"GABS 2026 Venue"}`,
+    `DESCRIPTION:B2B Meeting at GABS 2026\nDate: ${meeting.dayLabel||meeting.day||""}\nTime: ${meeting.start} (${meeting.dur} min)\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)\nBook your flight: gabs2026.com`,
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].join("\r\n");
+  const blob=new Blob([ics],{type:"text/calendar;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download=`GABS2026_Meeting_${fromName.replace(/\s+/g,"_")}.ics`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function renderMsgs(){
+  if(!threadMessages.length)return`<div style="text-align:center;color:#bbb;font-size:13px;margin-top:48px;line-height:2.2">💬<br/>Start the conversation</div>`;
+  return threadMessages.map(m=>{
+    const mine=m.fromId===me?.id;
+    const cls=mine?"me":"them";
+    let respHTML="";
+    if(m.meeting){
+      if(!mine&&!m.resp){
+        respHTML=`<div class="mresp"><button class="mresp-btn" style="background:#E8F5E9;color:var(--g);border-color:#A5D6A7" data-mid="${m.id}" data-resp="accepted">${esc(t().accept)}</button><button class="mresp-btn" style="background:#FFEBEE;color:var(--r);border-color:#EF9A9A" data-mid="${m.id}" data-resp="declined">${esc(t().decline)}</button><button class="mresp-btn" style="background:#FFF8E1;color:#E65100;border-color:#FFCC80" data-mid="${m.id}" data-resp="busy">${esc(t().busy)}</button></div>`;
+      } else if(m.resp){
+        const rMap={accepted:{txt:t().accepted,bg:"#E8F5E9",c:"var(--g)"},declined:{txt:t().declined,bg:"#FFEBEE",c:"var(--r)"},busy:{txt:t().busySt,bg:"#FFF8E1",c:"#E65100"}};
+        const r=rMap[m.resp]||{txt:m.resp,bg:"#eee",c:"#555"};
+        const calBtns=m.resp==="accepted"?`
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            <button class="mresp-btn" style="background:#E8F5FB;color:#1a73e8;border-color:#9FC5E8" data-gcal="${m.id}">📅 Google Calendar</button>
+            <button class="mresp-btn" style="background:#E3EAF8;color:${NAVY};border-color:#B3C5E8" data-ics="${m.id}">📥 .ics (Apple / Outlook)</button>
+          </div>`:"";
+        respHTML=`<div class="mresp-status" style="background:${r.bg};color:${r.c}">${esc(r.txt)}</div>${calBtns}`;
+      } else if(mine){
+        respHTML=`<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:5px">⏳ ${esc(t().pending)}</div>`;
+      }
+    }
+    return`<div class="bw ${cls}">
+      ${!mine?`<div class="bsender">${esc(m.fromName||"")}</div>`:""}
+      <div class="bub ${cls}">${esc(m.text)}${m.meeting?`<div class="mpill ${cls}">📍 ${esc(m.meeting.loc)}<br/>🕐 ${esc(m.meeting.start)} · ${esc(m.meeting.dur)} ${esc(t().mins)}</div>`:""}${respHTML}</div>
+      <div class="btime">${fmtTime(m.ts)}</div>
+    </div>`;
+  }).join("");
+}
+
+function scrollBottom(){const el=document.getElementById("msgs");if(el)el.scrollTop=el.scrollHeight;}
+
+function initThread(p){
+  if(!me||!window._fb)return;
+  if(threadUnsub){threadUnsub();threadUnsub=null;}
+  const fb=window._fb;
+  const tid2=tid(me.id,p.id);
+  const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
+  threadUnsub=fb.onSnapshot(q,snap=>{
+    threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const msgs=document.getElementById("msgs");
+    if(msgs){msgs.innerHTML=renderMsgs();scrollBottom();bindRespBtns(p);}
+  });
+  setTimeout(scrollBottom,100);
+}
+
+function bindCompose(p){
+  document.getElementById("t-back")?.addEventListener("click",()=>{activeThreadId=null;threadMessages=[];draftText="";if(threadUnsub){threadUnsub();threadUnsub=null;}renderApp();});
+  document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
+  const inp=document.getElementById("cinp");
+  const sbt=document.getElementById("sbtn");
+  if(!inp||!sbt)return;
+  inp.addEventListener("input",()=>{draftText=inp.value;sbt.className=`sbtn ${draftText.trim()?"on":"off"}`;inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();doSend(p);}});
+  sbt.onclick=()=>{if(draftText.trim())doSend(p);};
+}
+
+function bindRespBtns(p){
+  document.querySelectorAll(".mresp-btn").forEach(btn=>{
+    btn.onclick=async()=>{
+      // Google Calendar button
+      if(btn.dataset.gcal){
+        const msg=threadMessages.find(m=>m.id===btn.dataset.gcal);
+        if(msg&&msg.meeting){window.open(generateGoogleCalURL(msg.meeting,me.name,p.name),"_blank");}
+        return;
+      }
+      // ICS download button
+      if(btn.dataset.ics){
+        const msg=threadMessages.find(m=>m.id===btn.dataset.ics);
+        if(msg&&msg.meeting)generateICS(msg.meeting,me.name,p.name);
+        return;
+      }
+      if(!window._fb)return;
+      const fb=window._fb;
+      const tid2=tid(me.id,p.id);
+      await fb.updateDoc(fb.doc(fb.db,"threads",tid2,"messages",btn.dataset.mid),{resp:btn.dataset.resp});
+    };
+  });
+}
+
+async function doSend(p,textOverride,meeting){
+  const text=(textOverride||draftText).trim();
+  if(!text||!me||!window._fb)return;
+  draftText="";
+  const inp=document.getElementById("cinp");
+  const sbt=document.getElementById("sbtn");
+  if(inp){inp.value="";inp.style.height="auto";}
+  if(sbt)sbt.className="sbtn off";
+  const fb=window._fb;
+  const tid2=tid(me.id,p.id);
+  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av||initials(me.name),ts:fb.serverTimestamp()};
+  if(meeting)payload.meeting=meeting;
+  await fb.addDoc(fb.collection(fb.db,"threads",tid2,"messages"),payload);
+}
+
+// ── Inbox ──────────────────────────────────────────────────────────────────
+function renderInbox(){
+  const entries=Object.values(inboxData).sort((a,b)=>(b.ts?.seconds||0)-(a.ts?.seconds||0));
+  if(!entries.length)return`<div class="inbox"><div class="inbox-hdr" id="inbox-hdr">${esc(t().messages)}</div><div class="inbox-empty"><div style="font-size:48px">💬</div><div style="color:#aaa;font-size:14px">${esc(t().noMsgs)}</div><div style="color:#ccc;font-size:12px;line-height:1.7;margin-top:4px">${esc(t().startConv)}</div></div></div>`;
+  return`<div class="inbox"><div class="inbox-hdr" id="inbox-hdr">${esc(t().messages)}</div>${entries.map(({p,text})=>`<div class="inbox-row" data-id="${p.id}">${avHTML(p.av||initials(p.name||"?"),44)}<div class="inbox-meta"><div class="inbox-name">${esc(p.name)}</div><div class="inbox-prev">${esc(text||"")}</div></div><span style="color:${STEEL};font-size:20px">›</span></div>`).join("")}</div>`;
+}
+
+function startInbox(){
+  if(!me||!window._fb||inboxStarted)return;
+  inboxStarted=true;
+  const fb=window._fb;
+  participants.filter(p=>p.id!==me.id).forEach(p=>{
+    const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
+    const u=fb.onSnapshot(q,snap=>{
+      if(!snap.empty){const d=snap.docs[0].data();inboxData[p.id]={p,text:d.text,ts:d.ts};}
+      else delete inboxData[p.id];
+      updateMsgBadge();
+      if(currentTab==="messages"&&!activeThreadId){document.getElementById("tc").innerHTML=renderInbox();bindInboxRows();}
+    });
+    inboxUnsubs.push(u);
+  });
+}
+
+function updateMsgBadge(){
+  const count=Object.keys(inboxData).length;
+  document.querySelectorAll(".tab").forEach(tab=>{
+    if(tab.dataset.tab==="messages"){
+      tab.querySelector(".badge")?.remove();
+      if(count>0){const b=document.createElement("span");b.className="badge";b.textContent=count;tab.appendChild(b);}
+    }
+  });
+}
+
+function bindInboxRows(){
+  document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=()=>{const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
+}
+
+// ── Meeting modal ──────────────────────────────────────────────────────────
+function showMeeting(p,fromThread=false){
+  const ov=makeOv();
+  ov.innerHTML=`<div class="sheet" id="msheet"></div>`;
+  document.body.appendChild(ov);
+  let state={loc:"",start:"",dur:30,note:"",sent:false};
+
+  function render(){
+    if(state.sent){document.getElementById("msheet").innerHTML=`<div style="text-align:center;padding:36px 0"><div style="font-size:52px">✅</div><div style="font-weight:700;color:${NAVY};font-size:16px;font-family:'Playfair Display',serif;margin-top:14px">${esc(t().sent)}</div></div>`;setTimeout(()=>ov.remove(),1700);return;}
+    const dayOpts=MEETING_DAYS.map(d=>`<option value="${d.date}"${state.day===d.date?" selected":""}>${esc(d.label)}</option>`).join("");
+    const slots=allSlots();
+    const slotOpts=slots.map(s=>{const blocked=state.dur&&state.day&&(isBlocked(me.id+"-"+state.day,s,state.dur)||isBlocked(p.id+"-"+state.day,s,state.dur));return`<option value="${esc(s)}"${state.start===s?" selected":""}${blocked?" disabled":""}>${esc(s)}${blocked?" (busy)":""}</option>`;});
+    document.getElementById("msheet").innerHTML=`
+      <div style="display:flex;gap:11px;align-items:center;margin-bottom:16px">${avHTML(p.av||initials(p.name||"?"),42)}<div><div style="font-weight:700;color:${NAVY};font-family:'Playfair Display',serif">${esc(p.name)}</div><div style="color:#888;font-size:12px">${esc(p.company||"")}</div></div></div>
+      <div style="font-weight:700;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif;margin-bottom:14px">📅 ${esc(t().meetReq)}</div>
+      <div class="lbl" style="margin-top:0">Day *</div>
+      <select class="inp" id="m-day"><option value="">-- Select day --</option>${dayOpts}</select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <div><div class="lbl" style="margin-top:0">${esc(t().startTime)}</div><select class="inp" id="m-start"${!state.day?" disabled":""}><option value="">--</option>${slotOpts.join("")}</select></div>
+        <div><div class="lbl" style="margin-top:0">${esc(t().duration)}</div><select class="inp" id="m-dur">${DURATIONS.map(d=>`<option value="${d}"${state.dur===d?" selected":""}>${d} ${esc(t().mins)}</option>`).join("")}</select></div>
+      </div>
+      <div class="lbl">${esc(t().selectLoc)}</div>
+      <input class="inp" id="m-loc" placeholder="e.g. Your exhibition stand, Hotel lobby, Table 4…" value="${esc(state.loc)}"/>
+      <div class="lbl">${esc(t().addMsg)}</div>
+      <textarea class="inp" id="m-note" rows="2" style="resize:none;margin-bottom:14px">${esc(state.note)}</textarea>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px">
+        <button class="btn bg" id="m-cancel">${esc(t().cancel)}</button>
+        <button class="btn bp" id="m-send" ${!state.day||!state.start||!state.loc?"disabled":""}>${esc(t().send)}</button>
+      </div>`;
+    const dayEl=document.getElementById("m-day");
+    const locEl=document.getElementById("m-loc");
+    const startEl=document.getElementById("m-start");
+    const durEl=document.getElementById("m-dur");
+    const sendEl=document.getElementById("m-send");
+    const check=()=>{if(sendEl)sendEl.disabled=!dayEl.value||!startEl.value||!locEl.value.trim();};
+    dayEl.onchange=()=>{state.day=dayEl.value;state.start="";render();};
+    locEl.oninput=()=>{state.loc=locEl.value;check();};
+    startEl.onchange=()=>{state.start=startEl.value;state.dur=parseInt(durEl.value)||30;render();};
+    durEl.onchange=()=>{state.dur=parseInt(durEl.value)||30;state.start=startEl.value;render();};
+    document.getElementById("m-cancel").onclick=()=>ov.remove();
+    sendEl?.addEventListener("click",async()=>{
+      const day=dayEl.value,loc=locEl.value.trim(),start=startEl.value,dur=parseInt(durEl.value)||30,note=document.getElementById("m-note").value.trim();
+      if(!day||!start||!loc)return;
+      const dayLabel=MEETING_DAYS.find(d=>d.date===day)?.label||day;
+      bookSlot(me.id+"-"+day,p.id+"-"+day,start,dur);
+      const text=note||"Meeting proposed ✓";
+      const meetingData={loc,start,dur,day,dayLabel};
+      if(fromThread){await doSend(p,text,meetingData);}
+      else{openThread(p);setTimeout(async()=>await doSend(p,text,meetingData),300);}
+      state.sent=true;render();
+    });
+  }
+  render();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── AI modal ───────────────────────────────────────────────────────────────
+function showAI(){
+  const ov=makeOv(true);
+  ov.innerHTML=`<div class="sheet pop" style="max-width:420px"><div style="font-weight:700;color:${NAVY};font-size:16px;font-family:'Playfair Display',serif;margin-bottom:18px">${esc(t().yourMatch)}</div><div id="ai-c" style="text-align:center;padding:36px 0"><div class="spin" style="margin:0 auto;border-top-color:${STEEL}"></div><div style="color:#aaa;margin-top:14px;font-size:13px">${esc(t().matching)}</div></div></div>`;
+  document.body.appendChild(ov);
+  setTimeout(()=>{
+    const m=bestMatch();
+    if(!m){document.getElementById("ai-c").innerHTML=`<div style="color:#aaa;font-size:14px">Not enough participants yet</div>`;return;}
+    document.getElementById("ai-c").innerHTML=`
+      <div style="display:flex;gap:13px;align-items:center;margin-bottom:12px;text-align:left">${avHTML(m.av||initials(m.name||"?"),52)}<div><div style="font-weight:700;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif">${esc(m.name)}</div><div style="color:${STEEL};font-size:13px">${esc(m.title||"")}</div><div style="color:#888;font-size:12px">${esc(m.company||"")}</div></div></div>
+      <div style="background:${LIGHT};border-radius:11px;padding:12px 14px;font-size:13px;color:${NAVY};line-height:1.6;border-left:3px solid ${STEEL};text-align:left;margin-bottom:16px">${esc(lang==="de"?`${m.name} von ${m.company} (${m.country}) — starker Kontakt für ${m.sector}-Kooperationen.`:`${m.name} from ${m.company} (${m.country}) — strong potential for ${m.sector} collaboration.`)}</div>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px"><button class="btn bg" id="ai-no">${esc(t().cancel)}</button><button class="btn bp" id="ai-yes">${esc(t().propose)} →</button></div>`;
+    document.getElementById("ai-no").onclick=()=>ov.remove();
+    document.getElementById("ai-yes").onclick=()=>{ov.remove();showMeeting(m);};
+  },1300);
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── Entry screen (picker + registration) ──────────────────────────────────
+let pickerSearch="",pickerSel=null;
+
+function showEntry(){
+  let entryTab="pick"; // "pick" or "register"
+  const el=document.createElement("div");
+  el.id="entry";
+
+  function render(){
+    el.innerHTML=`
+    <div class="entry-hero">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="color:${STEEL};font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:9px">6TH EDITION · ACCRA 2026</div>
+          <div style="color:#fff;font-size:23px;font-weight:800;font-family:'Playfair Display',serif;line-height:1.2;margin-bottom:5px">German-African<br/>Business Summit</div>
+          <div style="color:rgba(255,255,255,.5);font-size:12px">23–25 November 2026 · Accra, Ghana</div>
+        </div>
+        <button class="btn lang-btn" id="e-lang">${esc(S[lang].langBtn)}</button>
+      </div>
+    </div>
+    <div class="entry-card">
+      <div class="entry-tabs">
+        <div class="entry-tab${entryTab==="pick"?" on":""}" id="et-pick">${esc(S[lang].alreadyReg)}</div>
+        <div class="entry-tab${entryTab==="register"?" on":""}" id="et-reg">${esc(S[lang].registerNew)}</div>
+      </div>
+      <div id="entry-body">${entryTab==="pick"?renderPicker():renderRegForm()}</div>
+    </div>`;
+
+    // Lang toggle — full re-render of entry screen
+    document.getElementById("e-lang").onclick=()=>{
+      lang=lang==="en"?"de":"en";
+      localStorage.setItem("gabs_lang",lang);
+      render(); // re-renders the whole entry screen with new lang
+    };
+    // Admin access
+    document.getElementById("e-admin").onclick=()=>showPinPrompt();
+
+    // Tab switch
+    document.getElementById("et-pick").onclick=()=>{entryTab="pick";render();};
+    document.getElementById("et-reg").onclick=()=>{entryTab="register";render();};
+
+    if(entryTab==="pick")bindPicker();
+    else bindRegForm();
+  }
+
+  document.body.appendChild(el);
+  render();
+}
+
+// ── Picker tab ─────────────────────────────────────────────────────────────
+function renderPickerList(){
+  const q=pickerSearch.toLowerCase();
+  const list=participants.filter(p=>!q||p.name.toLowerCase().includes(q)||p.company?.toLowerCase().includes(q));
+  if(!list.length)return`<div style="text-align:center;color:#aaa;padding:24px;font-size:13px">${esc(S[lang].noParticipants)}</div>`;
+  return list.map(p=>`<div class="pi${pickerSel?.id===p.id?" sel":""}" data-id="${p.id}">
+    ${avHTML(p.av||initials(p.name||"?"),40)}
+    <div style="flex:1;min-width:0"><div style="font-weight:700;color:${NAVY};font-size:14px;font-family:'Playfair Display',serif">${esc(p.name)}</div><div style="color:#888;font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div></div>
+    ${pickerSel?.id===p.id?`<div class="chk">✓</div>`:""}
+  </div>`).join("");
+}
+
+function renderPicker(){
+  return`
+    <div style="color:#888;font-size:13px;margin-bottom:12px">${esc(S[lang].whoSub)}</div>
+    <input class="inp" id="p-srch" placeholder="${esc(S[lang].searchName)}" value="${esc(pickerSearch)}" autocomplete="off"/>
+    <div class="picker-list" id="picker-list">${renderPickerList()}</div>
+    <div style="padding:14px 0 calc(14px + var(--safe-b))">
+      <button class="btn bp" id="p-conf" ${!pickerSel?"disabled":""}>${pickerSel?esc(S[lang].confirm):esc(S[lang].whoSub)}</button>
+      <div style="text-align:center;margin-top:10px"><button id="e-admin" style="background:none;border:none;color:#bbb;font-size:12px;cursor:pointer;touch-action:manipulation;padding:6px 16px">⚙ Admin access</button></div>
+    </div>`;
+}
+
+function bindPicker(){
+  const srch=document.getElementById("p-srch");
+  if(srch){
+    srch.oninput=e=>{
+      pickerSearch=e.target.value;
+      pickerSel=null;
+      const pl=document.getElementById("picker-list");
+      if(pl)pl.innerHTML=renderPickerList();
+      const cb=document.getElementById("p-conf");
+      if(cb){cb.disabled=true;cb.textContent=S[lang].whoSub;}
+      bindPickerItems();
+    };
+  }
+  bindPickerItems();
+  document.getElementById("p-conf")?.addEventListener("click",()=>{
+    if(!pickerSel)return;
+    me={...pickerSel};
+    localStorage.setItem("gabs_me",JSON.stringify(me));
+    const entry=document.getElementById("entry");
+    if(entry){entry.style.opacity="0";entry.style.transition="opacity .25s";setTimeout(()=>{entry.remove();renderApp();startInbox();},260);}
+  });
+}
+
+function bindPickerItems(){
+  document.querySelectorAll(".pi").forEach(item=>item.onclick=()=>{
+    pickerSel=participants.find(p=>p.id===item.dataset.id)||null;
+    document.querySelectorAll(".pi").forEach(x=>x.classList.remove("sel"));
+    if(pickerSel){item.classList.add("sel");if(!item.querySelector(".chk")){const c=document.createElement("div");c.className="chk";c.textContent="✓";item.appendChild(c);}}
+    const cb=document.getElementById("p-conf");
+    if(cb){cb.disabled=!pickerSel;cb.textContent=pickerSel?S[lang].confirm:S[lang].whoSub;}
+  });
+}
+
+// ── Registration form ──────────────────────────────────────────────────────
+function renderRegForm(){
+  return`
+    <div style="color:#888;font-size:13px;margin-bottom:16px">${esc(S[lang].regSub)}</div>
+    <div class="lbl" style="margin-top:0">${esc(S[lang].fname)} *</div>
+    <input class="inp" id="r-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
+    <div class="lbl">${esc(S[lang].company)} *</div>
+    <input class="inp" id="r-company" placeholder="e.g. Berlin Tech GmbH" autocomplete="organization"/>
+    <div class="lbl">${esc(S[lang].title)} *</div>
+    <input class="inp" id="r-title" placeholder="e.g. Managing Director" autocomplete="organization-title"/>
+    <div class="lbl">${esc(S[lang].sector)} *</div>
+    <select class="inp" id="r-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
+    <div class="lbl">${esc(S[lang].country)} *</div>
+    <select class="inp" id="r-country"><option value="">-- Select --</option>${COUNTRIES.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select>
+    <div class="lbl">${esc(S[lang].email)} *</div>
+    <input class="inp" id="r-email" type="email" placeholder="you@company.com" autocomplete="email"/>
+    <div class="lbl">${esc(S[lang].ticketRef)} *</div>
+    <input class="inp" id="r-ticket" placeholder="e.g. GABS-2026-001" autocomplete="off" style="text-transform:uppercase"/>
+    <div style="font-size:11px;color:#aaa;margin-top:4px;margin-bottom:4px">${esc(S[lang].ticketHint)}</div>
+    <div class="lbl">${esc(S[lang].phone)} <span style="color:#bbb;font-weight:400">(optional)</span></div>
+    <input class="inp" id="r-phone" type="tel" placeholder="e.g. +49 30 12345678" autocomplete="tel"/>
+    <div class="lbl">${esc(S[lang].linkedin)} <span style="color:#bbb;font-weight:400">(optional)</span></div>
+    <input class="inp" id="r-linkedin" placeholder="linkedin.com/in/yourname" autocomplete="url"/>
+    <div id="r-feedback"></div>
+    <div style="padding:14px 0 calc(14px + var(--safe-b))">
+      <button class="btn bp" id="r-submit" style="margin-top:6px">${esc(S[lang].regBtn)}</button>
+      <div style="text-align:center;margin-top:10px"><button id="e-admin" style="background:none;border:none;color:#bbb;font-size:12px;cursor:pointer;touch-action:manipulation;padding:6px 16px">⚙ Admin access</button></div>
+    </div>`;
+}
+
+function bindRegForm(){
+  document.getElementById("r-submit")?.addEventListener("click",async()=>{
+    const name=document.getElementById("r-name")?.value.trim();
+    const company=document.getElementById("r-company")?.value.trim();
+    const title=document.getElementById("r-title")?.value.trim();
+    const sector=document.getElementById("r-sector")?.value;
+    const country=document.getElementById("r-country")?.value;
+    const email=document.getElementById("r-email")?.value.trim().toLowerCase();
+    const phone=document.getElementById("r-phone")?.value.trim()||"";
+    const linkedin=document.getElementById("r-linkedin")?.value.trim()||"";
+    const ticket=(document.getElementById("r-ticket")?.value.trim()||"").toUpperCase();
+    const fb=document.getElementById("r-feedback");
+
+    if(!name||!company||!title||!sector||!country||!email||!ticket){
+      if(fb)fb.innerHTML=`<div class="err">Please fill in all fields including your ticket reference.</div>`;return;
+    }
+    if(!email.includes("@")){if(fb)fb.innerHTML=`<div class="err">Please enter a valid email.</div>`;return;}
+
+    if(window._fb){
+      try{
+        const fbs=window._fb;
+        const btn=document.getElementById("r-submit");
+
+        // Check duplicate email
+        const emailCheck=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("email","==",email)));
+        if(!emailCheck.empty){
+          if(fb)fb.innerHTML=`<div class="err">This email is already registered. Use "I'm already registered" to continue.</div>`;
+          return;
+        }
+
+        // Check duplicate ticket — ticket can only be used once
+        const ticketCheck=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("ticket","==",ticket)));
+        if(!ticketCheck.empty){
+          if(fb)fb.innerHTML=`<div class="err">This ticket reference is already in use. Each ticket can only be registered once. Contact AHK Ghana if you believe this is an error.</div>`;
+          return;
+        }
+
+        if(btn){btn.disabled=true;btn.textContent="Submitting…";}
+
+        // Auto-approve if ticket ref is in the valid list
+        const ticketValid=validTicketRefs.includes(ticket);
+        const status=ticketValid?"approved":"pending";
+
+        const docRef=await fbs.addDoc(fbs.collection(fbs.db,"participants"),{
+          name,company,title,sector,country,email,phone,linkedin,ticket,
+          av:initials(name),
+          status,
+          registeredAt:fbs.serverTimestamp(),
+          source:"self-registered",
+        });
+
+        // Send confirmation email
+        sendConfirmationEmail({name,email,company,title,ticket,status});
+
+        if(ticketValid){
+          if(fb)fb.innerHTML=`<div class="ok"><strong>✓ Welcome to GABS 2026, ${esc(name)}!</strong><br/>Registration confirmed. Taking you to the app…</div>`;
+          if(btn){btn.textContent="✓ Confirmed";}
+          // Redirect to main app
+          me={id:docRef.id,name,company,title,sector,country,email,phone,linkedin,av:initials(name),status:"approved"};
+          localStorage.setItem("gabs_me",JSON.stringify(me));
+          setTimeout(()=>{
+            // Always do a fresh DOM lookup — form may have re-rendered
+            const entryEl=document.getElementById("entry");
+            if(entryEl){
+              entryEl.style.opacity="0";
+              entryEl.style.transition="opacity .3s";
+              setTimeout(()=>{
+                if(entryEl.parentNode)entryEl.parentNode.removeChild(entryEl);
+                renderApp();
+                startInbox();
+              },400);
+            } else {
+              // Entry already gone — just render
+              renderApp();
+              startInbox();
+            }
+          },1600);
+        } else {
+          if(fb)fb.innerHTML=`<div style="background:#FFF8E1;border-left:3px solid #E65100;border-radius:10px;padding:12px 14px;font-size:13px"><strong>${esc(S[lang].regPending)}</strong><br/>${esc(S[lang].regPendingMsg)}<br/><span style="font-size:11px;color:#aaa;margin-top:4px;display:block">${esc(S[lang].ticketInvalid)}</span></div>`;
+          if(btn){btn.disabled=true;btn.textContent=S[lang].regPending;}
+        }
+      }catch(e){
+        const fb2=document.getElementById("r-feedback");
+        if(fb2)fb2.innerHTML=`<div class="err">Submission failed. Please try again.</div>`;
+        const btn=document.getElementById("r-submit");
+        if(btn){btn.disabled=false;btn.textContent=S[lang].regBtn;}
+      }
+    }
+  });
+}
+
+// ── Admin panel ────────────────────────────────────────────────────────────
+function showAdmin(){
+  const ov=makeOv();
+  let adminTab="pending";
+
+  async function renderMain(){
+    ov.innerHTML=`<div class="sheet" style="padding-bottom:calc(22px + var(--safe-b))">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-weight:800;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif">⚙️ ${esc(t().adminTitle)}</div>
+        <button class="btn bg bsm" id="a-cl">${esc(t().close)}</button>
+      </div>
+      <!-- Admin tabs -->
+      <div class="entry-tabs" style="margin-bottom:16px">
+        <div class="entry-tab${adminTab==="pending"?" on":""}" id="at-pending">${esc(t().pendingTab)} ${pendingRegs.length>0?`<span style="background:#E53935;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">${pendingRegs.length}</span>`:""}</div>
+        <div class="entry-tab${adminTab==="participants"?" on":""}" id="at-parts">${esc(t().participantsTab)}</div>
+      </div>
+      <div id="admin-body"></div>
+    </div>`;
+    document.getElementById("a-cl").onclick=()=>ov.remove();
+    document.getElementById("at-pending").onclick=()=>{adminTab="pending";renderAdminBody();};
+    document.getElementById("at-parts").onclick=()=>{adminTab="participants";renderAdminBody();};
+    renderAdminBody();
+  }
+
+  function renderAdminBody(){
+    const body=document.getElementById("admin-body");if(!body)return;
+    if(adminTab==="pending")renderPendingBody(body);
+    else renderParticipantsBody(body);
+  }
+
+  function renderPendingBody(body){
+    if(!pendingRegs.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:#aaa;font-size:14px">✓ ${esc(t().noPending)}</div>`;return;}
+    body.innerHTML=pendingRegs.map(p=>`
+      <div class="pending-card">
+        <div class="pending-info">
+          ${avHTML(p.av||initials(p.name||"?"),40)}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:${NAVY};font-size:14px;font-family:'Playfair Display',serif">${esc(p.name)}</div>
+            <div style="color:#888;font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div>
+            <div style="color:${STEEL};font-size:11px">${esc(p.email||"")} · ${esc(p.country||"")}</div>
+            ${p.phone?`<div style="color:#aaa;font-size:11px">📞 ${esc(p.phone)}</div>`:""}
+          </div>
+        </div>
+        <div class="pending-acts">
+          <button class="btn brd bsm" data-id="${p.id}" id="rej-${p.id}">${esc(t().rejectBtn)}</button>
+          <button class="btn bgn bsm" data-id="${p.id}" id="apr-${p.id}">${esc(t().approveBtn)}</button>
+        </div>
+      </div>`).join("");
+    pendingRegs.forEach(p=>{
+      document.getElementById(`apr-${p.id}`)?.addEventListener("click",async()=>{
+        if(!window._fb)return;
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});
+      });
+      document.getElementById(`rej-${p.id}`)?.addEventListener("click",async()=>{
+        if(!window._fb)return;
+        await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));
+      });
+    });
+  }
+
+  function renderParticipantsBody(body){
+    body.innerHTML=`
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn bp" id="a-up">↑ ${esc(t().uploadCSV)}</button>
+      <button class="btn bg" id="a-tickets" style="margin-top:0">🎫 Upload Ticket References</button>
+      <input type="file" id="tickets-file" accept=".csv,.txt" style="display:none"/>
+        <button class="btn bg" id="a-exp">↓ ${esc(t().exportCSV)}</button>
+        <button class="btn bg" id="a-qr">📱 ${esc(t().showQR)}</button>
+        <button class="btn bm" id="a-dl">${esc(t().dlTpl)}</button>
+        <div id="a-fb"></div>
+        <button class="btn bm" id="a-rst">${esc(t().reset)}</button>
+        <div style="font-size:11px;color:#ccc;text-align:center">${esc(t().csvHint)}</div>
+      </div>
+      <input type="file" id="a-csv" accept=".csv" style="display:none"/>`;
+
+    document.getElementById("a-up").onclick=()=>document.getElementById("a-csv").click();
+    document.getElementById("a-tickets").onclick=()=>document.getElementById("tickets-file").click();
+    document.getElementById("tickets-file").onchange=e=>{
+      const f=e.target.files[0];if(!f)return;
+      const r=new FileReader();
+      r.onload=ev=>{
+        const refs=ev.target.result.split(/[\n,]/).map(r=>r.trim().toUpperCase()).filter(Boolean);
+        validTicketRefs=refs;
+        localStorage.setItem("gabs_tickets",JSON.stringify(refs));
+        const fb=document.getElementById("a-fb");
+        if(fb)fb.innerHTML=`<div class="ok">✓ ${refs.length} ticket references loaded</div>`;
+      };
+      r.readAsText(f);e.target.value="";
+    };
+    document.getElementById("a-csv").onchange=async e=>{
+      const f=e.target.files[0];if(!f)return;
+      const reader=new FileReader();
+      reader.onload=async ev=>{
+        try{
+          const lines=ev.target.result.trim().split("\n").filter(l=>l.trim());
+          if(lines.length<2)throw new Error("Need header + 1 row");
+          const hdrs=lines[0].split(",").map(h=>h.trim().toLowerCase().replace(/"/g,""));
+          const miss=["name","company","sector","country","title"].filter(x=>!hdrs.includes(x));
+          if(miss.length)throw new Error("Missing: "+miss.join(", "));
+          const parsed=lines.slice(1).map((line,i)=>{
+            const vals=line.split(",").map(v=>v.trim().replace(/"/g,""));
+            const row=Object.fromEntries(hdrs.map((h,idx)=>[h,vals[idx]||""]));
+            return{...row,av:initials(row.name||"?"),status:"approved",source:"csv",_idx:i};
+          }).filter(p=>p.name);
+          const fb=document.getElementById("a-fb");
+          if(fb)fb.innerHTML=`<div class="ok">⏳ Syncing ${parsed.length} participants…</div>`;
+          if(window._fb){
+            const fbs=window._fb;
+            await Promise.all(parsed.map((p,i)=>fbs.setDoc(fbs.doc(fbs.db,"participants",`csv_${i}`),{...p,id:`csv_${i}`})));
+            if(fb)fb.innerHTML=`<div class="ok">✓ ${parsed.length} participants synced to all devices</div>`;
+          }
+        }catch(err){
+          const fb=document.getElementById("a-fb");
+          if(fb)fb.innerHTML=`<div class="err">${esc(err.message)}</div>`;
+        }
+      };
+      reader.readAsText(f);e.target.value="";
+    };
+
+    document.getElementById("a-exp").onclick=()=>{
+      const rows=[["name","company","sector","country","title","email","status","source"],...participants.map(p=>[p.name,p.company,p.sector,p.country,p.title,p.email||"",p.status||"approved",p.source||"csv"])];
+      const csv=rows.map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+      const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`GABS2026_participants_${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
+    };
+
+    document.getElementById("a-qr").onclick=showQR;
+    document.getElementById("a-dl").onclick=()=>{
+      const csv=["name,company,sector,country,title,email","Hans Mueller,Berlin Tech GmbH,Technology,Germany,Managing Director,hans@berlintech.de"].join("\n");
+      const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="GABS2026_template.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+    };
+    document.getElementById("a-rst").onclick=async()=>{
+      if(!window._fb)return;
+      const fbs=window._fb;
+      const snap=await fbs.getDocs(fbs.collection(fbs.db,"participants"));
+      await Promise.all(snap.docs.map(d=>fbs.deleteDoc(d.ref)));
+      const fb=document.getElementById("a-fb");
+      if(fb)fb.innerHTML=`<div class="ok">✓ All participants cleared</div>`;
+    };
+  }
+
+  document.body.appendChild(ov);
+  renderMain();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── QR ─────────────────────────────────────────────────────────────────────
+function showQR(){
+  const ov=makeOv(true);
+  ov.innerHTML=`<div class="sheet pop" style="max-width:360px;text-align:center">
+    <div style="font-weight:700;color:${NAVY};font-size:15px;font-family:'Playfair Display',serif;margin-bottom:16px">📱 GABS 2026</div>
+    <div style="background:linear-gradient(135deg,${NAVY},${STEEL});border-radius:20px;padding:18px;display:inline-block;margin-bottom:14px">
+      <div id="qr-el" style="background:#fff;border-radius:10px;padding:8px"></div>
+    </div>
+    <div style="font-size:11px;color:#aaa;word-break:break-all;margin-bottom:16px">${APP_URL}</div>
+    <button class="btn bg" id="qr-cl">${esc(t().close)}</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById("qr-cl").onclick=()=>ov.remove();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+  setTimeout(()=>{if(window.QRCode)new QRCode(document.getElementById("qr-el"),{text:APP_URL,width:190,height:190,colorDark:NAVY,colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.H});},60);
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+async function boot(){
+  document.getElementById("app").style.display="flex";
+  // Secret admin access via URL hash
+  if(window.location.hash==="#admin"){
+    window.location.hash="";
+    if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
+    document.getElementById("loader").classList.add("gone");
+    showAdmin();
+    return;
+  }
+  if(window._fb){
+    // Load approved participants from Firestore
+    startParticipantListener();
+    // Small wait so first snapshot arrives before picker renders
+    await new Promise(r=>setTimeout(r,600));
+  }
+  document.getElementById("loader").classList.add("gone");
+  if(!me){showEntry();}
+  else{renderApp();startInbox();}
+}
+
+if(window._fb){boot();}
+else{window.addEventListener("fb-ready",boot,{once:true});setTimeout(()=>{if(!window._fb)boot();},3500);}
+
+const qs=document.createElement("script");qs.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";document.head.appendChild(qs);
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
