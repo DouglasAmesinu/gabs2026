@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#1B3A6B"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="GABS 2026"/>
+<title>GABS 2026</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="icon" href="favicon.ico" sizes="32x32"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
+const db=getFirestore(app);
+window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
+window.dispatchEvent(new Event("fb-ready"));
+</script>
+<style>
+:root{
+  --navy:#1B3A6B;--steel:#5B9BB5;--gold:#C49A2A;--light:#F0F4F8;
+  --white:#ffffff;--text:#1a1a2e;--muted:#6B7280;--border:#E5E7EB;
+  --green:#16A34A;--red:#DC2626;--orange:#EA580C;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
+body{font-family:'DM Sans',sans-serif;background:#F0F4F8;color:var(--text)}
+#app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;background:var(--white);position:relative;overflow:hidden}
+button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appearance:none;border:none;background:none;outline:none}
+::-webkit-scrollbar{display:none}
+
+/* ── Loader ── */
+#loader{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .4s}
+#loader.gone{opacity:0;pointer-events:none}
+.spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes badgePop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+/* ── Entry Screen ── */
+#entry{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--navy);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.entry-hero{padding:52px 28px 32px;flex-shrink:0}
+.entry-eyebrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px}
+.entry-eyebrow-left{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.entry-eyebrow-right{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.04em}
+.entry-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:6px 14px;margin-bottom:20px}
+.entry-badge-dot{width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.entry-badge-text{color:rgba(255,255,255,.9);font-size:13px;font-weight:600}
+.entry-title{color:var(--white);font-size:32px;font-weight:800;line-height:1.15;margin-bottom:6px}
+.entry-title-gold{color:var(--gold)}
+.entry-sub{color:rgba(255,255,255,.55);font-size:15px;line-height:1.6;margin-top:14px;max-width:320px}
+.entry-card{background:var(--white);border-radius:28px 28px 0 0;flex:1;padding:32px 24px;min-height:340px}
+.entry-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.entry-input{width:100%;padding:16px 18px;border:1.5px solid var(--border);border-radius:14px;font-size:16px;color:var(--text);background:#F9FAFB;font-weight:500;transition:all .2s;letter-spacing:.04em}
+.entry-input:focus{border-color:var(--navy);background:var(--white);box-shadow:0 0 0 3px rgba(27,58,107,.08)}
+.entry-input::placeholder{color:#9CA3AF;letter-spacing:.02em}
+.entry-hint{text-align:center;color:var(--muted);font-size:13px;margin-top:16px}
+.btn-gold{width:100%;padding:17px;border-radius:14px;background:var(--gold);color:var(--white);font-size:16px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px}
+.btn-gold:active{opacity:.85;transform:scale(.98)}
+.btn-gold:disabled{opacity:.4;pointer-events:none}
+.btn-navy{width:100%;padding:15px;border-radius:14px;background:var(--navy);color:var(--white);font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:opacity .15s}
+.btn-navy:active{opacity:.8}
+.btn-outline{width:100%;padding:15px;border-radius:14px;border:1.5px solid var(--border);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;touch-action:manipulation;transition:all .15s;background:var(--white)}
+.btn-outline:active{background:#F3F4F6}
+.btn-sm{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:opacity .15s;width:auto}
+.btn-sm:active{opacity:.75}
+
+/* ── Main App Layout ── */
+.app-body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.app-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+/* ── Bottom Nav ── */
+#bottom-nav{background:var(--white);border-bottom:1px solid var(--border);display:flex;padding:0;flex-shrink:0;padding-top:env(safe-area-inset-top,0px)}
+.nav-item{flex:1;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px;padding:13px 4px;cursor:pointer;touch-action:manipulation;position:relative;transition:all .15s;border-bottom:2.5px solid transparent}
+.nav-item:active{opacity:.7}
+.nav-icon{font-size:16px;line-height:1}
+.nav-label{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.01em}
+.nav-item.on{border-bottom-color:var(--navy)}
+.nav-item.on .nav-label{color:var(--navy);font-weight:700}
+.nav-item.on .nav-icon{filter:none}
+.nav-item.on .nav-icon{filter:none}
+.nav-badge{position:absolute;top:6px;right:calc(50% - 24px);background:var(--gold);color:var(--white);border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;animation:badgePop .3s ease}
+
+/* ── Page Headers ── */
+.page-hdr{padding:16px 20px 10px}
+
+/* ── Discover Hero Banner ── */
+.disc-hero{background:linear-gradient(135deg,var(--navy) 0%,#1e3a5f 50%,#2a4a7f 100%);padding:24px 20px 20px;position:relative;overflow:hidden}
+.disc-hero::before{content:"";position:absolute;top:-30px;right:-30px;width:140px;height:140px;border-radius:50%;background:rgba(196,154,42,.12);pointer-events:none}
+.disc-hero::after{content:"";position:absolute;bottom:-20px;left:-20px;width:100px;height:100px;border-radius:50%;background:rgba(91,155,181,.1);pointer-events:none}
+.disc-hero-eyebrow{color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
+.disc-hero-title{color:#fff;font-size:24px;font-weight:800;line-height:1.2;margin-bottom:6px}
+.disc-hero-meta{color:rgba(255,255,255,.55);font-size:12px;margin-bottom:16px}
+
+.page-title{font-size:22px;font-weight:800;color:var(--text)}
+.page-sub{font-size:13px;color:var(--muted);margin-top:3px}
+
+/* ── Discover ── */
+.search-wrap{padding:0 16px 12px}
+.search-box{display:flex;align-items:center;gap:10px;background:#F3F4F6;border-radius:12px;padding:11px 15px}
+.search-icon{color:var(--muted);font-size:16px;flex-shrink:0}
+.search-inp{flex:1;font-size:14px;color:var(--text);background:transparent}
+.search-inp::placeholder{color:#9CA3AF}
+.filter-row{display:flex;gap:8px;padding:0 16px 12px}
+.filter-sel{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;color:var(--text);background:#F9FAFB;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%236B7280' d='M5 6L0 0h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;-webkit-appearance:none;appearance:none}
+.filter-row::-webkit-scrollbar{display:none}
+.filter-chip{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;border:1.5px solid var(--border);background:var(--white);color:var(--muted);transition:all .15s;white-space:nowrap}
+.filter-chip.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.cards-list{padding:0 16px 20px;display:flex;flex-direction:column;gap:10px}
+
+/* ── Participant Card ── */
+.p-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05);animation:fadeUp .22s ease both}
+.p-card-top{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px}
+.av{border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;color:var(--white);font-weight:700;font-size:14px;flex-shrink:0}
+.p-name{font-size:15px;font-weight:700;color:var(--text);line-height:1.2}
+.p-role{font-size:13px;color:var(--muted);margin-top:2px}
+.p-company{font-size:13px;font-weight:600;color:var(--navy);margin-top:1px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.chip-sector{background:#EEF2FF;color:#4338CA}
+.chip-country{background:#FEF3C7;color:#92400E}
+.chip-you{background:#DCFCE7;color:#166534}
+.p-actions{display:grid;grid-template-columns:1fr 1.8fr;gap:8px}
+.p-contact{display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.p-contact a{font-size:12px;font-weight:600;color:var(--steel);text-decoration:none;display:flex;align-items:center;gap:4px}
+
+/* ── Messages ── */
+.msgs-hero{background:linear-gradient(135deg,var(--navy),#1e3a5f);padding:20px 20px 18px;position:relative;overflow:hidden}
+.msgs-hero::after{content:"";position:absolute;bottom:-20px;right:-20px;width:100px;height:100px;border-radius:50%;background:rgba(196,154,42,.1);pointer-events:none}
+.msgs-hero-title{color:#fff;font-size:22px;font-weight:800;margin-bottom:3px}
+.msgs-hero-sub{color:rgba(255,255,255,.55);font-size:13px}
+.inbox-av-wrap{position:relative}
+.inbox-list{padding:0;display:flex;flex-direction:column}
+.inbox-row-alt{background:#F8FAFC}
+.inbox-row{display:flex;gap:13px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;touch-action:manipulation;position:relative}
+.inbox-row:active{background:rgba(0,0,0,.02)}
+.inbox-meta{flex:1;min-width:0}
+.inbox-name{font-size:15px;font-weight:700;color:var(--text)}
+.inbox-company{font-size:12px;color:var(--steel);font-weight:600;margin-top:1px}
+.inbox-prev{font-size:13px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inbox-prev.unread{color:var(--gold);font-weight:600}
+.inbox-time{font-size:11px;color:var(--muted);flex-shrink:0;align-self:flex-start;margin-top:2px}
+.inbox-badge{width:20px;height:20px;border-radius:50%;background:var(--gold);color:var(--white);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.inbox-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;gap:10px}
+
+/* ── Thread ── */
+.thread-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.thread-hdr{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--white)}
+.t-back{font-size:24px;color:var(--navy);cursor:pointer;touch-action:manipulation;padding:0 8px 0 0;line-height:1;flex-shrink:0}
+.t-info{flex:1;min-width:0}
+.t-name{font-size:15px;font-weight:700;color:var(--text)}
+.t-company{font-size:12px;color:var(--muted)}
+.t-meet-btn{background:var(--light);border:1px solid var(--border);border-radius:10px;padding:7px 13px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;flex-shrink:0;touch-action:manipulation;display:flex;align-items:center;gap:5px}
+.msgs-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;display:flex;flex-direction:column;gap:10px;background:#F8FAFC}
+.msg-wrap{display:flex;flex-direction:column;max-width:78%}
+.msg-wrap.me{align-self:flex-end;align-items:flex-end}
+.msg-wrap.them{align-self:flex-start;align-items:flex-start}
+.msg-sender{font-size:11px;color:var(--muted);padding:0 4px;margin-bottom:3px}
+.msg-bub{padding:11px 14px;font-size:14px;line-height:1.5;word-break:break-word;border-radius:18px}
+.msg-bub.me{background:var(--navy);color:var(--white);border-bottom-right-radius:4px}
+.msg-bub.them{background:var(--white);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-time{font-size:10px;color:var(--muted);padding:0 4px;margin-top:3px}
+.meet-pill{margin-top:8px;padding:10px 13px;border-radius:11px;font-size:12px;font-weight:600;line-height:1.8}
+.meet-pill.me{background:rgba(255,255,255,.15);color:var(--white)}
+.meet-pill.them{background:#F0F4F8;color:var(--text);border:1px solid var(--border)}
+.meet-pill-row{display:flex;align-items:center;gap:6px}
+.meet-actions{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.meet-btn{padding:7px 13px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;border:1.5px solid;transition:opacity .15s}
+.meet-btn:active{opacity:.7}
+.meet-status{font-size:12px;font-weight:700;padding:5px 11px;border-radius:9px;margin-top:6px;display:inline-flex;align-items:center;gap:4px}
+.compose-bar{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--border);background:var(--white);flex-shrink:0;align-items:flex-end;padding-bottom:calc(12px + var(--safe-b))}
+.compose-inp{flex:1;padding:11px 16px;border-radius:22px;border:1.5px solid var(--border);font-size:15px;color:var(--text);background:#F9FAFB;resize:none;max-height:96px;overflow-y:auto;line-height:1.45;transition:border-color .2s}
+.compose-inp:focus{border-color:var(--navy);background:var(--white)}
+.send-btn{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;flex-shrink:0;transition:all .15s;touch-action:manipulation}
+.send-btn.on{background:var(--navy);color:var(--white)}
+.send-btn.off{background:#E5E7EB;color:#9CA3AF;pointer-events:none}
+.send-btn:active{transform:scale(.88)}
+
+/* ── Schedule ── */
+.sched-day-tabs{display:flex;gap:8px;padding:0 16px 16px;overflow-x:auto}
+.sched-day-tabs::-webkit-scrollbar{display:none}
+.day-tab{flex-shrink:0;padding:10px 16px;border-radius:12px;border:1.5px solid var(--border);cursor:pointer;touch-action:manipulation;transition:all .2s;background:var(--white)}
+.day-tab.on{background:var(--navy);border-color:var(--navy);color:var(--white)}
+.day-tab-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.day-tab.on .day-tab-label{color:rgba(255,255,255,.7)}
+.day-tab-date{font-size:14px;font-weight:700;color:var(--text);margin-top:2px}
+.day-tab.on .day-tab-date{color:var(--white)}
+.sched-legend{display:flex;gap:12px;padding:0 16px 14px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--muted)}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sched-sessions{padding:0 16px;display:flex;flex-direction:column;gap:8px;padding-bottom:20px}
+.sesh-card{border-radius:14px;padding:14px 16px;margin-bottom:0}
+.sesh-card.light{background:var(--white);border:1px solid var(--border)}
+.sesh-card.dark{background:var(--navy);border:1px solid var(--navy)}
+.sesh-card.dark .sesh-title{color:#fff}
+.sesh-card.dark .sesh-time{color:rgba(255,255,255,.55)}
+.sesh-card.dark .sesh-loc{color:rgba(255,255,255,.45)}
+.sesh-card.dark .sesh-badge{opacity:.9}
+.sesh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+.sesh-time{font-size:12px;font-weight:700;color:var(--muted)}
+.sesh-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.sesh-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:6px}
+.sesh-loc{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+
+/* ── Overlays ── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(4px);padding:10px}
+.ov.ctr{align-items:center;padding:20px}
+.sheet{background:var(--white);border-radius:24px 24px 16px 16px;width:100%;max-width:480px;padding:24px;box-shadow:0 -4px 30px rgba(0,0,0,.15);animation:slideUp .25s ease;max-height:90vh;overflow-y:auto}
+.sheet.pop{border-radius:20px;animation:popIn .22s ease}
+.sheet-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px}
+.sheet-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
+.form-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:14px}
+.form-label:first-of-type{margin-top:0}
+.form-inp{width:100%;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;color:var(--text);background:#F9FAFB;transition:border-color .2s}
+.form-inp:focus{border-color:var(--navy);background:var(--white)}
+.form-inp::placeholder{color:#9CA3AF}
+select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%236B7280' d='M5 6L0 0h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:34px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err-msg{background:#FEF2F2;border-left:3px solid var(--red);border-radius:8px;padding:10px 13px;font-size:13px;color:var(--red);margin-top:8px}
+.ok-msg{background:#F0FDF4;border-left:3px solid var(--green);border-radius:8px;padding:10px 13px;font-size:13px;color:var(--green);margin-top:8px}
+.btn-row{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:18px}
+
+/* ── Profile footer ── */
+#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-b));flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
+.profile-info{display:flex;align-items:center;gap:9px}
+.profile-name{font-size:13px;font-weight:700;color:var(--text)}
+.edit-profile-btn{font-size:12px;font-weight:600;color:var(--steel);cursor:pointer;touch-action:manipulation;padding:6px 0}
+
+/* ── Logos footer ── */
+
+/* ── AI Match ── */
+.match-btn{width:100%;padding:12px;border-radius:12px;background:var(--navy);color:var(--white);font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:12px;border:none}
+.match-btn:active{opacity:.85}
+
+/* ── Claim form stages ── */
+.stage-badge{display:inline-flex;align-items:center;gap:6px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;color:var(--green);margin-bottom:16px}
+.already-card{text-align:center;padding:12px 0 20px}
+.invalid-card{text-align:center;padding:20px 0}
+
+/* Utility */
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt20{margin-top:20px}
+.gap10{gap:10px}
+</style>
+</head>
+<body>
+<div id="loader"><div class="spin"></div><div style="color:rgba(255,255,255,.4);font-size:12px;margin-top:14px;letter-spacing:2px;font-weight:600">GABS 2026</div></div>
+<div id="app" style="display:none"></div>
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const NAVY="#1B3A6B",STEEL="#5B9BB5",GOLD="#C49A2A";
+const APP_URL="https://www.gabsconnect.com/";
+const DURATIONS=[15,20,30,45,60];
+const MEETING_DAYS=[
+  {label:"Tue 24 Nov 2026 — Day One",date:"20261124"},
+  {label:"Wed 25 Nov 2026 — Day Two",date:"20261125"},
+];
+const EMAILJS_SERVICE_ID="service_3aowa2a";
+const EMAILJS_TEMPLATE_ID="template_gec29jf";
+const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
+const SECTORS=["Agriculture","Consulting","Construction","Energy","Finance","Healthcare","Logistics","Manufacturing","Mining","Technology","Trade","Other"];
+const COUNTRIES=["Germany","Ghana","Nigeria","Senegal","Kenya","South Africa","Cameroon","Côte d'Ivoire","Ethiopia","Tanzania","Other"];
+const SC={
+  plenary:{bg:"#DBEAFE",c:"#1E40AF",dot:"#3B82F6"},
+  panel:{bg:"#E0F2FE",c:"#075985",dot:"#0EA5E9"},
+  fireside:{bg:"#FEF3C7",c:"#92400E",dot:"#F59E0B"},
+  networking:{bg:"#DCFCE7",c:"#166534",dot:"#22C55E"},
+  social:{bg:"#FCE7F3",c:"#9D174D",dot:"#EC4899"},
+  logistics:{bg:"#F3F4F6",c:"#374151",dot:"#9CA3AF"},
+  reception:{bg:"#FCE7F3",c:"#9D174D",dot:"#EC4899"},
+  breakfast:{bg:"#DCFCE7",c:"#166534",dot:"#22C55E"},
+  lunch:{bg:"#DCFCE7",c:"#166534",dot:"#22C55E"},
+  closing:{bg:"#DBEAFE",c:"#1E40AF",dot:"#3B82F6"},
+  workshop:{bg:"#F3E8FF",c:"#6B21A8",dot:"#A855F7"},
+  b2b:{bg:"#FFF7ED",c:"#9A3412",dot:"#F97316"}
+};
+const SCHEDULE=[
+  {day:"MON 23 NOV 2026 · INFORMAL OPENING",dayShort:"Day 0",date:"Mon 23 Nov",sessions:[
+    {time:"19:00–22:00",title:"Welcome Reception",loc:"Garden & Reception Hall",type:"social"},
+  ]},
+  {day:"TUE 24 NOV 2026 · DAY ONE",dayShort:"Day 1",date:"Tue 24 Nov",sessions:[
+    {time:"09:00",title:"Opening by VIP Speakers",loc:"Main Hall",type:"plenary"},
+    {time:"10:00",title:"Opening Panel: The future of African German Business Relations in a changing world: More Opportunities than Challenges!?",loc:"Main Hall",type:"panel"},
+    {time:"11:00",title:"VIP Speaker: Business Key Note",loc:"Main Hall",type:"plenary"},
+    {time:"11:20",title:"Fireside Chat: How we can change the world — The perspective of young entrepreneurs from Africa and Germany",loc:"Main Hall",type:"fireside"},
+    {time:"12:00",title:"Lunch Break — Visit to the Startup Villages",loc:"Asana Bar & Restaurant",type:"lunch"},
+    {time:"14:00",title:"Panel: Africa in the World of Tomorrow – How is the continent preparing technologically for the future?",loc:"Main Hall",type:"panel"},
+    {time:"15:15",title:"Panel 2: Natural Resources and Mining",loc:"Main Hall",type:"panel"},
+    {time:"16:30",title:"Fireside Chat with VIP Speaker",loc:"Main Hall",type:"fireside"},
+    {time:"17:00–18:00",title:"Transfer to German Ambassador Residence (by invitation only)",loc:"German Ambassador Residence",type:"logistics"},
+    {time:"18:30",title:"Dinner Reception hosted by the German Ambassador",loc:"German Ambassador Residence",type:"social"},
+    {time:"21:30",title:"Transfer back to Hotels",loc:"Various Hotels",type:"logistics"},
+  ]},
+  {day:"WED 25 NOV 2026 · DAY TWO",dayShort:"Day 2",date:"Wed 25 Nov",sessions:[
+    {time:"08:00",title:"Breakfast Meeting with German Ambassadors in Africa and Investment Promotion Agencies",loc:"Garden / Asana Bar",type:"breakfast"},
+    {time:"09:30",title:"Panel 3: Financing your African Business",loc:"Main Hall",type:"panel"},
+    {time:"10:45",title:"Panel 4: Regulations and Legal Context",loc:"Main Hall",type:"panel"},
+    {time:"12:00",title:"Fireside Chat with VIP Speaker: AfCFTA — From Borders to Business: How AfCFTA shapes African Trade",loc:"Main Hall",type:"fireside"},
+    {time:"12:30",title:"Lunch Break",loc:"Asana Bar & Restaurant & Board Room",type:"lunch"},
+    {time:"14:00",title:"Panel 5: Automotive",loc:"Main Hall",type:"panel"},
+    {time:"15:15",title:"Closing Panel: Made in Africa - Made by Germany: German Investment on the Rise",loc:"Main Hall",type:"panel"},
+    {time:"16:30",title:"Closing Remarks and Farewell Drinks",loc:"Main Hall",type:"closing"},
+    {time:"17:30",title:"Buses leaving for Moevenpick Hotel",loc:"Moevenpick Hotel",type:"logistics"},
+    {time:"19:00",title:"educataGhana Kickoff (see separate program)",loc:"Moevenpick Hotel / Piazza",type:"social"},
+  ]},
+];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let me=null;try{const s=localStorage.getItem("gabs_me");if(s)me=JSON.parse(s);}catch(e){}
+let participants=[];
+let currentTab="discover";
+let activeThreadId=null;
+let threadMessages=[];
+let draftText="";
+let inboxData={};
+let threadUnsub=null;
+let inboxUnsubs=[];
+let inboxStarted=false;
+let inboxListenedIds=new Set();
+let pendingRegs=[];
+let participantsUnsub=null;
+let discSearch="",discSector="",discCountry="";
+let schedDay=0;
+let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
+let validTicketRefs=[];try{const s=localStorage.getItem("gabs_tickets");if(s)validTicketRefs=JSON.parse(s);}catch(e){}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const esc=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const tid=(a,b)=>[a,b].sort().join("__");
+const fmtTime=ts=>ts?.seconds?new Date(ts.seconds*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
+const initials=name=>name.trim().split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+
+function avHTML(av,sz=42){
+  const fs=Math.round(sz*.36);
+  return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(av)}</div>`;
+}
+function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
+
+// Slot management
+function saveSlots(){try{localStorage.setItem("gabs_slots",JSON.stringify(bookedSlots));}catch(e){}}
+function timeToMins(t){const[h,m]=t.split(":").map(Number);return h*60+m;}
+function minsToTime(m){return`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;}
+function allSlots(){const s=[];for(let h=8;h<18;h++){s.push(`${String(h).padStart(2,"0")}:00`);s.push(`${String(h).padStart(2,"0")}:30`);}return s;}
+function bookSlot(myId,theirId,day,start,dur){
+  const end=minsToTime(timeToMins(start)+dur);
+  [myId,theirId].forEach(id=>{if(!bookedSlots[id+day])bookedSlots[id+day]=[];bookedSlots[id+day].push({start,end});});
+  saveSlots();
+}
+function isBlocked(pid,day,start,dur){
+  return(bookedSlots[pid+day]||[]).some(s=>{const bs=timeToMins(s.start),be=timeToMins(s.end),ns=timeToMins(start),ne=ns+dur;return ns<be&&ne>bs;});
+}
+
+function bestMatch(){
+  const keys=["ceo","md","managing director","director","head","partner","founder"];
+  const pool=participants.filter(p=>p.id!==me?.id);
+  if(!pool.length)return null;
+  return pool.map(p=>{let sc=0;if(p.country==="Germany")sc+=30;if(p.sector==="Finance")sc+=25;if(keys.some(x=>p.title?.toLowerCase().includes(x)))sc+=20;sc+=Math.random()*8;return{...p,sc};}).sort((a,b)=>b.sc-a.sc)[0];
+}
+
+// ── EmailJS ────────────────────────────────────────────────────────────────
+if(window.emailjs){try{window.emailjs.init(EMAILJS_PUBLIC_KEY);}catch(e){}}
+function sendConfirmationEmail({name,email,company,title,ticket,status}){
+  if(!window.emailjs||!email)return;
+  window.emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
+    to_name:name,to_email:email,company,title,ticket_ref:ticket,
+    status:status==="approved"?"Confirmed ✓":"Pending review",
+    app_url:APP_URL,event_dates:"23–25 November 2026",event_venue:"Accra, Ghana",
+  }).catch(e=>console.warn("Email failed:",e));
+}
+
+// ── Calendar ───────────────────────────────────────────────────────────────
+function generateGoogleCalURL(meeting,fromName,toName){
+  const date=meeting.day||"20261124";
+  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const pad=n=>String(n).padStart(2,"0");
+  const startStr=`${date}T${pad(h)}${pad(m)}00`;
+  const endMins=h*60+m+(meeting.dur||30);
+  const endStr=`${date}T${pad(Math.floor(endMins/60))}${pad(endMins%60)}00`;
+  return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(`B2B Meeting at GABS 2026\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`)}&location=${encodeURIComponent(meeting.loc||"GABS 2026 Venue, Accra")}`;
+}
+function generateICS(meeting,fromName,toName){
+  const base=meeting.day||"20261124";
+  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const pad=n=>String(n).padStart(2,"0");
+  const startDt=`${base}T${pad(h)}${pad(m)}00`;
+  const endMins=h*60+m+(meeting.dur||30);
+  const endDt=`${base}T${pad(Math.floor(endMins/60))}${pad(endMins%60)}00`;
+  const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//GABS 2026//EN","BEGIN:VEVENT",`UID:gabs2026-${Date.now()}@gabsb2b`,`DTSTART:${startDt}`,`DTEND:${endDt}`,`SUMMARY:GABS 2026 B2B Meeting: ${fromName} & ${toName}`,`LOCATION:${meeting.loc||"GABS 2026 Venue"}`,`DESCRIPTION:B2B Meeting at GABS 2026\\nDate: ${meeting.dayLabel||""}\\nTime: ${meeting.start} (${meeting.dur} min)\\nVenue: ${meeting.loc||""}\\nAll times GMT`,"STATUS:CONFIRMED","END:VEVENT","END:VCALENDAR"].join("\r\n");
+  const blob=new Blob([ics],{type:"text/calendar;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=`GABS2026_Meeting.ics`;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+// ── Firestore listeners ────────────────────────────────────────────────────
+function startParticipantListener(){
+  if(!window._fb)return;
+  const fb=window._fb;
+  const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
+  participantsUnsub=fb.onSnapshot(q,snap=>{
+    participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(currentTab==="discover"){const di=document.querySelector(".cards-list");if(di)refreshDisc();}
+    if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
+    const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
+    if(me)startInbox();
+    updateMsgBadge();
+  });
+  const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
+  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));});
+}
+
+async function loadTicketsFromCloud(){
+  if(!window._fb)return;
+  try{
+    const fbs=window._fb;
+    const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"config")));
+    const doc=snap.docs.find(d=>d.id==="tickets");
+    if(doc){validTicketRefs=doc.data().refs||[];localStorage.setItem("gabs_tickets",JSON.stringify(validTicketRefs));console.log(`Loaded ${validTicketRefs.length} ticket refs from Firestore`);}
+    else{console.warn("No tickets doc in Firestore yet");}
+  }catch(e){console.error("Ticket load failed:",e.code||e.message);}
+}
+
+// ── App shell ──────────────────────────────────────────────────────────────
+function renderApp(){
+  const app=document.getElementById("app");
+  app.innerHTML=`
+    ${renderBottomNav()}
+    <div class="app-body">
+      <div class="app-scroll" id="tab-content">${renderTab()}</div>
+    </div>
+    ${renderProfileBar()}`;
+  bindBottomNav();
+  bindTab();
+  bindProfileBar();
+  if(!inboxStarted&&me)startInbox();
+}
+
+function renderBottomNav(){
+  const tabs=[
+    {k:"discover",icon:"👥",label:"Discover"},
+    {k:"messages",icon:"💬",label:"Messages"},
+    {k:"schedule",icon:"📅",label:"Schedule"},
+  ];
+  const msgCount=Object.keys(inboxData).length;
+  return`<div id="bottom-nav">${tabs.map(t=>`
+    <div class="nav-item${currentTab===t.k?" on":""}" data-tab="${t.k}">
+      <div class="nav-icon">${t.icon}</div>
+      <div class="nav-label">${t.label}</div>
+      ${t.k==="messages"&&msgCount>0?`<div class="nav-badge">${msgCount}</div>`:""}
+    </div>`).join("")}</div>`;
+}
+
+function bindBottomNav(){
+  document.querySelectorAll(".nav-item[data-tab]").forEach(item=>{
+    item.onclick=()=>{
+      if(currentTab===item.dataset.tab&&item.dataset.tab!=="messages")return;
+      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";
+      renderApp();
+    };
+  });
+}
+
+function renderProfileBar(){
+  if(!me)return"";
+  return`<div id="profile-bar">
+    <div class="profile-info">
+      ${avHTML(me.av||initials(me.name||"?"),32)}
+      <span class="profile-name">${esc(me.name)}</span>
+    </div>
+    <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
+  </div>`;
+}
+
+
+
+function bindProfileBar(){
+  document.getElementById("edit-profile-btn")?.addEventListener("click",showEditProfile);
+}
+
+function showEditProfile(){
+  const ov=makeOv(true);
+  ov.innerHTML=`<div class="sheet pop" style="max-width:440px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="sheet-title">Edit Profile</div>
+      <button class="btn-outline btn-sm" id="ep-close">Close</button>
+    </div>
+    <div class="sheet-sub">Update your details visible to other participants</div>
+    <div style="background:#F8FAFC;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
+      ${avHTML(me.av||initials(me.name||"?"),44)}
+      <div>
+        <div style="font-weight:700;color:var(--text);font-size:15px">${esc(me.name)}</div>
+        <div style="color:var(--muted);font-size:12px">${esc(me.company||"")}</div>
+        <div style="color:var(--steel);font-size:11px;margin-top:3px">Name and company are fixed to your ticket</div>
+      </div>
+    </div>
+    <div class="form-label">Job Title</div>
+    <input class="form-inp" id="ep-title" value="${esc(me.title||"")}" placeholder="e.g. Managing Director"/>
+    <div class="form-grid">
+      <div><div class="form-label">Sector</div>
+        <select class="form-inp" id="ep-sector">
+          ${SECTORS.map(s=>`<option value="${esc(s)}"${me.sector===s?" selected":""}>${esc(s)}</option>`).join("")}
+        </select>
+      </div>
+      <div><div class="form-label">Country</div>
+        <select class="form-inp" id="ep-country">
+          ${COUNTRIES.map(c=>`<option value="${esc(c)}"${me.country===c?" selected":""}>${esc(c)}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <div class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+    <input class="form-inp" id="ep-email" type="email" value="${esc(me.email||"")}" placeholder="you@company.com"/>
+    <div class="form-label">LinkedIn <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+    <input class="form-inp" id="ep-linkedin" value="${esc(me.linkedin||"")}" placeholder="linkedin.com/in/yourname"/>
+    <div id="ep-feedback"></div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
+      <button class="btn-navy" id="ep-save" style="color:#fff">Save changes</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+
+  document.getElementById("ep-close").onclick=()=>ov.remove();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+
+  document.getElementById("ep-logout").onclick=()=>{
+    ov.remove();
+    me=null;localStorage.removeItem("gabs_me");
+    inboxStarted=false;inboxListenedIds=new Set();
+    inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};
+    showEntry();
+  };
+
+  document.getElementById("ep-save").onclick=async()=>{
+    const title=document.getElementById("ep-title").value.trim();
+    const sector=document.getElementById("ep-sector").value;
+    const country=document.getElementById("ep-country").value;
+    const email=document.getElementById("ep-email").value.trim().toLowerCase();
+    const linkedin=document.getElementById("ep-linkedin").value.trim();
+    const fb=document.getElementById("ep-feedback");
+    const btn=document.getElementById("ep-save");
+
+    if(email&&!email.includes("@")){if(fb)fb.innerHTML=`<div class="err-msg">Please enter a valid email.</div>`;return;}
+    if(btn){btn.disabled=true;btn.textContent="Saving…";}
+
+    try{
+      if(window._fb&&me.id){
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{title,sector,country,email,linkedin});
+      }
+      me={...me,title,sector,country,email,linkedin};
+      localStorage.setItem("gabs_me",JSON.stringify(me));
+      if(fb)fb.innerHTML=`<div class="ok-msg">✓ Profile updated</div>`;
+      if(btn){btn.disabled=false;btn.textContent="Save changes";}
+      // Refresh the profile bar name display
+      const pname=document.querySelector(".profile-name");
+      if(pname)pname.textContent=me.name;
+      setTimeout(()=>ov.remove(),1200);
+    }catch(e){
+      if(fb)fb.innerHTML=`<div class="err-msg">Update failed. Try again.</div>`;
+      if(btn){btn.disabled=false;btn.textContent="Save changes";}
+    }
+  };
+}
+
+
+
+// ── Tab rendering ──────────────────────────────────────────────────────────
+function renderTab(){
+  if(currentTab==="discover")return renderDiscover();
+  if(currentTab==="messages")return activeThreadId?renderThread():renderInbox();
+  if(currentTab==="schedule")return renderSchedule();
+  return"";
+}
+function bindTab(){
+  if(currentTab==="discover")bindDiscover();
+  else if(currentTab==="messages"){
+    if(activeThreadId){const p=participants.find(x=>x.id===activeThreadId);if(p){initThread(p);bindCompose(p);}}
+    else bindInboxRows();
+  }
+  else if(currentTab==="schedule")bindSchedule();
+}
+
+// ── Discover ───────────────────────────────────────────────────────────────
+function filtered(){
+  const q=discSearch.toLowerCase();
+  return participants.filter(p=>
+    (!q||p.name.toLowerCase().includes(q)||p.company?.toLowerCase().includes(q)||p.sector?.toLowerCase().includes(q))&&
+    (!discSector||p.sector===discSector)&&(!discCountry||p.country===discCountry)
+  );
+}
+
+function pCardHTML(p){
+  const self=me&&p.id===me.id;
+  const hasContact=p.phone||p.linkedin;
+  return`<div class="p-card${self?" self":""}" data-pid="${p.id}">
+    <div class="p-card-top">
+      ${avHTML(p.av||initials(p.name||"?"),46)}
+      <div style="flex:1;min-width:0">
+        <div class="p-name">${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
+        <div class="p-role">${esc(p.title||"")}</div>
+        <div class="p-company">${esc(p.company||"")}</div>
+      </div>
+    </div>
+    <div class="chips">
+      ${p.sector?`<span class="chip chip-sector">${esc(p.sector)}</span>`:""}
+      ${p.country?`<span class="chip chip-country">${esc(p.country)}</span>`:""}
+    </div>
+    ${hasContact?`<div class="p-contact">
+      ${p.phone?`<a href="tel:${esc(p.phone)}">📞 ${esc(p.phone)}</a>`:""}
+      ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener">🔗 LinkedIn</a>`:""}
+    </div>`:""}
+    ${self?"":`<div class="p-actions" style="margin-top:12px">
+      <button class="btn-outline btn-sm p-msg" data-id="${p.id}">💬 Message</button>
+      <button class="btn-navy btn-sm p-mt" data-id="${p.id}" style="color:#fff">📅 Propose Meeting</button>
+    </div>`}
+  </div>`;
+}
+
+function renderDiscover(){
+  const list=filtered();
+  const secs=[...new Set(participants.map(p=>p.sector).filter(Boolean))].sort();
+  return`<div>
+    <div class="disc-hero">
+      <div class="disc-hero-eyebrow">6TH EDITION · ACCRA 2026</div>
+      <div class="disc-hero-title">German-African<br/>Business <span style="color:var(--gold)">Summit</span></div>
+      <div class="disc-hero-meta">23–25 November 2026 · Accra, Ghana</div>
+
+    </div>
+    <div class="page-hdr" style="padding-top:14px">
+      <div class="page-title">Discover</div>
+      <div class="page-sub">${participants.length} participant${participants.length!==1?"s":""} attending</div>
+    </div>
+    <div class="search-wrap">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input class="search-inp" id="si" placeholder="Search by name or company…" value="${esc(discSearch)}" autocomplete="off"/>
+      </div>
+    </div>
+    <div class="filter-row">
+      <select class="filter-sel" id="sec-sel">
+        <option value="">All Sectors</option>
+        ${[...new Set(participants.map(p=>p.sector).filter(Boolean))].sort().map(s=>`<option value="${esc(s)}"${discSector===s?" selected":""}>${esc(s)}</option>`).join("")}
+      </select>
+      <select class="filter-sel" id="cnt-sel">
+        <option value="">All Countries</option>
+        ${[...new Set(participants.map(p=>p.country).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}"${discCountry===c?" selected":""}>${esc(c)}</option>`).join("")}
+      </select>
+    </div>
+    <button class="match-btn" id="ai-btn" style="margin:0 16px 12px;width:calc(100% - 32px)">✦ Find your best match</button>
+    <div id="cards-list" class="cards-list">
+      ${participants.length===0
+        ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`
+        :list.map(p=>pCardHTML(p)).join("")
+      }
+    </div>
+  </div>`;
+}
+
+function bindDiscover(){
+  document.getElementById("ai-btn")?.addEventListener("click",showAI);
+  const ss=document.getElementById("sec-sel");
+  if(ss)ss.onchange=e=>{discSector=e.target.value;refreshDisc();};
+  const cs=document.getElementById("cnt-sel");
+  if(cs)cs.onchange=e=>{discCountry=e.target.value;refreshDisc();};
+  const si=document.getElementById("si");
+  if(si){
+    si.oninput=e=>{
+      discSearch=e.target.value.toLowerCase();
+      document.querySelectorAll(".p-card").forEach(card=>{
+        const p=participants.find(x=>x.id===card.dataset.pid);
+        if(!p){card.style.display="";return;}
+        const match=!discSearch||p.name.toLowerCase().includes(discSearch)||p.company?.toLowerCase().includes(discSearch)||p.sector?.toLowerCase().includes(discSearch);
+        card.style.display=match?"":"none";
+      });
+      const vis=document.querySelectorAll(".p-card:not([style*='none'])").length;
+      document.querySelector(".page-sub").textContent=`${vis} participant${vis!==1?"s":""} attending`;
+    };
+  }
+  bindCards();
+}
+
+function refreshDisc(){
+  const wrap=document.getElementById("cards-list");if(!wrap)return;
+  const list=filtered();
+  wrap.innerHTML=list.length===0
+    ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants yet</div></div>`
+    :list.map(p=>pCardHTML(p)).join("");
+  const sub=document.querySelector(".page-sub");if(sub)sub.textContent=`${participants.length} participant${participants.length!==1?"s":""} attending`;
+  bindCards();
+}
+
+function bindCards(){
+  document.querySelectorAll(".p-msg").forEach(b=>b.onclick=()=>{const p=participants.find(x=>x.id===b.dataset.id);if(p)openThread(p);});
+  document.querySelectorAll(".p-mt").forEach(b=>b.onclick=()=>{const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);});
+}
+
+// ── Messages / Inbox ───────────────────────────────────────────────────────
+function openThread(p){
+  currentTab="messages";
+  activeThreadId=p.id;
+  // Clear this conversation from inbox so badge decrements
+  delete inboxData[p.id];
+  renderApp();
+}
+
+function renderInbox(){
+  const entries=Object.values(inboxData).sort((a,b)=>(b.ts?.seconds||0)-(a.ts?.seconds||0));
+  if(!entries.length)return`<div>
+    <div class="msgs-hero">
+      <div class="msgs-hero-title">Messages</div>
+      <div class="msgs-hero-sub">Your conversations with other participants</div>
+    </div>
+    <div class="inbox-empty"><div style="font-size:52px;margin-bottom:12px">💬</div><div style="font-size:16px;font-weight:700;color:var(--text)">No conversations yet</div><div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.6">Go to Discover and tap<br/><strong>Message</strong> on any participant</div></div>
+  </div>`;
+  return`<div>
+    <div class="msgs-hero">
+      <div class="msgs-hero-title">Messages</div>
+      <div class="msgs-hero-sub">${entries.length} conversation${entries.length!==1?"s":""}</div>
+    </div>
+    <div class="inbox-list">${entries.map(({p,text,ts},idx)=>`
+      <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${p.id}">
+        <div class="inbox-av-wrap">
+          ${avHTML(p.av||initials(p.name||"?"),44)}
+        </div>
+        <div class="inbox-meta">
+          <div class="inbox-name">${esc(p.name)}</div>
+          <div class="inbox-company">${esc(p.company||"")}</div>
+          <div class="inbox-prev">${esc(text||"")}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+          <span class="inbox-time">${fmtTime(ts)}</span>
+          <span style="color:var(--navy);font-size:18px">›</span>
+        </div>
+      </div>`).join("")}
+    </div>
+  </div>`;
+}
+
+function bindInboxRows(){
+  document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=()=>{const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
+}
+
+function startInbox(){
+  if(!me||!window._fb)return;
+  inboxStarted=true;
+  const fb=window._fb;
+  participants.filter(p=>p.id!==me.id&&!inboxListenedIds.has(p.id)).forEach(p=>{
+    inboxListenedIds.add(p.id);
+    const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
+    const u=fb.onSnapshot(q,snap=>{
+      if(!snap.empty){const d=snap.docs[0].data();inboxData[p.id]={p,text:d.text,ts:d.ts};}
+      else delete inboxData[p.id];
+      updateMsgBadge();
+      if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
+    });
+    inboxUnsubs.push(u);
+  });
+}
+
+function updateMsgBadge(){
+  const count=Object.keys(inboxData).length;
+  document.querySelectorAll(".nav-item[data-tab='messages']").forEach(nav=>{
+    nav.querySelector(".nav-badge")?.remove();
+    if(count>0){const b=document.createElement("div");b.className="nav-badge";b.textContent=count;nav.appendChild(b);}
+  });
+}
+
+// ── Thread ─────────────────────────────────────────────────────────────────
+function renderThread(){
+  const p=participants.find(x=>x.id===activeThreadId);
+  if(!p)return renderInbox();
+  return`<div class="thread-wrap">
+    <div class="thread-hdr">
+      <span class="t-back" id="t-back">←</span>
+      ${avHTML(p.av||initials(p.name||"?"),38)}
+      <div class="t-info">
+        <div class="t-name">${esc(p.name)}</div>
+        <div class="t-company">${esc(p.title||"")} · ${esc(p.company||"")}</div>
+      </div>
+      <button class="t-meet-btn" id="t-meet">📅 Meet</button>
+    </div>
+    <div class="msgs-area" id="msgs">${renderMsgs()}</div>
+    <div class="compose-bar">
+      <textarea class="compose-inp" id="cinp" placeholder="Message…" rows="1">${esc(draftText)}</textarea>
+      <div class="send-btn ${draftText.trim()?"on":"off"}" id="sbtn">➤</div>
+    </div>
+  </div>`;
+}
+
+function renderMsgs(){
+  if(!threadMessages.length)return`<div style="text-align:center;color:var(--muted);font-size:13px;margin-top:60px;line-height:2.5">💬<br/>Start the conversation</div>`;
+  return threadMessages.map(m=>{
+    const mine=m.fromId===me?.id;
+    const cls=mine?"me":"them";
+    let respHTML="";
+    if(m.meeting){
+      if(!mine&&!m.resp){
+        respHTML=`<div class="meet-actions">
+          <button class="meet-btn" style="background:#F0FDF4;color:var(--green);border-color:#BBF7D0" data-mid="${m.id}" data-resp="accepted">✓ Accept</button>
+          <button class="meet-btn" style="background:#FEF2F2;color:var(--red);border-color:#FECACA" data-mid="${m.id}" data-resp="declined">✗ Decline</button>
+          <button class="meet-btn" style="background:#FFF7ED;color:var(--orange);border-color:#FED7AA" data-mid="${m.id}" data-resp="busy">⏱ Busy</button>
+        </div>`;
+      } else if(m.resp){
+        const rMap={accepted:{txt:"✓ Accepted",bg:"#F0FDF4",c:"var(--green)"},declined:{txt:"✗ Declined",bg:"#FEF2F2",c:"var(--red)"},busy:{txt:"⏱ Busy",bg:"#FFF7ED",c:"var(--orange)"}};
+        const r=rMap[m.resp]||{txt:m.resp,bg:"#F3F4F6",c:"var(--muted)"};
+        const calBtns=m.resp==="accepted"?`<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
+          <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-gcal="${m.id}">📅 Add to Calendar</button>
+          <button class="meet-btn" style="background:#F3F4F6;color:var(--text);border-color:var(--border)" data-ics="${m.id}">📥 Download .ics</button>
+        </div>`:"";
+        respHTML=`<div class="meet-status" style="background:${r.bg};color:${r.c}">${r.txt}</div>${calBtns}`;
+      } else if(mine){
+        respHTML=`<div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">⏳ Awaiting response</div>`;
+      }
+    }
+    return`<div class="msg-wrap ${cls}">
+      ${!mine?`<div class="msg-sender">${esc(m.fromName||"")}</div>`:""}
+      <div class="msg-bub ${cls}">${esc(m.text)}
+        ${m.meeting?`<div class="meet-pill ${cls}">
+          <div class="meet-pill-row">📅 ${esc(m.meeting.dayLabel||"")}</div>
+          <div class="meet-pill-row">📍 ${esc(m.meeting.loc)}</div>
+          <div class="meet-pill-row">🕐 ${esc(m.meeting.start)} · ${esc(m.meeting.dur)} min</div>
+        </div>`:""}
+        ${respHTML}
+      </div>
+      <div class="msg-time">${fmtTime(m.ts)}</div>
+    </div>`;
+  }).join("");
+}
+
+function scrollBottom(){const el=document.getElementById("msgs");if(el)el.scrollTop=el.scrollHeight;}
+
+function initThread(p){
+  if(!me||!window._fb)return;
+  if(threadUnsub){threadUnsub();threadUnsub=null;}
+  const fb=window._fb;
+  const tid2=tid(me.id,p.id);
+  const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
+  threadUnsub=fb.onSnapshot(q,snap=>{
+    threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const msgs=document.getElementById("msgs");
+    if(msgs){msgs.innerHTML=renderMsgs();scrollBottom();bindRespBtns(p);}
+    requestAnimationFrame(()=>scrollBottom());
+  });
+  setTimeout(scrollBottom,100);
+}
+
+function bindCompose(p){
+  document.getElementById("t-back")?.addEventListener("click",()=>{activeThreadId=null;threadMessages=[];draftText="";if(threadUnsub){threadUnsub();threadUnsub=null;}renderApp();});
+  document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
+  const inp=document.getElementById("cinp");
+  const sbt=document.getElementById("sbtn");
+  if(!inp||!sbt)return;
+  inp.addEventListener("input",()=>{draftText=inp.value;sbt.className=`send-btn ${draftText.trim()?"on":"off"}`;inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();doSend(p);}});
+  sbt.onclick=()=>{if(draftText.trim())doSend(p);};
+}
+
+function bindRespBtns(p){
+  document.querySelectorAll("[data-resp]").forEach(btn=>{
+    btn.onclick=async()=>{
+      if(!window._fb)return;
+      const fb=window._fb;
+      await fb.updateDoc(fb.doc(fb.db,"threads",tid(me.id,p.id),"messages",btn.dataset.mid),{resp:btn.dataset.resp});
+    };
+  });
+  document.querySelectorAll("[data-gcal]").forEach(btn=>{
+    btn.onclick=()=>{
+      const msg=threadMessages.find(m=>m.id===btn.dataset.gcal);
+      if(msg?.meeting)window.open(generateGoogleCalURL(msg.meeting,me.name,p.name),"_blank");
+    };
+  });
+  document.querySelectorAll("[data-ics]").forEach(btn=>{
+    btn.onclick=()=>{
+      const msg=threadMessages.find(m=>m.id===btn.dataset.ics);
+      if(msg?.meeting)generateICS(msg.meeting,me.name,p.name);
+    };
+  });
+}
+
+async function doSend(p,textOverride,meeting){
+  const text=(textOverride||draftText).trim();
+  if(!text||!me||!window._fb)return;
+  draftText="";
+  const inp=document.getElementById("cinp");const sbt=document.getElementById("sbtn");
+  if(inp){inp.value="";inp.style.height="auto";}
+  if(sbt)sbt.className="send-btn off";
+  const fb=window._fb;const tid2=tid(me.id,p.id);
+  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av||initials(me.name),ts:fb.serverTimestamp()};
+  if(meeting)payload.meeting=meeting;
+  await fb.addDoc(fb.collection(fb.db,"threads",tid2,"messages"),payload);
+}
+
+// ── Schedule ───────────────────────────────────────────────────────────────
+function renderSchedule(){
+  const day=SCHEDULE[schedDay];
+  const typeColors={plenary:"#3B82F6",panel:"#0EA5E9",fireside:"#F59E0B",networking:"#22C55E",social:"#EC4899",logistics:"#9CA3AF",reception:"#EC4899",breakfast:"#22C55E",lunch:"#22C55E",closing:"#3B82F6",workshop:"#A855F7",b2b:"#F97316"};
+  return`<div>
+    <div class="page-hdr"><div class="page-title">Schedule</div><div class="page-sub">3-day programme · All times GMT</div></div>
+    <div class="sched-day-tabs">
+      ${SCHEDULE.map((d,i)=>`
+        <div class="day-tab${schedDay===i?" on":""}" data-di="${i}">
+          <div class="day-tab-label">${d.dayShort}</div>
+          <div class="day-tab-date">${d.date}</div>
+        </div>`).join("")}
+    </div>
+    <div class="sched-legend">
+      ${[...new Set(day.sessions.map(s=>s.type))].map(type=>{const col=SC[type];return col?`<div class="legend-item"><div class="legend-dot" style="background:${typeColors[type]||'#9CA3AF'}"></div>${type}</div>`:""}).join("")}
+    </div>
+    <div class="sched-sessions">
+      ${day.sessions.map((s,si)=>{
+        const col=SC[s.type]||{bg:"#F3F4F6",c:"#374151",dot:"#9CA3AF"};
+        const isDark=si%2===1;
+        const badgeBg=isDark?"rgba(255,255,255,.15)":col.bg;
+        const badgeC=isDark?"rgba(255,255,255,.85)":col.c;
+        const dotC=isDark?"rgba(255,255,255,.7)":(typeColors[s.type]||"#9CA3AF");
+        return`<div class="sesh-card ${isDark?"dark":"light"}">
+          <div class="sesh-top">
+            <span class="sesh-time">${esc(s.time)}</span>
+            <span class="sesh-badge" style="background:${badgeBg};color:${badgeC}"><span style="width:7px;height:7px;border-radius:50%;background:${dotC};display:inline-block"></span>${esc(s.type)}</span>
+          </div>
+          <div class="sesh-title">${esc(s.title)}</div>
+          <div class="sesh-loc">📍 ${esc(s.loc)}</div>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function bindSchedule(){
+  document.querySelectorAll(".day-tab[data-di]").forEach(tab=>{
+    tab.onclick=()=>{schedDay=parseInt(tab.dataset.di);const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}};
+  });
+}
+
+// ── Meeting modal ──────────────────────────────────────────────────────────
+function showMeeting(p,fromThread=false){
+  const ov=makeOv();
+  ov.innerHTML=`<div class="sheet" id="msheet"></div>`;
+  document.body.appendChild(ov);
+  let state={day:"",loc:"",start:"",dur:30,note:"",sent:false};
+
+  function render(){
+    if(state.sent){
+      document.getElementById("msheet").innerHTML=`<div style="text-align:center;padding:40px 0"><div style="font-size:52px">✅</div><div style="font-size:16px;font-weight:800;color:var(--text);margin-top:14px">Request sent!</div></div>`;
+      setTimeout(()=>ov.remove(),1700);return;
+    }
+    const slots=allSlots();
+    const slotOpts=slots.map(s=>{const blocked=state.day&&(isBlocked(me.id,state.day,s,state.dur)||isBlocked(p.id,state.day,s,state.dur));return`<option value="${esc(s)}"${state.start===s?" selected":""}${blocked?" disabled":""}>${esc(s)}${blocked?" (busy)":""}</option>`;});
+    document.getElementById("msheet").innerHTML=`
+      <div style="display:flex;gap:13px;align-items:center;margin-bottom:18px">
+        ${avHTML(p.av||initials(p.name||"?"),44)}
+        <div><div style="font-size:16px;font-weight:800;color:var(--text)">${esc(p.name)}</div><div style="font-size:13px;color:var(--muted)">${esc(p.company||"")}</div></div>
+      </div>
+      <div class="sheet-title">Propose a Meeting</div>
+      <div class="sheet-sub">Select a day, time and location</div>
+      <div class="form-label">Day *</div>
+      <select class="form-inp" id="m-day"><option value="">-- Select day --</option>${MEETING_DAYS.map(d=>`<option value="${d.date}"${state.day===d.date?" selected":""}>${esc(d.label)}</option>`).join("")}</select>
+      <div class="form-grid" style="margin-top:14px">
+        <div><div class="form-label">Start time *</div><select class="form-inp" id="m-start"${!state.day?" disabled":""}><option value="">--</option>${slotOpts.join("")}</select></div>
+        <div><div class="form-label">Duration</div><select class="form-inp" id="m-dur">${DURATIONS.map(d=>`<option value="${d}"${state.dur===d?" selected":""}>${d} min</option>`).join("")}</select></div>
+      </div>
+      <div class="form-label">Venue *</div>
+      <input class="form-inp" id="m-loc" placeholder="e.g. Your exhibition stand, Hotel lobby…" value="${esc(state.loc)}"/>
+      <div class="form-label">Note <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <textarea class="form-inp" id="m-note" rows="2" style="resize:none">${esc(state.note)}</textarea>
+      <div class="btn-row">
+        <button class="btn-outline" id="m-cancel">Cancel</button>
+        <button class="btn-navy" id="m-send" ${!state.day||!state.start||!state.loc?"disabled":""} style="color:#fff;opacity:${!state.day||!state.start||!state.loc?.4:1}">Send Request →</button>
+      </div>`;
+    const dayEl=document.getElementById("m-day");
+    const startEl=document.getElementById("m-start");
+    const durEl=document.getElementById("m-dur");
+    const locEl=document.getElementById("m-loc");
+    const sendEl=document.getElementById("m-send");
+    const check=()=>{if(sendEl){const ok=dayEl.value&&startEl.value&&locEl.value.trim();sendEl.disabled=!ok;sendEl.style.opacity=ok?"1":".4";}};
+    dayEl.onchange=()=>{state.day=dayEl.value;state.start="";render();};
+    startEl.onchange=()=>{state.start=startEl.value;state.dur=parseInt(durEl.value)||30;render();};
+    durEl.onchange=()=>{state.dur=parseInt(durEl.value)||30;state.start=startEl.value;render();};
+    locEl.oninput=()=>{state.loc=locEl.value;check();};
+    document.getElementById("m-cancel").onclick=()=>ov.remove();
+    sendEl?.addEventListener("click",async()=>{
+      const day=dayEl.value,loc=locEl.value.trim(),start=startEl.value,dur=parseInt(durEl.value)||30,note=document.getElementById("m-note").value.trim();
+      if(!day||!start||!loc)return;
+      const dayLabel=MEETING_DAYS.find(d=>d.date===day)?.label||day;
+      bookSlot(me.id,p.id,day,start,dur);
+      const text=note||"Meeting proposed ✓";
+      const meetingData={loc,start,dur,day,dayLabel};
+      if(fromThread){await doSend(p,text,meetingData);}
+      else{openThread(p);setTimeout(async()=>await doSend(p,text,meetingData),300);}
+      state.sent=true;render();
+    });
+  }
+  render();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── AI Best Match ──────────────────────────────────────────────────────────
+function showAI(){
+  const ov=makeOv(true);
+  ov.innerHTML=`<div class="sheet pop" style="max-width:420px"><div class="sheet-title">✦ Your Best Match</div><div id="ai-c" style="text-align:center;padding:40px 0"><div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">Analysing participants…</div></div></div>`;
+  document.body.appendChild(ov);
+  setTimeout(()=>{
+    const m=bestMatch();
+    if(!m){document.getElementById("ai-c").innerHTML=`<div style="color:var(--muted);font-size:14px">Not enough participants yet</div>`;return;}
+    document.getElementById("ai-c").innerHTML=`
+      <div style="display:flex;gap:13px;align-items:center;margin-bottom:14px;text-align:left">${avHTML(m.av||initials(m.name||"?"),52)}<div><div style="font-size:16px;font-weight:800;color:var(--text)">${esc(m.name)}</div><div style="color:var(--steel);font-size:13px">${esc(m.title||"")}</div><div style="color:var(--muted);font-size:12px">${esc(m.company||"")}</div></div></div>
+      <div style="background:#F0F4F8;border-radius:12px;padding:12px 15px;font-size:13px;color:var(--text);line-height:1.6;border-left:3px solid ${STEEL};text-align:left;margin-bottom:18px">${esc(`${m.name} from ${m.company} (${m.country}) — strong potential for ${m.sector} collaboration.`)}</div>
+      <div class="btn-row"><button class="btn-outline" id="ai-no">Cancel</button><button class="btn-navy" id="ai-yes" style="color:#fff">Propose Meeting →</button></div>`;
+    document.getElementById("ai-no").onclick=()=>ov.remove();
+    document.getElementById("ai-yes").onclick=()=>{ov.remove();showMeeting(m);};
+  },1300);
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── Entry screen ──────────────────────────────────────────────────────────
+function showEntry(){
+  const el=document.createElement("div");
+  el.id="entry";
+  let stage="enter";
+  let ticketInput="";
+  let foundParticipant=null;
+
+  function render(){
+    el.innerHTML=`
+    <div class="entry-hero">
+      <div class="entry-eyebrow">
+        <span class="entry-eyebrow-left">GABS · 2026</span>
+        <span class="entry-eyebrow-right">23–25 NOV · ACCRA</span>
+      </div>
+      <div class="entry-badge"><div class="entry-badge-dot"></div><span class="entry-badge-text">Official summit app</span></div>
+      <div class="entry-title">German-African<br/>Business<br/><span class="entry-title-gold">Summit</span></div>
+      <div class="entry-sub">Enter your ticket reference to access the delegate network, meeting scheduler and full programme.</div>
+    </div>
+    <div class="entry-card">
+      <div id="entry-stage">${renderStage()}</div>
+    </div>`;
+    bindStage();
+    window._rerenderEntry=render;
+  }
+
+  function renderStage(){
+    if(stage==="enter")return`
+      <div class="entry-label">Ticket Reference</div>
+      <input class="entry-input" id="t-input" placeholder="GABS-2026-XXXX" value="${esc(ticketInput)}" autocomplete="off"/>
+      <div id="t-err"></div>
+      <button class="btn-gold" id="t-go">Continue →</button>
+      <div class="entry-hint">Your reference is on your confirmation email.</div>
+      <div style="text-align:center;margin-top:20px"><button id="e-admin" style="background:none;border:none;color:#9CA3AF;font-size:12px;cursor:pointer;touch-action:manipulation;padding:6px 16px">⚙ Admin</button></div>`;
+
+    if(stage==="checking")return`<div style="text-align:center;padding:60px 0"><div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">Checking ticket…</div></div>`;
+
+    if(stage==="already")return`
+      <div class="already-card">
+        ${avHTML(foundParticipant.av||initials(foundParticipant.name||"?"),64)}
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:14px">This ticket is already linked to</div>
+        <div style="font-size:17px;font-weight:700;color:${STEEL};margin-top:4px">${esc(foundParticipant.name)}</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:3px">${esc(foundParticipant.title||"")} · ${esc(foundParticipant.company||"")}</div>
+      </div>
+      <button class="btn-gold" id="a-continue">Continue as ${esc(foundParticipant.name.split(" ")[0])} →</button>
+      <button class="btn-outline mt12" id="a-back">This isn't me</button>`;
+
+    if(stage==="invalid")return`
+      <div class="invalid-card">
+        <div style="font-size:44px;margin-bottom:12px">🎫</div>
+        <div style="font-size:17px;font-weight:800;color:var(--text)">Ticket not found</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:10px;line-height:1.6">We couldn't find this ticket reference. Please check and try again, or contact AHK Ghana.</div>
+      </div>
+      <button class="btn-outline mt16" id="i-back">Try again</button>`;
+
+    if(stage==="claim")return renderClaimForm();
+    return"";
+  }
+
+  function renderClaimForm(){
+    return`
+      <div class="stage-badge">✓ Ticket verified · ${esc(ticketInput)}</div>
+      <div class="sheet-title">Complete your profile</div>
+      <div class="sheet-sub">So other participants can find and connect with you</div>
+      <div class="form-label">Full name *</div>
+      <input class="form-inp" id="c-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
+      <div class="form-label">Company *</div>
+      <input class="form-inp" id="c-company" placeholder="e.g. Berlin Tech GmbH" autocomplete="organization"/>
+      <div class="form-label">Job title *</div>
+      <input class="form-inp" id="c-title" placeholder="e.g. Managing Director" autocomplete="organization-title"/>
+      <div class="form-grid" style="margin-top:0">
+        <div><div class="form-label">Sector *</div><select class="form-inp" id="c-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
+        <div><div class="form-label">Country *</div><select class="form-inp" id="c-country"><option value="">-- Select --</option>${COUNTRIES.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
+      </div>
+      <div class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <input class="form-inp" id="c-email" type="email" placeholder="you@company.com" autocomplete="email"/>
+      <div class="form-label">LinkedIn <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <input class="form-inp" id="c-linkedin" placeholder="linkedin.com/in/yourname"/>
+      <div id="c-feedback"></div>
+      <button class="btn-gold mt16" id="c-submit">Confirm & Enter App →</button>
+      <button class="btn-outline mt12" id="c-back">Back</button>`;
+  }
+
+  function bindStage(){
+    if(stage==="enter"){
+      const inp=document.getElementById("t-input");
+      const goBtn=document.getElementById("t-go");
+      if(inp){inp.oninput=e=>{ticketInput=e.target.value.toUpperCase();};inp.addEventListener("keydown",e=>{if(e.key==="Enter")checkTicket();});setTimeout(()=>inp.focus(),150);}
+      goBtn?.addEventListener("click",checkTicket);
+      document.getElementById("e-admin")?.addEventListener("click",()=>showAdmin());
+    }
+    else if(stage==="already"){
+      document.getElementById("a-continue")?.addEventListener("click",()=>{
+        me={...foundParticipant};localStorage.setItem("gabs_me",JSON.stringify(me));
+        if(!participants.find(p=>p.id===me.id))participants.push({...me});
+        el.style.opacity="0";el.style.transition="opacity .3s";
+        setTimeout(()=>{el.remove();renderApp();startInbox();},300);
+      });
+      document.getElementById("a-back")?.addEventListener("click",()=>{stage="enter";ticketInput="";render();});
+    }
+    else if(stage==="invalid"){document.getElementById("i-back")?.addEventListener("click",()=>{stage="enter";render();});}
+    else if(stage==="claim")bindClaimForm();
+  }
+
+  async function checkTicket(){
+    const val=(document.getElementById("t-input")?.value||"").trim().toUpperCase();
+    if(!val){const err=document.getElementById("t-err");if(err)err.innerHTML=`<div class="err-msg" style="margin-top:10px">Please enter your ticket reference.</div>`;return;}
+    ticketInput=val;stage="checking";render();
+    if(!window._fb){stage="invalid";render();return;}
+    try{
+      const fbs=window._fb;
+      const claimed=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("ticket","==",ticketInput)));
+      if(!claimed.empty){foundParticipant={id:claimed.docs[0].id,...claimed.docs[0].data()};stage="already";render();return;}
+      if(!validTicketRefs.includes(ticketInput)){stage="invalid";render();return;}
+      stage="claim";render();
+    }catch(e){stage="invalid";render();}
+  }
+
+  function bindClaimForm(){
+    document.getElementById("c-back")?.addEventListener("click",()=>{stage="enter";render();});
+    document.getElementById("c-submit")?.addEventListener("click",async()=>{
+      const name=document.getElementById("c-name")?.value.trim();
+      const company=document.getElementById("c-company")?.value.trim();
+      const title=document.getElementById("c-title")?.value.trim();
+      const sector=document.getElementById("c-sector")?.value;
+      const country=document.getElementById("c-country")?.value;
+      const email=document.getElementById("c-email")?.value.trim().toLowerCase()||"";
+      const linkedin=document.getElementById("c-linkedin")?.value.trim()||"";
+      const fb2=document.getElementById("c-feedback");
+      if(!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields.</div>`;return;}
+      if(email&&!email.includes("@")){if(fb2)fb2.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
+      if(!window._fb)return;
+      const btn=document.getElementById("c-submit");
+      try{
+        const fbs=window._fb;
+        const recheck=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("ticket","==",ticketInput)));
+        if(!recheck.empty){if(fb2)fb2.innerHTML=`<div class="err-msg">This ticket was just claimed. Please contact AHK Ghana.</div>`;return;}
+        if(btn){btn.disabled=true;btn.textContent="Submitting…";}
+        const docRef=await fbs.addDoc(fbs.collection(fbs.db,"participants"),{
+          name,company,title,sector,country,email,linkedin,ticket:ticketInput,
+          av:initials(name),status:"approved",registeredAt:fbs.serverTimestamp(),source:"ticket-claim",
+        });
+        if(email)sendConfirmationEmail({name,email,company,title,ticket:ticketInput,status:"approved"});
+        me={id:docRef.id,name,company,title,sector,country,email,linkedin,av:initials(name),status:"approved"};
+        localStorage.setItem("gabs_me",JSON.stringify(me));
+        if(!participants.find(p=>p.id===me.id))participants.push({...me});
+        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`;
+        if(btn)btn.textContent="✓ Confirmed";
+        setTimeout(()=>{
+          const entryEl=document.getElementById("entry");
+          if(entryEl){entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>{entryEl.remove();renderApp();startInbox();},350);}
+          else{renderApp();startInbox();}
+        },900);
+      }catch(e){
+        if(fb2)fb2.innerHTML=`<div class="err-msg">Submission failed. Please try again.</div>`;
+        if(btn){btn.disabled=false;btn.textContent="Confirm & Enter App →";}
+      }
+    });
+  }
+
+  document.body.appendChild(el);
+  render();
+}
+
+// ── Admin panel ────────────────────────────────────────────────────────────
+function showAdmin(){
+  const ov=makeOv();
+  let adminTab="pending";
+  async function renderMain(){
+    ov.innerHTML=`<div class="sheet" style="padding-bottom:calc(22px + var(--safe-b))">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:17px;font-weight:800;color:var(--text)">⚙️ Admin Panel</div>
+        <button class="btn-outline btn-sm" id="a-cl">Close</button>
+      </div>
+      <div style="display:flex;background:#F3F4F6;border-radius:12px;padding:3px;margin-bottom:16px">
+        <div id="at-pending" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="pending"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Pending ${pendingRegs.length>0?`<span style="background:#DC2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">${pendingRegs.length}</span>`:""}
+        </div>
+        <div id="at-parts" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="participants"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Participants</div>
+      </div>
+      <div id="admin-body"></div>
+    </div>`;
+    document.getElementById("a-cl").onclick=()=>ov.remove();
+    document.getElementById("at-pending").onclick=()=>{adminTab="pending";renderAdminBody();};
+    document.getElementById("at-parts").onclick=()=>{adminTab="participants";renderAdminBody();};
+    renderAdminBody();
+  }
+  function renderAdminBody(){
+    const body=document.getElementById("admin-body");if(!body)return;
+    if(adminTab==="pending")renderPendingBody(body);
+    else renderPartsBody(body);
+  }
+  function renderPendingBody(body){
+    if(!pendingRegs.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">✓ No pending registrations</div>`;return;}
+    body.innerHTML=pendingRegs.map(p=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+        ${avHTML(p.av||initials(p.name||"?"),38)}
+        <div><div style="font-weight:700;color:var(--text)">${esc(p.name)}</div><div style="color:var(--muted);font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div><div style="color:var(--steel);font-size:11px">${esc(p.email||"")} · ${esc(p.country||"")}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn-outline btn-sm" style="color:var(--red);border-color:#FECACA" data-id="${p.id}" id="rej-${p.id}">Reject</button>
+        <button class="btn-navy btn-sm" style="color:#fff" data-id="${p.id}" id="apr-${p.id}">Approve</button>
+      </div>
+    </div>`).join("");
+    pendingRegs.forEach(p=>{
+      document.getElementById(`apr-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});});
+      document.getElementById(`rej-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));});
+    });
+  }
+  function renderPartsBody(body){
+    body.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px">
+      <button class="btn-navy" id="a-up" style="color:#fff">↑ Upload participant CSV</button>
+      <button class="btn-navy" id="a-tickets" style="color:#fff">🎫 Upload ticket references</button>
+      <button class="btn-outline" id="a-exp">↓ Export participant CSV</button>
+      <button class="btn-outline" id="a-qr">📱 Show QR Code</button>
+      <button class="btn-outline" id="a-dl">↓ CSV Template</button>
+      <div id="a-fb"></div>
+      <button class="btn-outline" id="a-rst" style="color:var(--red);border-color:#FECACA">Reset all data</button>
+      <div style="font-size:11px;color:var(--muted);text-align:center">Columns: name, company, sector, country, title, email</div>
+    </div>
+    <input type="file" id="a-csv" accept=".csv" style="display:none"/>
+    <input type="file" id="tickets-file" accept=".csv,.txt" style="display:none"/>`;
+    document.getElementById("a-up").onclick=()=>document.getElementById("a-csv").click();
+    document.getElementById("a-csv").onchange=async e=>{
+      const f=e.target.files[0];if(!f)return;
+      const reader=new FileReader();
+      reader.onload=async ev=>{
+        try{
+          const lines=ev.target.result.trim().split("\n").filter(l=>l.trim());
+          if(lines.length<2)throw new Error("Need header + 1 row");
+          const hdrs=lines[0].split(",").map(h=>h.trim().toLowerCase().replace(/"/g,""));
+          const miss=["name","company","sector","country","title"].filter(x=>!hdrs.includes(x));
+          if(miss.length)throw new Error("Missing columns: "+miss.join(", "));
+          const parsed=lines.slice(1).map((line,i)=>{
+            const vals=line.split(",").map(v=>v.trim().replace(/"/g,""));
+            const row=Object.fromEntries(hdrs.map((h,idx)=>[h,vals[idx]||""]));
+            return{...row,av:initials(row.name||"?"),status:"approved",source:"csv",_idx:i};
+          }).filter(p=>p.name);
+          const fb2=document.getElementById("a-fb");
+          if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Syncing ${parsed.length} participants…</div>`;
+          if(window._fb){const fbs=window._fb;await Promise.all(parsed.map((p,i)=>fbs.setDoc(fbs.doc(fbs.db,"participants",`csv_${i}`),{...p,id:`csv_${i}`})));if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${parsed.length} participants synced</div>`;}
+        }catch(err){const fb2=document.getElementById("a-fb");if(fb2)fb2.innerHTML=`<div class="err-msg">${esc(err.message)}</div>`;}
+      };
+      reader.readAsText(f);e.target.value="";
+    };
+    document.getElementById("a-tickets").onclick=()=>document.getElementById("tickets-file").click();
+    document.getElementById("tickets-file").onchange=async e=>{
+      const f=e.target.files[0];if(!f)return;
+      const r=new FileReader();
+      r.onload=async ev=>{
+        const refs=ev.target.result.split(/[\n,]/).map(r=>r.trim().toUpperCase()).filter(Boolean);
+        const fb2=document.getElementById("a-fb");
+        if(window._fb){
+          try{await window._fb.setDoc(window._fb.doc(window._fb.db,"config","tickets"),{refs,updatedAt:window._fb.serverTimestamp()});validTicketRefs=refs;localStorage.setItem("gabs_tickets",JSON.stringify(refs));if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${refs.length} ticket refs synced to all devices</div>`;}
+          catch(err){if(fb2)fb2.innerHTML=`<div class="err-msg">Sync failed: ${esc(err.message)}</div>`;}
+        }
+      };
+      r.readAsText(f);e.target.value="";
+    };
+    document.getElementById("a-exp").onclick=()=>{
+      const rows=[["name","company","sector","country","title","email","status","source"],...participants.map(p=>[p.name,p.company,p.sector,p.country,p.title,p.email||"",p.status||"approved",p.source||"csv"])];
+      const csv=rows.map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+      const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`GABS2026_participants_${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
+    };
+    document.getElementById("a-qr").onclick=showQR;
+    document.getElementById("a-dl").onclick=()=>{
+      const csv=["name,company,sector,country,title,email","Hans Mueller,Berlin Tech GmbH,Technology,Germany,Managing Director,hans@berlintech.de"].join("\n");
+      const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="GABS2026_template.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+    };
+    document.getElementById("a-rst").onclick=async()=>{
+      const fb2=document.getElementById("a-fb");
+      if(!confirm("Delete ALL participants and messages from Firestore? This cannot be undone."))return;
+      if(!window._fb){if(fb2)fb2.innerHTML=`<div class="err-msg">Not connected to Firestore.</div>`;return;}
+      if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Deleting…</div>`;
+      try{
+        const fbs=window._fb;
+        // Delete all participants
+        const pSnap=await fbs.getDocs(fbs.collection(fbs.db,"participants"));
+        await Promise.all(pSnap.docs.map(d=>fbs.deleteDoc(d.ref)));
+        // Delete all threads and their messages
+        const tSnap=await fbs.getDocs(fbs.collection(fbs.db,"threads"));
+        await Promise.all(tSnap.docs.map(async t=>{
+          const mSnap=await fbs.getDocs(fbs.collection(fbs.db,"threads",t.id,"messages"));
+          await Promise.all(mSnap.docs.map(m=>fbs.deleteDoc(m.ref)));
+          await fbs.deleteDoc(t.ref);
+        }));
+        // Reset local state
+        participants=[];
+        inboxData={};
+        inboxStarted=false;
+        inboxListenedIds=new Set();
+        inboxUnsubs.forEach(u=>u());
+        inboxUnsubs=[];
+        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${pSnap.docs.length} participant${pSnap.docs.length!==1?"s":""} and all messages cleared.</div>`;
+      }catch(e){
+        if(fb2)fb2.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
+        console.error("Reset failed:",e);
+      }
+    };
+  }
+  document.body.appendChild(ov);
+  renderMain();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+
+// ── QR ─────────────────────────────────────────────────────────────────────
+function showQR(){
+  const ov=makeOv(true);
+  ov.innerHTML=`<div class="sheet pop" style="max-width:340px;text-align:center">
+    <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:16px">📱 GABS 2026 App</div>
+    <div style="background:var(--navy);border-radius:16px;padding:16px;display:inline-block;margin-bottom:14px">
+      <div id="qr-el" style="background:#fff;border-radius:8px;padding:8px"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:16px">${APP_URL}</div>
+    <button class="btn-outline" id="qr-cl">Close</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById("qr-cl").onclick=()=>ov.remove();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+  setTimeout(()=>{if(window.QRCode)new QRCode(document.getElementById("qr-el"),{text:APP_URL,width:180,height:180,colorDark:NAVY,colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.H});},60);
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+async function boot(){
+  document.getElementById("app").style.display="flex";
+  if(window.location.hash==="#admin"){
+    window.location.hash="";
+    if(window._fb){startParticipantListener();await loadTicketsFromCloud();await new Promise(r=>setTimeout(r,600));}
+    document.getElementById("loader").classList.add("gone");
+    showAdmin();return;
+  }
+  if(window._fb){startParticipantListener();await loadTicketsFromCloud();await new Promise(r=>setTimeout(r,600));}
+  document.getElementById("loader").classList.add("gone");
+  if(!me){showEntry();}
+  else{renderApp();startInbox();}
+}
+
+if(window._fb){boot();}
+else{
+  window.addEventListener("fb-ready",boot,{once:true});
+  setTimeout(()=>{
+    if(!window._fb){
+      document.getElementById("loader").innerHTML=`<div style="text-align:center;padding:20px"><div style="color:rgba(255,255,255,.8);font-size:14px;margin-bottom:16px">Connection is slow.<br/>Still trying to connect…</div><button onclick="window.location.reload()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:11px 24px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">Retry</button></div>`;
+      const longWait=setTimeout(()=>{if(!window._fb)boot();},10000);
+      window.addEventListener("fb-ready",()=>{clearTimeout(longWait);boot();},{once:true});
+    }
+  },6000);
+}
+
+const qs=document.createElement("script");qs.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";document.head.appendChild(qs);
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+
+</script>
+</body>
+</html>
