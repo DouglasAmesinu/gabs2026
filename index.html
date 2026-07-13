@@ -270,6 +270,7 @@ const MEETING_DAYS=[
 const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
+const SALUTATIONS=["Mr","Ms","Dr","Prof","Prof Dr","Eng","Ambassador","Hon","Rev","Other"];
 const SECTORS=["Agriculture","Consulting","Construction","Energy","Finance","Healthcare","Logistics","Manufacturing","Mining","Technology","Trade","Other"];
 const COUNTRIES=["Germany","Ghana","Nigeria","Senegal","Kenya","South Africa","Cameroon","Côte d'Ivoire","Ethiopia","Tanzania","Other"];
 const INTERESTS=[
@@ -510,7 +511,7 @@ function renderProfileBar(){
   return`<div id="profile-bar">
     <div class="profile-info">
       ${avHTML(me.av||initials(me.name||"?"),32)}
-      <span class="profile-name">${esc(me.name)}</span>
+      <span class="profile-name">${me.salutation?esc(me.salutation)+". ":""}${esc(me.name)}</span>
     </div>
     <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
   </div>`;
@@ -538,6 +539,11 @@ function showEditProfile(){
         <div style="color:var(--steel);font-size:11px;margin-top:3px">Name and company are fixed to your ticket</div>
       </div>
     </div>
+    <div class="form-label">Salutation <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+    <select class="form-inp" id="ep-salutation">
+      <option value="">-- Select --</option>
+      ${SALUTATIONS.map(s=>`<option value="${esc(s)}"${me.salutation===s?" selected":""}>${esc(s)}</option>`).join("")}
+    </select>
     <div class="form-label">Job Title</div>
     <input class="form-inp" id="ep-title" value="${esc(me.title||"")}" placeholder="e.g. Managing Director"/>
     <div class="form-grid">
@@ -591,6 +597,7 @@ function showEditProfile(){
   };
 
   document.getElementById("ep-save").onclick=async()=>{
+    const salutation=document.getElementById("ep-salutation")?.value||"";
     const title=document.getElementById("ep-title").value.trim();
     const sector=document.getElementById("ep-sector").value;
     const country=document.getElementById("ep-country").value;
@@ -606,15 +613,15 @@ function showEditProfile(){
 
     try{
       if(window._fb&&me.id){
-        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{title,sector,country,email,linkedin,interests,bio});
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{salutation,title,sector,country,email,linkedin,interests,bio});
       }
-      me={...me,title,sector,country,email,linkedin,interests,bio};
+      me={...me,salutation,title,sector,country,email,linkedin,interests,bio};
       localStorage.setItem("gabs_me",JSON.stringify(me));
       if(fb)fb.innerHTML=`<div class="ok-msg">✓ Profile updated</div>`;
       if(btn){btn.disabled=false;btn.textContent="Save changes";}
       // Refresh the profile bar name display
       const pname=document.querySelector(".profile-name");
-      if(pname)pname.textContent=me.name;
+      if(pname)pname.textContent=(me.salutation?me.salutation+". ":"")+me.name;
       setTimeout(()=>ov.remove(),1200);
     }catch(e){
       if(fb)fb.innerHTML=`<div class="err-msg">Update failed. Try again.</div>`;
@@ -657,7 +664,7 @@ function pCardHTML(p){
     <div class="p-card-top">
       ${avHTML(p.av||initials(p.name||"?"),46)}
       <div style="flex:1;min-width:0">
-        <div class="p-name">${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
+        <div class="p-name">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
         <div class="p-role">${esc(p.title||"")}</div>
         <div class="p-company">${esc(p.company||"")}</div>
       </div>
@@ -1252,6 +1259,8 @@ function showEntry(){
       <div class="stage-badge">✓ Ticket verified · ${esc(ticketInput)}</div>
       <div class="sheet-title">Complete your profile</div>
       <div class="sheet-sub">So other participants can find and connect with you</div>
+      <div class="form-label">Salutation <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <select class="form-inp" id="c-salutation"><option value="">-- Select --</option>${SALUTATIONS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
       <div class="form-label">Full name *</div>
       <input class="form-inp" id="c-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
       <div class="form-label">Company *</div>
@@ -1326,6 +1335,7 @@ function showEntry(){
       bioInp.oninput=()=>{bioCount.textContent=`${bioInp.value.length} / 200`;bioCount.style.color=bioInp.value.length>180?"var(--red)":"var(--muted)";};
     }
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
+      const salutation=document.getElementById("c-salutation")?.value||"";
       const name=document.getElementById("c-name")?.value.trim();
       const company=document.getElementById("c-company")?.value.trim();
       const title=document.getElementById("c-title")?.value.trim();
@@ -1346,11 +1356,11 @@ function showEntry(){
         if(!recheck.empty){if(fb2)fb2.innerHTML=`<div class="err-msg">This ticket was just claimed. Please contact AHK Ghana.</div>`;return;}
         if(btn){btn.disabled=true;btn.textContent="Submitting…";}
         const docRef=await fbs.addDoc(fbs.collection(fbs.db,"participants"),{
-          name,company,title,sector,country,email,linkedin,interests,bio,ticket:ticketInput,
+          salutation,name,company,title,sector,country,email,linkedin,interests,bio,ticket:ticketInput,
           av:initials(name),status:"approved",registeredAt:fbs.serverTimestamp(),source:"ticket-claim",
         });
         if(email)sendConfirmationEmail({name,email,company,title,ticket:ticketInput,status:"approved"});
-        me={id:docRef.id,name,company,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
+        me={id:docRef.id,salutation,name,company,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
         if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`;
