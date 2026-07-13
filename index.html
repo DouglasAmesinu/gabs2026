@@ -539,7 +539,7 @@ function showEditProfile(){
         <div style="color:var(--steel);font-size:11px;margin-top:3px">Name and company are fixed to your ticket</div>
       </div>
     </div>
-    <div class="form-label">Salutation <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+    <div class="form-label">Salutation *</div>
     <select class="form-inp" id="ep-salutation">
       <option value="">-- Select --</option>
       ${SALUTATIONS.map(s=>`<option value="${esc(s)}"${me.salutation===s?" selected":""}>${esc(s)}</option>`).join("")}
@@ -608,6 +608,7 @@ function showEditProfile(){
     const fb=document.getElementById("ep-feedback");
     const btn=document.getElementById("ep-save");
 
+    if(!salutation){if(fb)fb.innerHTML=`<div class="err-msg">Please select a salutation.</div>`;return;}
     if(email&&!email.includes("@")){if(fb)fb.innerHTML=`<div class="err-msg">Please enter a valid email.</div>`;return;}
     if(btn){btn.disabled=true;btn.textContent="Saving…";}
 
@@ -1089,6 +1090,7 @@ async function showAI(){
   try{
     // Build profile summaries for Claude
     const myProfile=`My profile:
+Salutation: ${me.salutation||"—"}
 Name: ${me.name}
 Company: ${me.company||"—"}
 Title: ${me.title||"—"}
@@ -1099,6 +1101,7 @@ About: ${me.bio||"Not provided"}`;
 
     const otherProfiles=pool.map((p,i)=>`Participant ${i+1}:
 ID: ${p.id}
+Salutation: ${p.salutation||"—"}
 Name: ${p.name}
 Company: ${p.company||"—"}
 Title: ${p.title||"—"}
@@ -1259,7 +1262,7 @@ function showEntry(){
       <div class="stage-badge">✓ Ticket verified · ${esc(ticketInput)}</div>
       <div class="sheet-title">Complete your profile</div>
       <div class="sheet-sub">So other participants can find and connect with you</div>
-      <div class="form-label">Salutation <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <div class="form-label">Salutation *</div>
       <select class="form-inp" id="c-salutation"><option value="">-- Select --</option>${SALUTATIONS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
       <div class="form-label">Full name *</div>
       <input class="form-inp" id="c-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
@@ -1346,7 +1349,7 @@ function showEntry(){
       const interests=[...document.querySelectorAll(".interest-chip.sel")].map(c=>c.dataset.interest);
       const bio=document.getElementById("c-bio")?.value.trim()||"";
       const fb2=document.getElementById("c-feedback");
-      if(!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields.</div>`;return;}
+      if(!salutation||!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields including salutation.</div>`;return;}
       if(email&&!email.includes("@")){if(fb2)fb2.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
       if(!window._fb)return;
       const btn=document.getElementById("c-submit");
