@@ -577,6 +577,7 @@ function showEditProfile(){
     </div>
     <div class="form-label">About you <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional · max 200 characters)</span></div>
     <textarea class="form-inp" id="ep-bio" rows="3" maxlength="200" style="resize:none;line-height:1.5">${esc(me.bio||"")}</textarea>
+    <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
     <div id="ep-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">${(me.bio||"").length} / 200</div>
     <div id="ep-feedback"></div>
     <div class="btn-row" style="margin-top:18px">
@@ -688,7 +689,7 @@ function pCardHTML(p){
       ${p.ptype?`<span class="chip" style="background:#EDE9FE;color:#5B21B6">${esc(p.ptype)}</span>`:""}
     </div>
     ${p.interests&&p.interests.length?`<div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:6px;line-height:1.6">🎯 ${p.interests.slice(0,2).map(i=>esc(i)).join(" · ")}${p.interests.length>2?" +more":""}</div>`:""}
-    ${p.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.5;padding:8px 0;border-top:1px solid var(--border);margin-top:4px">${esc(p.bio)}</div>`:""}
+    ${p.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.5;padding:8px 0;border-top:1px solid var(--border);margin-top:4px">${esc(p.bio)}</div>`:(self?`<div id="bio-nudge" style="font-size:11px;color:var(--gold);font-weight:600;cursor:pointer;margin-top:4px">+ Add a bio to improve your AI matches</div>`:"")}
     ${(p.phone||p.linkedin||p.website)?`<div class="p-contact">
       ${p.phone?`<a href="tel:${esc(p.phone)}">📞 ${esc(p.phone)}</a>`:""}
       ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener">🔗 LinkedIn</a>`:""}
@@ -841,6 +842,7 @@ function bindCards(){
   document.querySelectorAll(".p-card").forEach(card=>{
     card.onclick=()=>{const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
   });
+  document.getElementById("bio-nudge")?.addEventListener("click",e=>{e.stopPropagation();showEditProfile();});
 }
 
 // ── Messages / Inbox ───────────────────────────────────────────────────────
@@ -1399,7 +1401,8 @@ function showEntry(){
         ${INTERESTS.map(i=>`<div class="interest-chip" data-interest="${esc(i)}">${esc(i)}</div>`).join("")}
       </div>
       <div class="form-label">About you <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional · max 200 characters)</span></div>
-      <textarea class="form-inp" id="c-bio" rows="3" maxlength="200" placeholder="e.g. We are a Ghanaian solar energy company looking to partner with German technology providers for rural electrification projects." style="resize:none;line-height:1.5"></textarea>
+      <textarea class="form-inp" id="c-bio" rows="3" maxlength="200" placeholder="e.g. We are a Ghanaian solar energy company seeking German technology partners for rural electrification projects in West Africa." style="resize:none;line-height:1.5"></textarea>
+      <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
       <div id="c-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">0 / 200</div>
       <div id="c-feedback"></div>
       <button class="btn-gold mt16" id="c-submit">Confirm & Enter App →</button>
