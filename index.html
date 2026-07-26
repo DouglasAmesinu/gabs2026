@@ -118,7 +118,8 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .cards-list{padding:0 16px 20px;display:flex;flex-direction:column;gap:10px}
 
 /* ── Participant Card ── */
-.p-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05);animation:fadeUp .22s ease both}
+.p-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05);animation:fadeUp .22s ease both;cursor:pointer}
+.p-card:active{opacity:.92;transform:scale(.99)}
 .p-card-top{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px}
 .av{border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;color:var(--white);font-weight:700;font-size:14px;flex-shrink:0}
 .p-name{font-size:15px;font-weight:700;color:var(--text);line-height:1.2}
@@ -773,9 +774,73 @@ function refreshDisc(){
   bindCards();
 }
 
+function showParticipantProfile(p){
+  const self=me&&p.id===me.id;
+  const hasContact=p.website||p.linkedin;
+  const ov=makeOv(false);
+  ov.innerHTML=`<div class="sheet" style="padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">
+    <div style="padding:22px 20px 16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:15px;align-items:center">
+        ${avHTML(p.av||initials(p.name||"?"),64)}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1.2">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
+          <div style="font-size:13px;color:var(--steel);font-weight:600;margin-top:3px">${esc(p.title||"")}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-top:2px">${esc(p.company||"")}</div>
+        </div>
+      </div>
+      <div class="chips" style="margin-top:12px;margin-bottom:0">
+        ${p.sector?`<span class="chip chip-sector">${esc(p.sector)}</span>`:""}
+        ${p.country?`<span class="chip chip-country">${esc(p.country)}</span>`:""}
+        ${p.ptype?`<span class="chip" style="background:#EDE9FE;color:#5B21B6">${esc(p.ptype)}</span>`:""}
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px">
+      ${p.bio?`<div style="padding:16px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">About</div>
+        <div style="font-size:14px;color:var(--text);line-height:1.65">${esc(p.bio)}</div>
+      </div>`:""}
+      ${p.interests&&p.interests.length?`<div style="padding:16px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Looking For</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">${p.interests.map(i=>`<span class="chip" style="background:var(--navy);color:#fff;padding:5px 11px">${esc(i)}</span>`).join("")}</div>
+      </div>`:""}
+      ${hasContact?`<div style="padding:16px 0">
+        <div style="font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Contact</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${p.website?`<a href="${esc(p.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🌐 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.website.replace(/^https?:\/\//,""))}</span></a>`:""}
+          ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🔗 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.linkedin.replace(/^https?:\/\//,""))}</span></a>`:""}
+        </div>
+      </div>`:""}
+    </div>
+    <div style="padding:14px 20px calc(14px + var(--safe-b,0px));border-top:1px solid var(--border)">
+      ${self
+        ?`<button class="btn-navy" id="pp-edit" style="color:#fff">✎ Edit Profile</button>`
+        :`<div style="display:grid;grid-template-columns:1fr 1.6fr;gap:10px">
+            <button class="btn-outline" id="pp-msg">💬 Message</button>
+            <button class="btn-navy" id="pp-meet" style="color:#fff">📅 Propose Meeting</button>
+          </div>`
+      }
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+  if(self){
+    document.getElementById("pp-edit").onclick=()=>{ov.remove();showEditProfile();};
+  } else {
+    document.getElementById("pp-msg").onclick=()=>{ov.remove();openThread(p);};
+    document.getElementById("pp-meet").onclick=()=>{ov.remove();showMeeting(p);};
+  }
+}
+
 function bindCards(){
-  document.querySelectorAll(".p-msg").forEach(b=>b.onclick=()=>{const p=participants.find(x=>x.id===b.dataset.id);if(p)openThread(p);});
-  document.querySelectorAll(".p-mt").forEach(b=>b.onclick=()=>{const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);});
+  document.querySelectorAll(".p-msg").forEach(b=>{
+    b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)openThread(p);};
+  });
+  document.querySelectorAll(".p-mt").forEach(b=>{
+    b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);};
+  });
+  document.querySelectorAll(".p-card").forEach(card=>{
+    card.onclick=()=>{const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
+  });
 }
 
 // ── Messages / Inbox ───────────────────────────────────────────────────────
