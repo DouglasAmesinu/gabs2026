@@ -271,6 +271,7 @@ const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
 const SALUTATIONS=["Mr","Ms","Dr","Prof","Prof Dr","Eng","Ambassador","Hon","Rev","Other"];
+const PARTICIPANT_TYPES=["Delegate","Exhibitor","Investor","Startup","Speaker","Buyer","Supplier","Media","Other"];
 const SECTORS=["Agriculture","Consulting","Construction","Energy","Finance","Healthcare","Logistics","Manufacturing","Mining","Technology","Trade","Other"];
 const COUNTRIES=["Germany","Ghana","Nigeria","Senegal","Kenya","South Africa","Cameroon","Côte d'Ivoire","Ethiopia","Tanzania","Other"];
 const INTERESTS=[
@@ -544,6 +545,13 @@ function showEditProfile(){
       <option value="">-- Select --</option>
       ${SALUTATIONS.map(s=>`<option value="${esc(s)}"${me.salutation===s?" selected":""}>${esc(s)}</option>`).join("")}
     </select>
+    <div class="form-label">Participant Type *</div>
+    <select class="form-inp" id="ep-ptype">
+      <option value="">-- Select --</option>
+      ${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}"${me.ptype===t?" selected":""}>${esc(t)}</option>`).join("")}
+    </select>
+    <div class="form-label">Company Website <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+    <input class="form-inp" id="ep-website" type="url" value="${esc(me.website||"")}" placeholder="e.g. https://www.company.com"/>
     <div class="form-label">Job Title</div>
     <input class="form-inp" id="ep-title" value="${esc(me.title||"")}" placeholder="e.g. Managing Director"/>
     <div class="form-grid">
@@ -598,6 +606,8 @@ function showEditProfile(){
 
   document.getElementById("ep-save").onclick=async()=>{
     const salutation=document.getElementById("ep-salutation")?.value||"";
+    const ptype=document.getElementById("ep-ptype")?.value||"";
+    const website=document.getElementById("ep-website")?.value.trim()||"";
     const title=document.getElementById("ep-title").value.trim();
     const sector=document.getElementById("ep-sector").value;
     const country=document.getElementById("ep-country").value;
@@ -609,14 +619,15 @@ function showEditProfile(){
     const btn=document.getElementById("ep-save");
 
     if(!salutation){if(fb)fb.innerHTML=`<div class="err-msg">Please select a salutation.</div>`;return;}
+    if(!ptype){if(fb)fb.innerHTML=`<div class="err-msg">Please select a participant type.</div>`;return;}
     if(email&&!email.includes("@")){if(fb)fb.innerHTML=`<div class="err-msg">Please enter a valid email.</div>`;return;}
     if(btn){btn.disabled=true;btn.textContent="Saving…";}
 
     try{
       if(window._fb&&me.id){
-        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{salutation,title,sector,country,email,linkedin,interests,bio});
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{salutation,ptype,website,title,sector,country,email,linkedin,interests,bio});
       }
-      me={...me,salutation,title,sector,country,email,linkedin,interests,bio};
+      me={...me,salutation,ptype,website,title,sector,country,email,linkedin,interests,bio};
       localStorage.setItem("gabs_me",JSON.stringify(me));
       if(fb)fb.innerHTML=`<div class="ok-msg">✓ Profile updated</div>`;
       if(btn){btn.disabled=false;btn.textContent="Save changes";}
@@ -673,12 +684,14 @@ function pCardHTML(p){
     <div class="chips">
       ${p.sector?`<span class="chip chip-sector">${esc(p.sector)}</span>`:""}
       ${p.country?`<span class="chip chip-country">${esc(p.country)}</span>`:""}
+      ${p.ptype?`<span class="chip" style="background:#EDE9FE;color:#5B21B6">${esc(p.ptype)}</span>`:""}
     </div>
     ${p.interests&&p.interests.length?`<div style="font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:6px;line-height:1.6">🎯 ${p.interests.slice(0,2).map(i=>esc(i)).join(" · ")}${p.interests.length>2?" +more":""}</div>`:""}
-    ${p.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.5;padding:8px 0;border-top:1px solid var(--border);margin-top:4px">${esc(p.bio)}</div>`:""} 
-    ${hasContact?`<div class="p-contact">
+    ${p.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.5;padding:8px 0;border-top:1px solid var(--border);margin-top:4px">${esc(p.bio)}</div>`:""}
+    ${(p.phone||p.linkedin||p.website)?`<div class="p-contact">
       ${p.phone?`<a href="tel:${esc(p.phone)}">📞 ${esc(p.phone)}</a>`:""}
       ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener">🔗 LinkedIn</a>`:""}
+      ${p.website?`<a href="${esc(p.website)}" target="_blank" rel="noopener">🌐 Website</a>`:""}
     </div>`:""}
     ${self?"":`<div class="p-actions" style="margin-top:12px">
       <button class="btn-outline btn-sm p-msg" data-id="${p.id}">💬 Message</button>
@@ -1091,8 +1104,10 @@ async function showAI(){
     // Build profile summaries for Claude
     const myProfile=`My profile:
 Salutation: ${me.salutation||"—"}
+Participant Type: ${me.ptype||"—"}
 Name: ${me.name}
 Company: ${me.company||"—"}
+Company Website: ${me.website||"—"}
 Title: ${me.title||"—"}
 Sector: ${me.sector||"—"}
 Country: ${me.country||"—"}
@@ -1102,8 +1117,10 @@ About: ${me.bio||"Not provided"}`;
     const otherProfiles=pool.map((p,i)=>`Participant ${i+1}:
 ID: ${p.id}
 Salutation: ${p.salutation||"—"}
+Participant Type: ${p.ptype||"—"}
 Name: ${p.name}
 Company: ${p.company||"—"}
+Company Website: ${p.website||"—"}
 Title: ${p.title||"—"}
 Sector: ${p.sector||"—"}
 Country: ${p.country||"—"}
@@ -1119,6 +1136,7 @@ ${otherProfiles}
 
 Analyse all participants and identify the ONE best match for this person. Consider:
 - German-African business connections (core purpose of the summit)
+- Complementary participant types (e.g. Investor↔Startup, Buyer↔Supplier, Speaker↔Delegate)
 - Complementary sectors and interests
 - Potential for genuine business value — partnerships, investment, market entry, supply chains
 - Overlapping goals and interests
@@ -1264,10 +1282,14 @@ function showEntry(){
       <div class="sheet-sub">So other participants can find and connect with you</div>
       <div class="form-label">Salutation *</div>
       <select class="form-inp" id="c-salutation"><option value="">-- Select --</option>${SALUTATIONS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
+      <div class="form-label">Participant Type *</div>
+      <select class="form-inp" id="c-ptype"><option value="">-- Select --</option>${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select>
       <div class="form-label">Full name *</div>
       <input class="form-inp" id="c-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
       <div class="form-label">Company *</div>
       <input class="form-inp" id="c-company" placeholder="e.g. Berlin Tech GmbH" autocomplete="organization"/>
+      <div class="form-label">Company Website <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <input class="form-inp" id="c-website" type="url" placeholder="e.g. https://www.company.com"/>
       <div class="form-label">Job title *</div>
       <input class="form-inp" id="c-title" placeholder="e.g. Managing Director" autocomplete="organization-title"/>
       <div class="form-grid" style="margin-top:0">
@@ -1339,8 +1361,10 @@ function showEntry(){
     }
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
       const salutation=document.getElementById("c-salutation")?.value||"";
+      const ptype=document.getElementById("c-ptype")?.value||"";
       const name=document.getElementById("c-name")?.value.trim();
       const company=document.getElementById("c-company")?.value.trim();
+      const website=document.getElementById("c-website")?.value.trim()||"";
       const title=document.getElementById("c-title")?.value.trim();
       const sector=document.getElementById("c-sector")?.value;
       const country=document.getElementById("c-country")?.value;
@@ -1349,7 +1373,7 @@ function showEntry(){
       const interests=[...document.querySelectorAll(".interest-chip.sel")].map(c=>c.dataset.interest);
       const bio=document.getElementById("c-bio")?.value.trim()||"";
       const fb2=document.getElementById("c-feedback");
-      if(!salutation||!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields including salutation.</div>`;return;}
+      if(!salutation||!ptype||!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields.</div>`;return;}
       if(email&&!email.includes("@")){if(fb2)fb2.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
       if(!window._fb)return;
       const btn=document.getElementById("c-submit");
@@ -1359,11 +1383,11 @@ function showEntry(){
         if(!recheck.empty){if(fb2)fb2.innerHTML=`<div class="err-msg">This ticket was just claimed. Please contact AHK Ghana.</div>`;return;}
         if(btn){btn.disabled=true;btn.textContent="Submitting…";}
         const docRef=await fbs.addDoc(fbs.collection(fbs.db,"participants"),{
-          salutation,name,company,title,sector,country,email,linkedin,interests,bio,ticket:ticketInput,
+          salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,ticket:ticketInput,
           av:initials(name),status:"approved",registeredAt:fbs.serverTimestamp(),source:"ticket-claim",
         });
         if(email)sendConfirmationEmail({name,email,company,title,ticket:ticketInput,status:"approved"});
-        me={id:docRef.id,salutation,name,company,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
+        me={id:docRef.id,salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
         if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`;
