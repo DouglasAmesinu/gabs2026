@@ -1145,8 +1145,8 @@ function showMeeting(p,fromThread=false){
 
 // ── AI Best Match ──────────────────────────────────────────────────────────
 async function showAI(){
-  const pool=participants.filter(p=>p.id!==me?.id);
-  if(!pool.length){
+  const fullPool=participants.filter(p=>p.id!==me?.id);
+  if(!fullPool.length){
     const ov=makeOv(true);
     ov.innerHTML=`<div class="sheet pop" style="max-width:420px;text-align:center;padding:40px 24px"><div style="font-size:48px;margin-bottom:12px">👥</div><div class="sheet-title">Not enough participants yet</div><div class="sheet-sub">Come back once more participants have registered</div><button class="btn-outline mt16" onclick="this.closest('.ov').remove()">Close</button></div>`;
     document.body.appendChild(ov);
@@ -1154,131 +1154,160 @@ async function showAI(){
     return;
   }
 
+  const seenIds=[];
+
   const ov=makeOv(true);
   ov.innerHTML=`<div class="sheet pop" style="max-width:420px">
     <div class="sheet-title">✦ Your Best Match</div>
     <div id="ai-c" style="text-align:center;padding:40px 0">
       <div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div>
-      <div style="color:var(--muted);margin-top:14px;font-size:13px">AI is analysing ${pool.length} participant${pool.length!==1?"s":""}…</div>
+      <div style="color:var(--muted);margin-top:14px;font-size:13px">AI is analysing ${fullPool.length} participant${fullPool.length!==1?"s":""}…</div>
     </div>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
 
-  try{
-    // Build profile summaries for Claude
-    const myProfile=`My profile:
-Salutation: ${me.salutation||"—"}
-Participant Type: ${me.ptype||"—"}
+  async function fetchMatch(pool){
+    const myProfile=`Salutation: ${me.salutation||"—"}
 Name: ${me.name}
 Company: ${me.company||"—"}
 Company Website: ${me.website||"—"}
 Title: ${me.title||"—"}
+Participant Type: ${me.ptype||"—"}
 Sector: ${me.sector||"—"}
 Country: ${me.country||"—"}
 Interests: ${(me.interests||[]).join(", ")||"Not specified"}
-About: ${me.bio||"Not provided"}`;
+Bio: ${me.bio||"Not provided"}`;
 
     const otherProfiles=pool.map((p,i)=>`Participant ${i+1}:
 ID: ${p.id}
 Salutation: ${p.salutation||"—"}
-Participant Type: ${p.ptype||"—"}
 Name: ${p.name}
 Company: ${p.company||"—"}
 Company Website: ${p.website||"—"}
 Title: ${p.title||"—"}
+Participant Type: ${p.ptype||"—"}
 Sector: ${p.sector||"—"}
 Country: ${p.country||"—"}
 Interests: ${(p.interests||[]).join(", ")||"Not specified"}
-About: ${p.bio||"Not provided"}`).join("\n\n");
+Bio: ${p.bio||"Not provided"}`).join("\n\n");
 
-    const prompt=`You are a B2B matchmaking assistant for GABS 2026 — the 6th German-African Business Summit in Accra, Ghana, November 23-25 2026. Your job is to find the single best networking match for a participant.
+    const prompt=`You are a B2B matchmaking assistant for GABS 2026 — the 6th German-African Business Summit in Accra, Ghana, November 23-25 2026. Find the single best networking match for this participant.
 
+MY PROFILE:
 ${myProfile}
 
-Other participants at the summit:
+OTHER PARTICIPANTS:
 ${otherProfiles}
 
-Analyse all participants and identify the ONE best match for this person. Consider:
-- German-African business connections (core purpose of the summit)
-- Complementary participant types (e.g. Investor↔Startup, Buyer↔Supplier, Speaker↔Delegate)
+Identify the ONE best match. Prioritise:
+- German-African business connections (the summit's core purpose)
+- Complementary participant types (Investor↔Startup, Buyer↔Supplier, Speaker↔Delegate)
 - Complementary sectors and interests
-- Potential for genuine business value — partnerships, investment, market entry, supply chains
-- Overlapping goals and interests
+- Genuine business value: partnerships, investment, market entry, supply chains
 
-Respond in this exact JSON format with no other text:
-{
-  "matchId": "<the participant ID>",
-  "matchName": "<their name>",
-  "reason": "<2-3 sentences explaining specifically why this is the best match — be concrete about the business opportunity, not generic>"
-}`;
+Respond with raw JSON only — no markdown, no code fences:
+{"matchId":"<participant ID>","matchName":"<name>","reason":"<2-3 specific sentences about the concrete business opportunity>"}`;
 
-    const response=await fetch("https://api.anthropic.com/v1/messages",{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-6",
-        max_tokens:1000,
-        messages:[{role:"user",content:prompt}]
-      })
+      headers:{"Content-Type":"application/json","anthropic-version":"2023-06-01"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})
     });
+    if(!res.ok)throw new Error("API error");
+    const data=await res.json();
+    const raw=(data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
+    return JSON.parse(raw);
+  }
 
-    const data=await response.json();
-    const text=data.content?.[0]?.text||"";
-    const clean=text.replace(/```json|```/g,"").trim();
-    const result=JSON.parse(clean);
-
-    const match=pool.find(p=>p.id===result.matchId)||pool.find(p=>p.name===result.matchName)||bestMatch();
-    if(!match)throw new Error("Match not found");
-
+  function renderMatch(match,reason){
+    const pool=fullPool.filter(p=>!seenIds.includes(p.id));
+    const hasMore=pool.length>0;
     const aiC=document.getElementById("ai-c");
     if(!aiC)return;
     aiC.style.textAlign="left";
     aiC.style.padding="0";
     aiC.innerHTML=`
-      <div style="display:flex;gap:13px;align-items:center;margin-bottom:16px">
+      <div style="display:flex;gap:13px;align-items:center;margin-bottom:14px">
         ${avHTML(match.av||initials(match.name||"?"),52)}
-        <div>
-          <div style="font-size:16px;font-weight:800;color:var(--text)">${esc(match.name)}</div>
+        <div style="min-width:0">
+          <div style="font-size:16px;font-weight:800;color:var(--text);line-height:1.2">${match.salutation?esc(match.salutation)+". ":""}${esc(match.name)}</div>
           <div style="color:var(--steel);font-size:13px;margin-top:2px">${esc(match.title||"")}</div>
-          <div style="color:var(--muted);font-size:12px">${esc(match.company||"")} · ${esc(match.country||"")}</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:1px">${esc(match.company||"")}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
         ${match.sector?`<span class="chip chip-sector">${esc(match.sector)}</span>`:""}
         ${match.country?`<span class="chip chip-country">${esc(match.country)}</span>`:""}
+        ${match.ptype?`<span class="chip" style="background:#EDE9FE;color:#5B21B6">${esc(match.ptype)}</span>`:""}
       </div>
-      <div style="background:#F0F4F8;border-radius:12px;padding:14px 15px;font-size:13px;color:var(--text);line-height:1.7;border-left:3px solid ${GOLD};margin-bottom:18px">
+      ${reason?`<div style="background:#FFFBEB;border:1.5px solid ${GOLD};border-radius:12px;padding:14px 15px;font-size:13px;color:var(--text);line-height:1.7;margin-bottom:14px">
         <div style="font-size:10px;font-weight:700;color:${GOLD};letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">✦ AI Match Reasoning</div>
-        ${esc(result.reason)}
-      </div>
-      ${match.bio?`<div style="background:#F8FAFC;border-radius:10px;padding:12px 14px;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px;font-style:italic">"${esc(match.bio)}"</div>`:""}
-      <div class="btn-row">
-        <button class="btn-outline" id="ai-no">Cancel</button>
-        <button class="btn-navy" id="ai-yes" style="color:#fff">Propose Meeting →</button>
+        ${esc(reason)}
+      </div>`:""}
+      ${match.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px;font-style:italic">${esc(match.bio)}</div>`:""}
+      <div style="display:grid;grid-template-columns:${hasMore?"1fr 1.3fr 1.3fr":"1fr 2fr"};gap:8px;margin-top:4px">
+        <button class="btn-outline" id="ai-cancel">Cancel</button>
+        ${hasMore?`<button class="btn-outline" id="ai-next" style="font-size:13px">Show another →</button>`:""}
+        <button class="btn-navy" id="ai-meet" style="color:#fff">Propose Meeting →</button>
       </div>`;
-    document.getElementById("ai-no").onclick=()=>ov.remove();
-    document.getElementById("ai-yes").onclick=()=>{ov.remove();showMeeting(match);};
-
-  }catch(e){
-    console.error("AI matching failed:",e);
-    // Graceful fallback to scoring algorithm
-    const m=bestMatch();
-    const aiC=document.getElementById("ai-c");
-    if(!aiC)return;
-    if(!m){aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">Not enough participants yet</div>`;return;}
-    aiC.style.textAlign="left";
-    aiC.style.padding="0";
-    aiC.innerHTML=`
-      <div style="display:flex;gap:13px;align-items:center;margin-bottom:14px">
-        ${avHTML(m.av||initials(m.name||"?"),52)}
-        <div><div style="font-size:16px;font-weight:800;color:var(--text)">${esc(m.name)}</div><div style="color:var(--steel);font-size:13px">${esc(m.title||"")}</div><div style="color:var(--muted);font-size:12px">${esc(m.company||"")}</div></div>
-      </div>
-      <div style="background:#F0F4F8;border-radius:12px;padding:12px 15px;font-size:13px;color:var(--text);line-height:1.6;border-left:3px solid ${STEEL};margin-bottom:18px">${esc(`${m.name} from ${m.company} (${m.country}) — strong potential for ${m.sector} collaboration.`)}</div>
-      <div class="btn-row"><button class="btn-outline" id="ai-no">Cancel</button><button class="btn-navy" id="ai-yes" style="color:#fff">Propose Meeting →</button></div>`;
-    document.getElementById("ai-no").onclick=()=>ov.remove();
-    document.getElementById("ai-yes").onclick=()=>{ov.remove();showMeeting(m);};
+    document.getElementById("ai-cancel").onclick=()=>ov.remove();
+    document.getElementById("ai-meet").onclick=()=>{ov.remove();showMeeting(match);};
+    document.getElementById("ai-next")?.addEventListener("click",()=>{
+      seenIds.push(match.id);
+      doLoad();
+    });
   }
+
+  function showSpinner(){
+    const remaining=fullPool.filter(p=>!seenIds.includes(p.id)).length;
+    const aiC=document.getElementById("ai-c");
+    if(aiC){
+      aiC.style.textAlign="center";
+      aiC.style.padding="40px 0";
+      aiC.innerHTML=`<div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">AI is analysing ${remaining} participant${remaining!==1?"s":""}…</div>`;
+    }
+  }
+
+  async function doLoad(){
+    showSpinner();
+    const pool=fullPool.filter(p=>!seenIds.includes(p.id));
+    if(!pool.length){
+      const aiC=document.getElementById("ai-c");
+      if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">No more participants to show.</div>`;}
+      return;
+    }
+    let match=null,reason="";
+    try{
+      const result=await fetchMatch(pool);
+      match=pool.find(p=>p.id===result.matchId)||pool.find(p=>p.name===result.matchName)||null;
+      reason=result.reason||"";
+    }catch(e){}
+    if(!match){
+      // Silent fallback to scoring algorithm
+      const seniorKeys=["ceo","md","managing director","director","head","partner","founder","president","vp","coo","cto","cfo"];
+      const myInterests=me?.interests||[];
+      const myCountry=me?.country||"";
+      const mySector=me?.sector||"";
+      match=pool.map(p=>{
+        let sc=0;
+        if((myCountry==="Germany"&&p.country!=="Germany")||(myCountry!=="Germany"&&p.country==="Germany"))sc+=35;
+        if(p.sector&&p.sector===mySector)sc+=20;
+        if(seniorKeys.some(x=>p.title?.toLowerCase().includes(x)))sc+=15;
+        sc+=(p.interests||[]).filter(i=>myInterests.includes(i)).length*12;
+        sc+=Math.random()*5;
+        return{...p,sc};
+      }).sort((a,b)=>b.sc-a.sc)[0]||null;
+    }
+    if(!match){
+      const aiC=document.getElementById("ai-c");
+      if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">Not enough participants yet.</div>`;}
+      return;
+    }
+    renderMatch(match,reason);
+  }
+
+  doLoad();
 }
 
 // ── Entry screen ──────────────────────────────────────────────────────────
