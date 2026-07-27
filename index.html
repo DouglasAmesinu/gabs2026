@@ -489,7 +489,7 @@ function renderBottomNav(){
     {k:"messages",icon:"💬",label:"Messages"},
     {k:"schedule",icon:"📅",label:"Schedule"},
   ];
-  const msgCount=Object.keys(inboxData).length;
+  const msgCount=Object.keys(inboxData).filter(id=>id!==activeThreadId&&!readThreadIds.has(id)).length;
   return`<div id="bottom-nav">${tabs.map(t=>`
     <div class="nav-item${currentTab===t.k?" on":""}" data-tab="${t.k}">
       <div class="nav-icon">${t.icon}</div>
