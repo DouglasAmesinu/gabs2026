@@ -1624,14 +1624,22 @@ function showAdmin(){
           await Promise.all(mSnap.docs.map(m=>fbs.deleteDoc(m.ref)));
           await fbs.deleteDoc(t.ref);
         }));
-        // Reset local state
-        participants=[];
-        inboxData={};
-        inboxStarted=false;
-        inboxListenedIds=new Set();
-        inboxUnsubs.forEach(u=>u());
-        inboxUnsubs=[];
         if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${pSnap.docs.length} participant${pSnap.docs.length!==1?"s":""} and all messages cleared.</div>`;
+        setTimeout(()=>{
+          localStorage.clear();
+          me=null;
+          participants=[];
+          inboxData={};
+          inboxStarted=false;
+          inboxListenedIds=new Set();
+          inboxUnsubs.forEach(u=>u());
+          inboxUnsubs=[];
+          activeThreadId=null;
+          threadMessages=[];
+          draftText="";
+          ov.remove();
+          showEntry();
+        },1500);
       }catch(e){
         if(fb2)fb2.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
         console.error("Reset failed:",e);
