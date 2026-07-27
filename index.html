@@ -446,7 +446,7 @@ function startParticipantListener(){
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
   participantsUnsub=fb.onSnapshot(q,snap=>{
     participants=snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(currentTab==="discover"){const di=document.querySelector(".cards-list");if(di)refreshDisc();}
+    refreshDisc();
     if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
     const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
     if(me)startInbox();
