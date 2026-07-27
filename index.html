@@ -339,6 +339,7 @@ let activeThreadId=null;
 let threadMessages=[];
 let draftText="";
 let inboxData={};
+let readThreadIds=new Set();
 let threadUnsub=null;
 let inboxUnsubs=[];
 let inboxStarted=false;
@@ -601,7 +602,7 @@ function showEditProfile(){
     ov.remove();
     me=null;localStorage.removeItem("gabs_me");
     inboxStarted=false;inboxListenedIds=new Set();
-    inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};
+    inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};readThreadIds=new Set();
     showEntry();
   };
 
@@ -849,8 +850,7 @@ function bindCards(){
 function openThread(p){
   currentTab="messages";
   activeThreadId=p.id;
-  // Don't delete from inboxData — we need it when user taps back.
-  // Just update the badge so the open thread doesn't count as unread.
+  readThreadIds.add(p.id);
   updateMsgBadge();
   renderApp();
 }
@@ -901,7 +901,7 @@ function startInbox(){
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
     const u=fb.onSnapshot(q,snap=>{
       if(snap.empty){delete inboxData[p.id];}
-      else if(activeThreadId!==p.id){const d=snap.docs[0].data();inboxData[p.id]={p,text:d.text,ts:d.ts};}
+      else if(activeThreadId!==p.id){const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);}}
       updateMsgBadge();
       if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
     });
@@ -911,7 +911,7 @@ function startInbox(){
 
 function updateMsgBadge(){
   // Exclude the currently open thread from unread count
-  const count=Object.keys(inboxData).filter(id=>id!==activeThreadId).length;
+  const count=Object.keys(inboxData).filter(id=>id!==activeThreadId&&!readThreadIds.has(id)).length;
   document.querySelectorAll(".nav-item[data-tab='messages']").forEach(nav=>{
     nav.querySelector(".nav-badge")?.remove();
     if(count>0){const b=document.createElement("div");b.className="nav-badge";b.textContent=count;nav.appendChild(b);}
