@@ -1614,32 +1614,18 @@ function showAdmin(){
       if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Deleting…</div>`;
       try{
         const fbs=window._fb;
-        // Delete all participants
         const pSnap=await fbs.getDocs(fbs.collection(fbs.db,"participants"));
         await Promise.all(pSnap.docs.map(d=>fbs.deleteDoc(d.ref)));
-        // Delete all threads and their messages
         const tSnap=await fbs.getDocs(fbs.collection(fbs.db,"threads"));
         await Promise.all(tSnap.docs.map(async t=>{
           const mSnap=await fbs.getDocs(fbs.collection(fbs.db,"threads",t.id,"messages"));
           await Promise.all(mSnap.docs.map(m=>fbs.deleteDoc(m.ref)));
           await fbs.deleteDoc(t.ref);
         }));
-        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${pSnap.docs.length} participant${pSnap.docs.length!==1?"s":""} and all messages cleared.</div>`;
-        setTimeout(()=>{
-          localStorage.clear();
-          me=null;
-          participants=[];
-          inboxData={};
-          inboxStarted=false;
-          inboxListenedIds=new Set();
-          inboxUnsubs.forEach(u=>u());
-          inboxUnsubs=[];
-          activeThreadId=null;
-          threadMessages=[];
-          draftText="";
-          ov.remove();
-          showEntry();
-        },1500);
+        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ All data cleared. Returning to start…</div>`;
+        await new Promise(r=>setTimeout(r,1500));
+        localStorage.clear();
+        window.location.reload();
       }catch(e){
         if(fb2)fb2.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
         console.error("Reset failed:",e);
