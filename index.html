@@ -48,16 +48,16 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 
 /* ── Entry Screen ── */
 #entry{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--navy);overflow-y:auto;-webkit-overflow-scrolling:touch}
-.entry-hero{padding:32px 24px 20px;flex-shrink:0}
-.entry-eyebrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px}
+.entry-hero{padding:28px 22px 16px;flex-shrink:0}
+.entry-eyebrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .entry-eyebrow-left{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
 .entry-eyebrow-right{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.04em}
-.entry-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:6px 14px;margin-bottom:20px}
+.entry-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:6px 14px;margin-bottom:10px}
 .entry-badge-dot{width:8px;height:8px;border-radius:50%;background:var(--gold)}
 .entry-badge-text{color:rgba(255,255,255,.9);font-size:13px;font-weight:600}
 .entry-title{color:var(--white);font-size:26px;font-weight:800;line-height:1.15;margin-bottom:6px}
 .entry-title-gold{color:var(--gold)}
-.entry-sub{color:rgba(255,255,255,.55);font-size:15px;line-height:1.6;margin-top:14px;max-width:320px;margin-bottom:0}
+.entry-sub{color:rgba(255,255,255,.55);font-size:14px;line-height:1.5;margin-top:8px;max-width:320px;margin-bottom:0}
 .entry-card{background:var(--white);border-radius:28px 28px 0 0;padding:28px 22px 32px;overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
 .entry-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin-bottom:10px}
 .entry-input{width:100%;padding:16px 18px;border:1.5px solid var(--border);border-radius:14px;font-size:16px;color:var(--text);background:#F9FAFB;font-weight:500;transition:all .2s;letter-spacing:.04em}
@@ -1329,7 +1329,7 @@ function showEntry(){
       </div>
       <div class="entry-badge"><div class="entry-badge-dot"></div><span class="entry-badge-text">Official summit app</span></div>
       <div class="entry-title">German-African<br/>Business<br/><span class="entry-title-gold">Summit</span></div>
-      <div class="entry-sub">Enter your ticket reference to access the delegate network, meeting scheduler and full programme.</div>
+      <div class="entry-sub">Enter your ticket reference to get started.</div>
     </div>
     <div class="entry-card">
       <div id="entry-stage">${renderStage()}</div>
@@ -1388,7 +1388,7 @@ function showEntry(){
       <input class="form-inp" id="c-website" type="url" placeholder="e.g. https://www.company.com"/>
       <div class="form-label">Job title *</div>
       <input class="form-inp" id="c-title" placeholder="e.g. Managing Director" autocomplete="organization-title"/>
-      <div class="form-grid" style="margin-top:0">
+      <div class="form-grid" style="margin-top:14px">
         <div><div class="form-label">Sector *</div><select class="form-inp" id="c-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
         <div><div class="form-label">Country *</div><select class="form-inp" id="c-country"><option value="">-- Select --</option>${COUNTRIES.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
       </div>
