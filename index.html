@@ -849,6 +849,8 @@ function bindCards(){
 function openThread(p){
   currentTab="messages";
   activeThreadId=p.id;
+  delete inboxData[p.id];
+  updateMsgBadge();
   renderApp();
 }
 
@@ -897,8 +899,8 @@ function startInbox(){
     inboxListenedIds.add(p.id);
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
     const u=fb.onSnapshot(q,snap=>{
-      if(!snap.empty){const d=snap.docs[0].data();inboxData[p.id]={p,text:d.text,ts:d.ts};}
-      else delete inboxData[p.id];
+      if(snap.empty){delete inboxData[p.id];}
+      else if(activeThreadId!==p.id){const d=snap.docs[0].data();inboxData[p.id]={p,text:d.text,ts:d.ts};}
       updateMsgBadge();
       if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
     });
