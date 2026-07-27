@@ -849,8 +849,6 @@ function bindCards(){
 function openThread(p){
   currentTab="messages";
   activeThreadId=p.id;
-  // Clear this conversation from inbox so badge decrements
-  delete inboxData[p.id];
   renderApp();
 }
 
@@ -996,7 +994,7 @@ function initThread(p){
 }
 
 function bindCompose(p){
-  document.getElementById("t-back")?.addEventListener("click",()=>{activeThreadId=null;draftText="";if(threadUnsub){threadUnsub();threadUnsub=null;}renderApp();bindInboxRows();});
+  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}updateMsgBadge();});
   document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
   const inp=document.getElementById("cinp");
   const sbt=document.getElementById("sbtn");
