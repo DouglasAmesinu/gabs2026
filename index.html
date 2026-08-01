@@ -377,9 +377,9 @@ function isBlocked(pid,day,start,dur){
   return(bookedSlots[pid+day]||[]).some(s=>{const bs=timeToMins(s.start),be=timeToMins(s.end),ns=timeToMins(start),ne=ns+dur;return ns<be&&ne>bs;});
 }
 
-function bestMatch(){
+function bestMatch(pool){
   const seniorKeys=["ceo","md","managing director","director","head","partner","founder","president","vp","coo","cto","cfo"];
-  const pool=participants.filter(p=>p.id!==me?.id&&p.ptype!=="Organiser");
+  pool=pool||participants.filter(p=>p.id!==me?.id&&p.ptype!=="Organiser");
   if(!pool.length)return null;
   const myInterests=me?.interests||[];
   const mySector=me?.sector||"";
@@ -1148,7 +1148,48 @@ function showMeeting(p,fromThread=false){
 }
 
 // ── AI Best Match ──────────────────────────────────────────────────────────
-async function showAI(){
+function generateReason(match){
+  const reasons=[];
+  const myCountry=me?.country||"";
+  const myInterests=me?.interests||[];
+  const mySector=me?.sector||"";
+
+  // Cross border pairing
+  if((myCountry==="Germany"&&match.country!=="Germany")||
+     (myCountry!=="Germany"&&match.country==="Germany")){
+    reasons.push(`${match.name} brings a ${match.country} perspective that complements your ${myCountry} base — exactly the kind of cross-border connection GABS is designed to create.`);
+  }
+
+  // Shared sector
+  if(match.sector&&match.sector===mySector){
+    reasons.push(`You share a focus in ${match.sector}, creating immediate common ground for a substantive conversation.`);
+  }
+
+  // Overlapping interests
+  const overlap=myInterests.filter(i=>(match.interests||[]).includes(i));
+  if(overlap.length>0){
+    reasons.push(`You are both looking for ${overlap.slice(0,2).join(" and ")}, which signals strong alignment in what you each hope to achieve at this summit.`);
+  }
+
+  // Participant type complementarity
+  if(match.ptype==="Investor"||match.ptype==="Startup"||match.ptype==="Exhibitor"){
+    reasons.push(`As a${match.ptype==="Exhibitor"?"n":""} ${match.ptype}, ${match.name} represents a direct opportunity for the kind of introduction that can move beyond the summit itself.`);
+  }
+
+  // Bio context
+  if(match.bio){
+    reasons.push(`Their own words: "${match.bio.slice(0,100)}${match.bio.length>100?"…":""}"`);
+  }
+
+  // Fallback
+  if(reasons.length===0){
+    reasons.push(`${match.name} from ${match.company} in ${match.country} is a strong match based on their profile and summit objectives.`);
+  }
+
+  return reasons.slice(0,2).join(" ");
+}
+
+function showAI(){
   const fullPool=participants.filter(p=>p.id!==me?.id&&p.ptype!=="Organiser");
   if(!fullPool.length){
     const ov=makeOv(true);
@@ -1163,68 +1204,13 @@ async function showAI(){
   const ov=makeOv(true);
   ov.innerHTML=`<div class="sheet pop" style="max-width:420px">
     <div class="sheet-title">✦ Your Best Match</div>
-    <div id="ai-c" style="text-align:center;padding:40px 0">
-      <div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div>
-      <div style="color:var(--muted);margin-top:14px;font-size:13px">AI is analysing ${fullPool.length} participant${fullPool.length!==1?"s":""}…</div>
-    </div>
+    <div id="ai-c" style="text-align:center;padding:40px 0"></div>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
 
-  async function fetchMatch(pool){
-    const myProfile=`Salutation: ${me.salutation||"—"}
-Name: ${me.name}
-Company: ${me.company||"—"}
-Company Website: ${me.website||"—"}
-Title: ${me.title||"—"}
-Participant Type: ${me.ptype||"—"}
-Sector: ${me.sector||"—"}
-Country: ${me.country||"—"}
-Interests: ${(me.interests||[]).join(", ")||"Not specified"}
-Bio: ${me.bio||"Not provided"}`;
-
-    const otherProfiles=pool.map((p,i)=>`Participant ${i+1}:
-ID: ${p.id}
-Salutation: ${p.salutation||"—"}
-Name: ${p.name}
-Company: ${p.company||"—"}
-Company Website: ${p.website||"—"}
-Title: ${p.title||"—"}
-Participant Type: ${p.ptype||"—"}
-Sector: ${p.sector||"—"}
-Country: ${p.country||"—"}
-Interests: ${(p.interests||[]).join(", ")||"Not specified"}
-Bio: ${p.bio||"Not provided"}`).join("\n\n");
-
-    const prompt=`You are a B2B matchmaking assistant for GABS 2026 — the 6th German-African Business Summit in Accra, Ghana, November 23-25 2026. Find the single best networking match for this participant.
-
-MY PROFILE:
-${myProfile}
-
-OTHER PARTICIPANTS:
-${otherProfiles}
-
-Identify the ONE best match. Prioritise:
-- German-African business connections (the summit's core purpose)
-- Complementary participant types (Investor↔Startup, Buyer↔Supplier, Speaker↔Delegate)
-- Complementary sectors and interests
-- Genuine business value: partnerships, investment, market entry, supply chains
-
-Respond with raw JSON only — no markdown, no code fences:
-{"matchId":"<participant ID>","matchName":"<name>","reason":"<2-3 specific sentences about the concrete business opportunity>"}`;
-
-    const res=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","anthropic-version":"2023-06-01"},
-      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})
-    });
-    if(!res.ok)throw new Error("API error");
-    const data=await res.json();
-    const raw=(data.content?.[0]?.text||"").replace(/```json|```/g,"").trim();
-    return JSON.parse(raw);
-  }
-
-  function renderMatch(match,reason){
+  function renderMatch(match){
+    const reason=generateReason(match);
     const pool=fullPool.filter(p=>!seenIds.includes(p.id));
     const hasMore=pool.length>0;
     const aiC=document.getElementById("ai-c");
@@ -1246,13 +1232,13 @@ Respond with raw JSON only — no markdown, no code fences:
         ${match.ptype?`<span class="chip" style="background:#EDE9FE;color:#5B21B6">${esc(match.ptype)}</span>`:""}
       </div>
       ${reason?`<div style="background:#FFFBEB;border:1.5px solid ${GOLD};border-radius:12px;padding:14px 15px;font-size:13px;color:var(--text);line-height:1.7;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;color:${GOLD};letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">✦ AI Match Reasoning</div>
+        <div style="font-size:10px;font-weight:700;color:${GOLD};letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">✦ Why this match?</div>
         ${esc(reason)}
       </div>`:""}
       ${match.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px;font-style:italic">${esc(match.bio)}</div>`:""}
       <div style="display:grid;grid-template-columns:${hasMore?"1fr 1.3fr 1.3fr":"1fr 2fr"};gap:8px;margin-top:4px">
         <button class="btn-outline" id="ai-cancel">Cancel</button>
-        ${hasMore?`<button class="btn-outline" id="ai-next" style="font-size:13px">Show another →</button>`:""}
+        ${hasMore?`<button class="btn-outline" id="ai-next" style="font-size:13px">Show another match →</button>`:""}
         <button class="btn-navy" id="ai-meet" style="color:#fff">Propose Meeting →</button>
       </div>`;
     document.getElementById("ai-cancel").onclick=()=>ov.remove();
@@ -1263,52 +1249,20 @@ Respond with raw JSON only — no markdown, no code fences:
     });
   }
 
-  function showSpinner(){
-    const remaining=fullPool.filter(p=>!seenIds.includes(p.id)).length;
-    const aiC=document.getElementById("ai-c");
-    if(aiC){
-      aiC.style.textAlign="center";
-      aiC.style.padding="40px 0";
-      aiC.innerHTML=`<div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">AI is analysing ${remaining} participant${remaining!==1?"s":""}…</div>`;
-    }
-  }
-
-  async function doLoad(){
-    showSpinner();
+  function doLoad(){
     const pool=fullPool.filter(p=>!seenIds.includes(p.id));
     if(!pool.length){
       const aiC=document.getElementById("ai-c");
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">No more participants to show.</div>`;}
       return;
     }
-    let match=null,reason="";
-    try{
-      const result=await fetchMatch(pool);
-      match=pool.find(p=>p.id===result.matchId)||pool.find(p=>p.name===result.matchName)||null;
-      reason=result.reason||"";
-    }catch(e){}
-    if(!match){
-      // Silent fallback to scoring algorithm
-      const seniorKeys=["ceo","md","managing director","director","head","partner","founder","president","vp","coo","cto","cfo"];
-      const myInterests=me?.interests||[];
-      const myCountry=me?.country||"";
-      const mySector=me?.sector||"";
-      match=pool.map(p=>{
-        let sc=0;
-        if((myCountry==="Germany"&&p.country!=="Germany")||(myCountry!=="Germany"&&p.country==="Germany"))sc+=35;
-        if(p.sector&&p.sector===mySector)sc+=20;
-        if(seniorKeys.some(x=>p.title?.toLowerCase().includes(x)))sc+=15;
-        sc+=(p.interests||[]).filter(i=>myInterests.includes(i)).length*12;
-        sc+=Math.random()*5;
-        return{...p,sc};
-      }).sort((a,b)=>b.sc-a.sc)[0]||null;
-    }
+    const match=bestMatch(pool);
     if(!match){
       const aiC=document.getElementById("ai-c");
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">Not enough participants yet.</div>`;}
       return;
     }
-    renderMatch(match,reason);
+    renderMatch(match);
   }
 
   doLoad();
