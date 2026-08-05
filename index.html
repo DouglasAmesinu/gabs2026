@@ -49,7 +49,6 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 /* ── Entry Screen ── */
 #entry{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--navy);overflow-y:auto;-webkit-overflow-scrolling:touch}
 .entry-hero{padding:28px 22px 16px;flex-shrink:0}
-.entry-eyebrow{display:flex;justify-content:center;align-items:center;margin-bottom:20px}
 .entry-eyebrow-left{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
 .entry-eyebrow-right{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.04em}
 .entry-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:6px 14px;margin-bottom:10px}
@@ -1313,12 +1312,9 @@ function showEntry(){
   function render(){
     el.innerHTML=`
     <div class="entry-hero">
-      <div class="entry-eyebrow" style="justify-content:center">
-        <span class="entry-eyebrow-right">23–25 NOV · ACCRA</span>
-      </div>
       <div class="entry-badge"><div class="entry-badge-dot"></div><span class="entry-badge-text">Official summit app</span></div>
       <div class="entry-title">German-African<br/>Business <span class="entry-title-gold">Summit</span></div>
-      <div class="entry-sub">Enter your ticket reference to get started.</div>
+      <div class="entry-sub">23–25 November 2026 · Accra, Ghana<br/>Enter your ticket reference to get started.</div>
     </div>
     <div class="entry-card">
       <div id="entry-stage">${renderStage()}</div>
