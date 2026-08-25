@@ -1376,7 +1376,7 @@ function showEntry(){
         <div><div class="form-label">Sector *</div><select class="form-inp" id="c-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
         <div><div class="form-label">Country *</div><select class="form-inp" id="c-country"><option value="">-- Select --</option>${COUNTRIES.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
       </div>
-      <div class="form-label">Email *</div>
+      <div class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
       <input class="form-inp" id="c-email" type="email" placeholder="you@company.com" autocomplete="email"/>
       <div class="form-label">LinkedIn <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
       <input class="form-inp" id="c-linkedin" placeholder="linkedin.com/in/yourname"/>
@@ -1453,8 +1453,8 @@ function showEntry(){
       const interests=[...document.querySelectorAll(".interest-chip.sel")].map(c=>c.dataset.interest);
       const bio=document.getElementById("c-bio")?.value.trim()||"";
       const fb2=document.getElementById("c-feedback");
-      if(!salutation||!ptype||!name||!company||!title||!sector||!country||!email){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields.</div>`;return;}
-      if(!email.includes("@")){if(fb2)fb2.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
+      if(!salutation||!ptype||!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields.</div>`;return;}
+      if(email&&!email.includes("@")){if(fb2)fb2.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
       if(!window._fb)return;
       const btn=document.getElementById("c-submit");
       try{
