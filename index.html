@@ -273,7 +273,7 @@ const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
 const SALUTATIONS=["Mr","Mrs","Ms","Dr","Prof","Prof Dr","Eng","Ambassador","Hon","Rev","Other"];
 const PARTICIPANT_TYPES=["Participant","Delegate","Exhibitor","Startup","Speaker","Organiser","Media","Other"];
 const SECTORS=["Agriculture","Consulting","Construction","Design & Creative","Energy","Finance","Government & Politics","Healthcare","Human Resources","Logistics","Manufacturing","Media","Mining","Real Estate","Technology","Trade","Other"];
-const COUNTRIES=["Germany","Ghana","Nigeria","Senegal","Kenya","South Africa","Cameroon","Côte d'Ivoire","Ethiopia","Tanzania","Other"];
+const COUNTRIES=["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","DR Congo","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe","Other"];
 const INTERESTS=[
   "Finding Customers & Sales Leads",
   "Joint Ventures & Long-term Partnerships",
@@ -563,9 +563,10 @@ function showEditProfile(){
         <input class="form-inp" id="ep-sector-other" placeholder="Please specify your sector" style="display:none;margin-top:8px"/>
       </div>
       <div><div class="form-label">Country</div>
-        <select class="form-inp" id="ep-country">
-          ${COUNTRIES.map(c=>`<option value="${esc(c)}"${me.country===c?" selected":""}>${esc(c)}</option>`).join("")}
-        </select>
+        <input class="form-inp" id="ep-country" list="ep-country-list" value="${esc(me.country||"")}" placeholder="Search or select country…" autocomplete="off"/>
+        <datalist id="ep-country-list">
+          ${COUNTRIES.map(c=>`<option value="${esc(c)}"></option>`).join("")}
+        </datalist>
       </div>
     </div>
     <div class="form-label">Email *</div>
@@ -620,7 +621,7 @@ function showEditProfile(){
     const epSectorRaw=document.getElementById("ep-sector").value;
     const epSectorOther=document.getElementById("ep-sector-other")?.value.trim();
     const sector=epSectorRaw==="Other"&&epSectorOther?epSectorOther:epSectorRaw;
-    const country=document.getElementById("ep-country").value;
+    const country=document.getElementById("ep-country").value.trim();
     const email=document.getElementById("ep-email").value.trim().toLowerCase();
     const linkedin=document.getElementById("ep-linkedin").value.trim();
     const interests=[...document.querySelectorAll("#ep-interests .interest-chip.sel")].map(c=>c.dataset.interest);
@@ -1386,7 +1387,10 @@ function showEntry(){
       <div class="form-grid" style="margin-top:14px">
         <div><div class="form-label">Sector *</div><select class="form-inp" id="c-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
         <input class="form-inp" id="c-sector-other" placeholder="Please specify your sector" style="display:none;margin-top:8px"/></div>
-        <div><div class="form-label">Country *</div><select class="form-inp" id="c-country"><option value="">-- Select --</option>${COUNTRIES.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
+        <div><div class="form-label">Country *</div><input class="form-inp" id="c-country" list="country-list" placeholder="Search or select country…" autocomplete="off"/>
+        <datalist id="country-list">
+          ${COUNTRIES.map(c=>`<option value="${esc(c)}"></option>`).join("")}
+        </datalist></div>
       </div>
       <div class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
       <input class="form-inp" id="c-email" type="email" placeholder="you@company.com" autocomplete="email"/>
@@ -1465,7 +1469,7 @@ function showEntry(){
       const sectorRaw=document.getElementById("c-sector")?.value;
       const sectorOther=document.getElementById("c-sector-other")?.value.trim();
       const sector=sectorRaw==="Other"&&sectorOther?sectorOther:sectorRaw;
-      const country=document.getElementById("c-country")?.value;
+      const country=document.getElementById("c-country")?.value.trim()||"";
       const email=document.getElementById("c-email")?.value.trim().toLowerCase()||"";
       const linkedin=document.getElementById("c-linkedin")?.value.trim()||"";
       const interests=[...document.querySelectorAll(".interest-chip.sel")].map(c=>c.dataset.interest);
