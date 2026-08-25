@@ -560,6 +560,7 @@ function showEditProfile(){
         <select class="form-inp" id="ep-sector">
           ${SECTORS.map(s=>`<option value="${esc(s)}"${me.sector===s?" selected":""}>${esc(s)}</option>`).join("")}
         </select>
+        <input class="form-inp" id="ep-sector-other" placeholder="Please specify your sector" style="display:none;margin-top:8px"/>
       </div>
       <div><div class="form-label">Country</div>
         <select class="form-inp" id="ep-country">
@@ -598,6 +599,11 @@ function showEditProfile(){
   }
   ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
 
+  document.getElementById("ep-sector")?.addEventListener("change",e=>{
+    const otherInp=document.getElementById("ep-sector-other");
+    if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+  });
+
   document.getElementById("ep-logout").onclick=()=>{
     ov.remove();
     me=null;localStorage.removeItem("gabs_me");
@@ -611,7 +617,9 @@ function showEditProfile(){
     const ptype=document.getElementById("ep-ptype")?.value||"";
     const website=document.getElementById("ep-website")?.value.trim()||"";
     const title=document.getElementById("ep-title").value.trim();
-    const sector=document.getElementById("ep-sector").value;
+    const epSectorRaw=document.getElementById("ep-sector").value;
+    const epSectorOther=document.getElementById("ep-sector-other")?.value.trim();
+    const sector=epSectorRaw==="Other"&&epSectorOther?epSectorOther:epSectorRaw;
     const country=document.getElementById("ep-country").value;
     const email=document.getElementById("ep-email").value.trim().toLowerCase();
     const linkedin=document.getElementById("ep-linkedin").value.trim();
@@ -1373,7 +1381,8 @@ function showEntry(){
       <div class="form-label">Job title *</div>
       <input class="form-inp" id="c-title" placeholder="e.g. Managing Director" autocomplete="organization-title"/>
       <div class="form-grid" style="margin-top:14px">
-        <div><div class="form-label">Sector *</div><select class="form-inp" id="c-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
+        <div><div class="form-label">Sector *</div><select class="form-inp" id="c-sector"><option value="">-- Select --</option>${SECTORS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
+        <input class="form-inp" id="c-sector-other" placeholder="Please specify your sector" style="display:none;margin-top:8px"/></div>
         <div><div class="form-label">Country *</div><select class="form-inp" id="c-country"><option value="">-- Select --</option>${COUNTRIES.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
       </div>
       <div class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
@@ -1439,6 +1448,10 @@ function showEntry(){
     if(bioInp&&bioCount){
       bioInp.oninput=()=>{bioCount.textContent=`${bioInp.value.length} / 200`;bioCount.style.color=bioInp.value.length>180?"var(--red)":"var(--muted)";};
     }
+    document.getElementById("c-sector")?.addEventListener("change",e=>{
+      const otherInp=document.getElementById("c-sector-other");
+      if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+    });
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
       const salutation=document.getElementById("c-salutation")?.value||"";
       const ptype=document.getElementById("c-ptype")?.value||"";
@@ -1446,7 +1459,9 @@ function showEntry(){
       const company=document.getElementById("c-company")?.value.trim();
       const website=document.getElementById("c-website")?.value.trim()||"";
       const title=document.getElementById("c-title")?.value.trim();
-      const sector=document.getElementById("c-sector")?.value;
+      const sectorRaw=document.getElementById("c-sector")?.value;
+      const sectorOther=document.getElementById("c-sector-other")?.value.trim();
+      const sector=sectorRaw==="Other"&&sectorOther?sectorOther:sectorRaw;
       const country=document.getElementById("c-country")?.value;
       const email=document.getElementById("c-email")?.value.trim().toLowerCase()||"";
       const linkedin=document.getElementById("c-linkedin")?.value.trim()||"";
