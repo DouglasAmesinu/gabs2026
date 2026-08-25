@@ -17,9 +17,12 @@
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
 const db=getFirestore(app);
+const storage=getStorage(app);
 window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
+window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
 </script>
 <style>
@@ -356,8 +359,9 @@ const tid=(a,b)=>[a,b].sort().join("__");
 const fmtTime=ts=>ts?.seconds?new Date(ts.seconds*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
 const initials=name=>name.trim().split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
 
-function avHTML(av,sz=42){
+function avHTML(av,sz=42,photoURL=null){
   const fs=Math.round(sz*.36);
+  if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(av)}</div>`;
 }
 function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
@@ -512,7 +516,7 @@ function renderProfileBar(){
   if(!me)return"";
   return`<div id="profile-bar">
     <div class="profile-info">
-      ${avHTML(me.av||initials(me.name||"?"),32)}
+      ${avHTML(me.av||initials(me.name||"?"),32,me.photoURL)}
       <span class="profile-name">${me.salutation?esc(me.salutation)+". ":""}${esc(me.name)}</span>
     </div>
     <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
@@ -533,8 +537,18 @@ function showEditProfile(){
       <button class="btn-outline btn-sm" id="ep-close">Close</button>
     </div>
     <div class="sheet-sub">Update your details visible to other participants</div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div id="ep-avatar-preview" style="width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative">
+        ${me.photoURL
+          ? `<img src="${me.photoURL}" style="width:100%;height:100%;object-fit:cover"/>`
+          : `<span style="color:#fff;font-size:28px;font-weight:700">${initials(me.name||"?")}</span>`}
+        <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>
+      </div>
+      <input type="file" id="ep-photo-input" accept="image/*" style="display:none"/>
+      <div id="ep-photo-status" style="font-size:12px;color:var(--muted)">Tap photo to change</div>
+    </div>
     <div style="background:#F8FAFC;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
-      ${avHTML(me.av||initials(me.name||"?"),44)}
+      ${avHTML(me.av||initials(me.name||"?"),44,me.photoURL)}
       <div>
         <div style="font-weight:700;color:var(--text);font-size:15px">${esc(me.name)}</div>
         <div style="color:var(--muted);font-size:12px">${esc(me.company||"")}</div>
@@ -603,6 +617,38 @@ function showEditProfile(){
   document.getElementById("ep-sector")?.addEventListener("change",e=>{
     const otherInp=document.getElementById("ep-sector-other");
     if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+  });
+
+  document.getElementById("ep-avatar-preview")?.addEventListener("click",()=>{
+    document.getElementById("ep-photo-input")?.click();
+  });
+
+  document.getElementById("ep-photo-input")?.addEventListener("change",async(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>5*1024*1024){
+      document.getElementById("ep-photo-status").textContent="Photo must be under 5MB";
+      return;
+    }
+    const status=document.getElementById("ep-photo-status");
+    status.textContent="Uploading…";
+    try{
+      const st=window._storage;
+      const storageRef=st.ref(st.storage,`photos/${me.id}`);
+      await st.uploadBytes(storageRef,file);
+      const url=await st.getDownloadURL(storageRef);
+      const preview=document.getElementById("ep-avatar-preview");
+      if(preview)preview.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover"/><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
+      me.photoURL=url;
+      localStorage.setItem("gabs_me",JSON.stringify(me));
+      if(window._fb&&me.id){
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{photoURL:url});
+      }
+      status.textContent="✓ Photo updated";
+    }catch(err){
+      status.textContent="Upload failed. Try again.";
+      console.error(err);
+    }
   });
 
   document.getElementById("ep-logout").onclick=()=>{
@@ -687,7 +733,7 @@ function pCardHTML(p){
   const hasContact=p.phone||p.linkedin;
   return`<div class="p-card${self?" self":""}" data-pid="${p.id}">
     <div class="p-card-top">
-      ${avHTML(p.av||initials(p.name||"?"),46)}
+      ${avHTML(p.av||initials(p.name||"?"),46,p.photoURL)}
       <div style="flex:1;min-width:0">
         <div class="p-name">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
         <div class="p-role">${esc(p.title||"")}</div>
@@ -794,7 +840,7 @@ function showParticipantProfile(p){
   ov.innerHTML=`<div class="sheet" style="padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">
     <div style="padding:22px 20px 16px;border-bottom:1px solid var(--border)">
       <div style="display:flex;gap:15px;align-items:center">
-        ${avHTML(p.av||initials(p.name||"?"),64)}
+        ${avHTML(p.av||initials(p.name||"?"),64,p.photoURL)}
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1.2">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
           <div style="font-size:13px;color:var(--steel);font-weight:600;margin-top:3px">${esc(p.title||"")}</div>
@@ -885,7 +931,7 @@ function renderInbox(){
       return`
       <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${p.id}" style="background:${unread?"#fff":"#F8FAFC"}">
         <div class="inbox-av-wrap">
-          ${avHTML(p.av||initials(p.name||"?"),44)}
+          ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL)}
           ${unread?`<span style="position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;background:var(--gold);border:2px solid #fff"></span>`:""}
         </div>
         <div class="inbox-meta">
@@ -939,7 +985,7 @@ function renderThread(){
   return`<div class="thread-wrap">
     <div class="thread-hdr">
       <span class="t-back" id="t-back">←</span>
-      ${avHTML(p.av||initials(p.name||"?"),38)}
+      ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
       <div class="t-info">
         <div class="t-name">${esc(p.name)}</div>
         <div class="t-company">${esc(p.title||"")} · ${esc(p.company||"")}</div>
@@ -1146,7 +1192,7 @@ function showMeeting(p,fromThread=false){
     const slotOpts=slots.map(s=>{const blocked=state.day&&(isBlocked(me.id,state.day,s,state.dur)||isBlocked(p.id,state.day,s,state.dur));return`<option value="${esc(s)}"${state.start===s?" selected":""}${blocked?" disabled":""}>${esc(s)}${blocked?" (busy)":""}</option>`;});
     document.getElementById("msheet").innerHTML=`
       <div style="display:flex;gap:13px;align-items:center;margin-bottom:18px">
-        ${avHTML(p.av||initials(p.name||"?"),44)}
+        ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL)}
         <div><div style="font-size:16px;font-weight:800;color:var(--text)">${esc(p.name)}</div><div style="font-size:13px;color:var(--muted)">${esc(p.company||"")}</div></div>
       </div>
       <div class="sheet-title">Propose a Meeting</div>
@@ -1264,7 +1310,7 @@ function showAI(){
     aiC.style.padding="0";
     aiC.innerHTML=`
       <div style="display:flex;gap:13px;align-items:center;margin-bottom:14px">
-        ${avHTML(match.av||initials(match.name||"?"),52)}
+        ${avHTML(match.av||initials(match.name||"?"),52,match.photoURL)}
         <div style="min-width:0">
           <div style="font-size:16px;font-weight:800;color:var(--text);line-height:1.2">${match.salutation?esc(match.salutation)+". ":""}${esc(match.name)}</div>
           <div style="color:var(--steel);font-size:13px;margin-top:2px">${esc(match.title||"")}</div>
@@ -1347,7 +1393,7 @@ function showEntry(){
 
     if(stage==="already")return`
       <div class="already-card">
-        ${avHTML(foundParticipant.av||initials(foundParticipant.name||"?"),64)}
+        ${avHTML(foundParticipant.av||initials(foundParticipant.name||"?"),64,foundParticipant.photoURL)}
         <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:14px">This ticket is already linked to</div>
         <div style="font-size:17px;font-weight:700;color:${STEEL};margin-top:4px">${esc(foundParticipant.name)}</div>
         <div style="color:var(--muted);font-size:13px;margin-top:3px">${esc(foundParticipant.title||"")} · ${esc(foundParticipant.company||"")}</div>
@@ -1541,7 +1587,7 @@ function showAdmin(){
     if(!pendingRegs.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">✓ No pending registrations</div>`;return;}
     body.innerHTML=pendingRegs.map(p=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-        ${avHTML(p.av||initials(p.name||"?"),38)}
+        ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
         <div><div style="font-weight:700;color:var(--text)">${esc(p.name)}</div><div style="color:var(--muted);font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div><div style="color:var(--steel);font-size:11px">${esc(p.email||"")} · ${esc(p.country||"")}</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
