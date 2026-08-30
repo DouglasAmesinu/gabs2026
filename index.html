@@ -360,6 +360,7 @@ let inboxListenedIds=new Set();
 let pendingRegs=[];
 let participantsUnsub=null;
 let discSearch="",discSectors=[],discCountry="";
+let myMeetings=[];
 let schedDay=0;
 let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
 let validTicketRefs=[];try{const s=localStorage.getItem("gabs_tickets");if(s)validTicketRefs=JSON.parse(s);}catch(e){}
@@ -478,6 +479,37 @@ function sendConfirmationEmail({name,email,company,title,ticket,status}){
   }).catch(e=>console.warn("Email failed:",e));
 }
 
+// ── Meetings ───────────────────────────────────────────────────────────────
+function loadMyMeetings(){
+  if(!me||!window._fb)return;
+  const fb=window._fb;
+  myMeetings=[];
+  participants.filter(p=>p.id!==me.id).forEach(p=>{
+    const threadId=tid(me.id,p.id);
+    const q=fb.query(fb.collection(fb.db,"threads",threadId,"messages"),fb.orderBy("ts","asc"));
+    fb.getDocs(q).then(snap=>{
+      snap.docs.forEach(doc=>{
+        const data=doc.data();
+        if(data.meeting){
+          myMeetings.push({
+            id:doc.id,
+            threadId,
+            otherParticipant:p,
+            meeting:data.meeting,
+            fromId:data.fromId,
+            resp:data.resp||null,
+            ts:data.ts,
+          });
+        }
+      });
+      if(currentTab==="schedule"){
+        const tc=document.getElementById("tab-content");
+        if(tc){tc.innerHTML=renderSchedule();bindSchedule();}
+      }
+    });
+  });
+}
+
 // ── Calendar ───────────────────────────────────────────────────────────────
 function generateGoogleCalURL(meeting,fromName,toName){
   const date=meeting.day||"20261124";
@@ -542,6 +574,7 @@ function renderApp(){
   bindBottomNav();
   bindTab();
   bindProfileBar();
+  loadMyMeetings();
   if(!inboxStarted&&me)startInbox();
 }
 
@@ -715,6 +748,7 @@ function showEditProfile(){
     me=null;localStorage.removeItem("gabs_me");
     inboxStarted=false;inboxListenedIds=new Set();
     inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};readThreadIds=new Set();
+    myMeetings=[];
     showEntry();
   };
 
@@ -1178,8 +1212,50 @@ async function doSend(p,textOverride,meeting){
 function renderSchedule(){
   const day=SCHEDULE[schedDay];
   const typeColors={plenary:"#3B82F6",panel:"#0EA5E9",fireside:"#F59E0B",networking:"#22C55E",social:"#EC4899",logistics:"#9CA3AF",reception:"#EC4899",breakfast:"#22C55E",lunch:"#22C55E",closing:"#3B82F6",workshop:"#A855F7",b2b:"#F97316"};
+  const pendingMeetings=myMeetings.filter(m=>!m.resp);
+  const confirmedMeetings=myMeetings.filter(m=>m.resp==="accepted");
+  const allMyMeetings=[...confirmedMeetings,...pendingMeetings];
   return`<div>
     <div class="page-hdr"><div class="page-title">Schedule</div><div class="page-sub">3-day programme · All times GMT</div></div>
+    ${allMyMeetings.length?`
+    <div style="padding:0 16px 20px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);margin-bottom:10px">MY MEETINGS</div>
+      ${allMyMeetings.map(m=>{
+        const isConfirmed=m.resp==="accepted";
+        const isSent=m.fromId===me.id;
+        const statusColor=isConfirmed?"var(--green)":"var(--gold)";
+        const statusText=isConfirmed?"✓ Confirmed":isSent?"⏳ Awaiting response":"📩 Respond required";
+        return`<div style="background:var(--white);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;border-left:3px solid ${statusColor}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:10px">
+              ${avHTML(m.otherParticipant.av||initials(m.otherParticipant.name||"?"),36,m.otherParticipant.photoURL||null)}
+              <div>
+                <div style="font-weight:700;font-size:14px;color:var(--text)">${esc(m.otherParticipant.salutation?m.otherParticipant.salutation+". ":"")}${esc(m.otherParticipant.name)}</div>
+                <div style="font-size:12px;color:var(--muted)">${esc(m.otherParticipant.company||"")}</div>
+              </div>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:${statusColor};background:${isConfirmed?"#F0FDF4":"#FFFBEB"};padding:3px 9px;border-radius:20px">${statusText}</span>
+          </div>
+          <div style="display:flex;gap:14px;font-size:12px;color:var(--muted)">
+            <span>📅 ${esc(m.meeting.dayLabel||m.meeting.day||"")}</span>
+            <span>🕐 ${esc(m.meeting.start||"")} · ${esc(String(m.meeting.dur||30))} min</span>
+            <span>📍 ${esc(m.meeting.loc||"")}</span>
+          </div>
+          ${isConfirmed?`<div style="display:flex;gap:8px;margin-top:10px">
+            <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateGoogleCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">📅 Add to Calendar</button>
+          </div>`:""}
+        </div>`;
+      }).join("")}
+    </div>
+    <div style="height:1px;background:var(--border);margin:0 16px 16px"></div>`:""}
+    ${!allMyMeetings.length?`
+    <div style="padding:16px 16px 0">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);margin-bottom:10px">MY MEETINGS</div>
+      <div style="background:#F8FAFC;border:1.5px dashed var(--border);border-radius:12px;padding:20px;text-align:center;margin-bottom:16px">
+        <div style="font-size:22px;margin-bottom:6px">📅</div>
+        <div style="font-size:13px;color:var(--muted)">No meetings yet<br/>Go to Discover and propose a meeting</div>
+      </div>
+    </div>`:""}
     <div class="sched-day-tabs">
       ${SCHEDULE.map((d,i)=>`
         <div class="day-tab${schedDay===i?" on":""}" data-di="${i}">
