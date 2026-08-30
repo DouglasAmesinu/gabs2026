@@ -548,7 +548,7 @@ function renderBottomNav(){
     {k:"schedule",icon:"📅",label:"Schedule"},
     {k:"sponsors",icon:"🤝",label:"Sponsors"},
   ];
-  const msgCount=Object.keys(inboxData).filter(id=>id!==activeThreadId&&!readThreadIds.has(id)).length;
+  const msgCount=Object.keys(inboxData).filter(id=>!readThreadIds.has(id)).length;
   return`<div id="bottom-nav">${tabs.map(t=>`
     <div class="nav-item${currentTab===t.k?" on":""}" data-tab="${t.k}">
       <div class="nav-icon">${t.icon}</div>
@@ -985,14 +985,14 @@ function renderInbox(){
       const unread=!readThreadIds.has(p.id);
       return`
       <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${p.id}" style="background:${unread?"#fff":"#F8FAFC"}">
-        <div class="inbox-av-wrap">
-          ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL)}
-          ${unread?`<span style="position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;background:var(--gold);border:2px solid #fff"></span>`:""}
+        <div style="position:relative;flex-shrink:0">
+          ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL||null)}
+          ${unread?`<div style="position:absolute;top:0;right:0;width:11px;height:11px;border-radius:50%;background:var(--gold);border:2px solid #fff"></div>`:""}
         </div>
         <div class="inbox-meta">
           <div class="inbox-name" style="font-weight:${unread?800:600}">${esc(p.name)}</div>
           <div class="inbox-company">${esc(p.company||"")}</div>
-          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"}">${esc(text||"")}</div>
+          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(text||"")}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <span class="inbox-time">${fmtTime(ts)}</span>
