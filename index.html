@@ -115,6 +115,10 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .filter-row{display:flex;gap:8px;padding:0 16px 12px}
 .filter-sel{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;color:var(--text);background:#F9FAFB;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%236B7280' d='M5 6L0 0h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;-webkit-appearance:none;appearance:none}
 .filter-row::-webkit-scrollbar{display:none}
+.filter-chips-row{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.filter-chips-row::-webkit-scrollbar{display:none}
+.filter-chip-sel{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;border:1.5px solid var(--border);background:var(--white);color:var(--muted);transition:all .15s;white-space:nowrap;user-select:none}
+.filter-chip-sel.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
 .filter-chip{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;border:1.5px solid var(--border);background:var(--white);color:var(--muted);transition:all .15s;white-space:nowrap}
 .filter-chip.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
 .cards-list{padding:0 16px 20px;display:flex;flex-direction:column;gap:10px}
@@ -355,7 +359,7 @@ let inboxStarted=false;
 let inboxListenedIds=new Set();
 let pendingRegs=[];
 let participantsUnsub=null;
-let discSearch="",discSector="",discCountry="";
+let discSearch="",discSectors=[],discCountry="";
 let schedDay=0;
 let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
 let validTicketRefs=[];try{const s=localStorage.getItem("gabs_tickets");if(s)validTicketRefs=JSON.parse(s);}catch(e){}
@@ -561,7 +565,7 @@ function bindBottomNav(){
   document.querySelectorAll(".nav-item[data-tab]").forEach(item=>{
     item.onclick=()=>{
       if(currentTab===item.dataset.tab&&item.dataset.tab!=="messages")return;
-      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";
+      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";discSectors=[];
       renderApp();
     };
   });
@@ -779,7 +783,7 @@ function filtered(){
   const q=discSearch.toLowerCase();
   return participants.filter(p=>
     (!q||p.name.toLowerCase().includes(q)||p.company?.toLowerCase().includes(q)||p.sector?.toLowerCase().includes(q))&&
-    (!discSector||p.sector===discSector)&&(!discCountry||p.country===discCountry)
+    (!discSectors.length||discSectors.includes(p.sector))&&(!discCountry||p.country===discCountry)
   );
 }
 
@@ -835,11 +839,10 @@ function renderDiscover(){
         <input class="search-inp" id="si" placeholder="Search by name or company…" value="${esc(discSearch)}" autocomplete="off"/>
       </div>
     </div>
+    <div class="filter-chips-row" id="sector-chips">
+      ${secs.map(s=>`<div class="filter-chip-sel${discSectors.includes(s)?" on":""}" data-sector="${esc(s)}">${esc(s)}</div>`).join("")}
+    </div>
     <div class="filter-row">
-      <select class="filter-sel" id="sec-sel">
-        <option value="">All Sectors</option>
-        ${[...new Set(participants.map(p=>p.sector).filter(Boolean))].sort().map(s=>`<option value="${esc(s)}"${discSector===s?" selected":""}>${esc(s)}</option>`).join("")}
-      </select>
       <select class="filter-sel" id="cnt-sel">
         <option value="">All Countries</option>
         ${[...new Set(participants.map(p=>p.country).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}"${discCountry===c?" selected":""}>${esc(c)}</option>`).join("")}
@@ -857,8 +860,19 @@ function renderDiscover(){
 
 function bindDiscover(){
   document.getElementById("ai-btn")?.addEventListener("click",showAI);
-  const ss=document.getElementById("sec-sel");
-  if(ss)ss.onchange=e=>{discSector=e.target.value;refreshDisc();};
+  document.querySelectorAll("#sector-chips .filter-chip-sel").forEach(chip=>{
+    chip.onclick=()=>{
+      const s=chip.dataset.sector;
+      if(discSectors.includes(s)){
+        discSectors=discSectors.filter(x=>x!==s);
+        chip.classList.remove("on");
+      } else {
+        discSectors.push(s);
+        chip.classList.add("on");
+      }
+      refreshDisc();
+    };
+  });
   const cs=document.getElementById("cnt-sel");
   if(cs)cs.onchange=e=>{discCountry=e.target.value;refreshDisc();};
   const si=document.getElementById("si");
@@ -879,12 +893,14 @@ function bindDiscover(){
 }
 
 function refreshDisc(){
-  const wrap=document.getElementById("cards-list");if(!wrap)return;
+  const wrap=document.getElementById("cards-list");
+  if(!wrap)return;
   const list=filtered();
   wrap.innerHTML=list.length===0
-    ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants yet</div></div>`
+    ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`
     :list.map(p=>pCardHTML(p)).join("");
-  const sub=document.querySelector(".page-sub");if(sub)sub.textContent=`${participants.length} participant${participants.length!==1?"s":""} attending`;
+  const sub=document.querySelector(".page-sub");
+  if(sub)sub.textContent=`${list.length} participant${list.length!==1?"s":""} attending`;
   bindCards();
 }
 
