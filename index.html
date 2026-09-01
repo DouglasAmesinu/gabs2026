@@ -285,7 +285,6 @@ const VENUES=["Cabana Ground Floor","Cabana 1st Floor","Garden","Ghana2Germany V
 const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
-const CLAUDE_API_KEY=""; // TODO: set your Anthropic API key here
 const SALUTATIONS=["Mr","Mrs","Ms","Dr","Prof","Prof Dr","Eng","Ambassador","Hon","Rev","Other"];
 const PARTICIPANT_TYPES=["Participant","Delegate","Exhibitor","Startup","Speaker","Organiser","Media","Other"];
 const SECTORS=["Agriculture","Consulting","Construction","Design & Creative","Energy","Finance","Government & Politics","Healthcare","Human Resources","Logistics","Manufacturing","Media","Mining","Real Estate","Technology","Trade","Other"];
@@ -1513,13 +1512,10 @@ function generateReason(match){
 async function claudeMatch(pool){
   console.log("Calling Claude API with", pool.length, "participants");
   try{
-    const response=await fetch("https://api.anthropic.com/v1/messages",{
+    const response=await fetch("https://us-central1-gabs2026-4f482.cloudfunctions.net/claudeProxy",{
       method:"POST",
       headers:{
-        "content-type":"application/json",
-        "x-api-key":CLAUDE_API_KEY,
-        "anthropic-version":"2023-06-01",
-        "anthropic-dangerous-direct-browser-access":"true",
+        "Content-Type":"application/json",
       },
       body:JSON.stringify({
         model:"claude-sonnet-5",
@@ -1553,7 +1549,6 @@ Respond with ONLY valid JSON in this exact shape, no other text: {"matchId":"<id
 function showAI(){
   const fullPool=participants.filter(p=>p.id!==me?.id&&p.ptype!=="Organiser");
   console.log("showAI called, pool size:", fullPool.length);
-  console.log("CLAUDE_API_KEY present:", typeof CLAUDE_API_KEY !== "undefined" && CLAUDE_API_KEY.length > 0);
   if(!fullPool.length){
     const ov=makeOv(true);
     ov.innerHTML=`<div class="sheet pop" style="max-width:420px;text-align:center;padding:40px 24px"><div style="font-size:48px;margin-bottom:12px">👥</div><div class="sheet-title">Not enough participants yet</div><div class="sheet-sub">Come back once more participants have registered</div><button class="btn-outline mt16" onclick="this.closest('.ov').remove()">Close</button></div>`;
@@ -1620,12 +1615,10 @@ function showAI(){
       return;
     }
     let match=null;
-    if(CLAUDE_API_KEY){
-      const aiResult=await claudeMatch(pool);
-      if(aiResult&&aiResult.matchId){
-        match=pool.find(p=>p.id===aiResult.matchId)||null;
-        if(match)match._aiReason=aiResult.reason;
-      }
+    const aiResult=await claudeMatch(pool);
+    if(aiResult&&aiResult.matchId){
+      match=pool.find(p=>p.id===aiResult.matchId)||null;
+      if(match)match._aiReason=aiResult.reason;
     }
     if(!match)match=bestMatch(pool);
     if(!match){
