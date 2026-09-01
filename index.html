@@ -1502,11 +1502,6 @@ function generateReason(match){
     reasons.push(`${match.name.split(" ")[0]} is speaking at the summit, so this is a good chance to connect before the sessions get busy.`);
   }
 
-  // Bio context
-  if(match.bio){
-    reasons.push(`In their own words: "${match.bio.slice(0,120)}${match.bio.length>120?"...":""}"`);
-  }
-
   // Fallback
   if(reasons.length===0){
     reasons.push(`Based on their profile and what they are looking to achieve here, ${match.name} looks like a genuinely useful connection for you at this summit.`);
@@ -1557,6 +1552,8 @@ Respond with ONLY valid JSON in this exact shape, no other text: {"matchId":"<id
 
 function showAI(){
   const fullPool=participants.filter(p=>p.id!==me?.id&&p.ptype!=="Organiser");
+  console.log("showAI called, pool size:", fullPool.length);
+  console.log("CLAUDE_API_KEY present:", typeof CLAUDE_API_KEY !== "undefined" && CLAUDE_API_KEY.length > 0);
   if(!fullPool.length){
     const ov=makeOv(true);
     ov.innerHTML=`<div class="sheet pop" style="max-width:420px;text-align:center;padding:40px 24px"><div style="font-size:48px;margin-bottom:12px">👥</div><div class="sheet-title">Not enough participants yet</div><div class="sheet-sub">Come back once more participants have registered</div><button class="btn-outline mt16" onclick="this.closest('.ov').remove()">Close</button></div>`;
