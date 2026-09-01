@@ -1512,6 +1512,20 @@ function generateReason(match){
 async function claudeMatch(pool){
   console.log("Calling Claude API with", pool.length, "participants");
   try{
+    const myProfile=`ME: ${me.name}|${me.title}|${me.company}|${me.sector}|${me.country}|${(me.interests||[]).join(",")}|${me.bio||""}|${me.ptype||""}`;
+    const otherProfiles=pool.map((p,i)=>`${i+1}: ID=${p.id}|${p.name}|${p.title}|${p.company}|${p.sector}|${p.country}|${(p.interests||[]).join(",")}|${p.bio||""}|${p.ptype||""}`).join("\n");
+    const prompt=`You are a B2B matchmaker for GABS 2026, German-African Business Summit, Accra Ghana, Nov 23-25.
+
+${myProfile}
+
+OTHER PARTICIPANTS:
+${otherProfiles}
+
+Find the single best match. Prioritise: German-African pairing, complementary needs (investor+startup, market entry seeker+local expert), overlapping interests, senior titles.
+
+Respond ONLY with valid JSON, no other text:
+{"matchId":"<exact id>","matchName":"<name>","reason":"<2 sentences max, conversational tone, no em dashes, specific to their actual profiles>"}`;
+
     const response=await fetch("https://us-central1-gabs2026-4f482.cloudfunctions.net/claudeProxy",{
       method:"POST",
       headers:{
@@ -1519,17 +1533,8 @@ async function claudeMatch(pool){
       },
       body:JSON.stringify({
         model:"claude-sonnet-5",
-        max_tokens:400,
-        messages:[{
-          role:"user",
-          content:`You are matching attendees at the German-African Business Summit. Given the current user's profile and a pool of candidate participants, pick the single best match and explain why in 2 sentences.
-
-Current user: ${JSON.stringify({name:me?.name,title:me?.title,company:me?.company,sector:me?.sector,country:me?.country,interests:me?.interests,ptype:me?.ptype})}
-
-Candidates: ${JSON.stringify(pool.map(p=>({id:p.id,name:p.name,title:p.title,company:p.company,sector:p.sector,country:p.country,interests:p.interests,ptype:p.ptype})))}
-
-Respond with ONLY valid JSON in this exact shape, no other text: {"matchId":"<id of the best candidate>","reason":"<why this is a good match>"}`,
-        }],
+        max_tokens:150,
+        messages:[{role:"user",content:prompt}],
       }),
     });
     console.log("API response status:", response.status);
