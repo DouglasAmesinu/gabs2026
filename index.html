@@ -281,6 +281,7 @@ const MEETING_DAYS=[
   {label:"Tue 24 Nov 2026 — Day One",date:"20261124"},
   {label:"Wed 25 Nov 2026 — Day Two",date:"20261125"},
 ];
+const VENUES=["Cabana Ground Floor","Cabana 1st Floor","Garden","Ghana2Germany Village","Other (specify)"];
 const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
@@ -1351,7 +1352,11 @@ function showMeeting(p,fromThread=false){
         <div><div class="form-label">Duration</div><select class="form-inp" id="m-dur">${DURATIONS.map(d=>`<option value="${d}"${state.dur===d?" selected":""}>${d} min</option>`).join("")}</select></div>
       </div>
       <div class="form-label">Venue *</div>
-      <input class="form-inp" id="m-loc" placeholder="e.g. Your exhibition stand, Hotel lobby…" value="${esc(state.loc)}"/>
+      <select class="form-inp" id="m-venue-select">
+        <option value="">-- Select venue --</option>
+        ${VENUES.map(v=>`<option value="${esc(v)}"${state.loc===v?" selected":""}>${esc(v)}</option>`).join("")}
+      </select>
+      <input class="form-inp" id="m-loc" placeholder="Specify location…" style="margin-top:8px;display:${state.loc&&!VENUES.slice(0,-1).includes(state.loc)?"block":"none"}" value="${esc(VENUES.slice(0,-1).includes(state.loc)?"":state.loc)}"/>
       <div class="form-label">Note <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
       <textarea class="form-inp" id="m-note" rows="2" style="resize:none">${esc(state.note)}</textarea>
       <div class="btn-row">
@@ -1362,15 +1367,32 @@ function showMeeting(p,fromThread=false){
     const startEl=document.getElementById("m-start");
     const durEl=document.getElementById("m-dur");
     const locEl=document.getElementById("m-loc");
+    const venueSelect=document.getElementById("m-venue-select");
     const sendEl=document.getElementById("m-send");
-    const check=()=>{if(sendEl){const ok=dayEl.value&&startEl.value&&locEl.value.trim();sendEl.disabled=!ok;sendEl.style.opacity=ok?"1":".4";}};
+    const getVenue=()=>venueSelect.value==="Other (specify)"?locEl.value.trim():venueSelect.value;
+    const check=()=>{if(sendEl){const ok=dayEl.value&&startEl.value&&getVenue();sendEl.disabled=!ok;sendEl.style.opacity=ok?"1":".4";}};
     dayEl.onchange=()=>{state.day=dayEl.value;state.start="";render();};
     startEl.onchange=()=>{state.start=startEl.value;state.dur=parseInt(durEl.value)||30;render();};
     durEl.onchange=()=>{state.dur=parseInt(durEl.value)||30;state.start=startEl.value;render();};
+    venueSelect?.addEventListener("change",()=>{
+      const val=venueSelect.value;
+      if(val==="Other (specify)"){
+        if(locEl)locEl.style.display="block";
+        state.loc="";
+      } else {
+        if(locEl)locEl.style.display="none";
+        state.loc=val;
+      }
+      check();
+    });
     locEl.oninput=()=>{state.loc=locEl.value;check();};
     document.getElementById("m-cancel").onclick=()=>ov.remove();
     sendEl?.addEventListener("click",async()=>{
-      const day=dayEl.value,loc=locEl.value.trim(),start=startEl.value,dur=parseInt(durEl.value)||30,note=document.getElementById("m-note").value.trim();
+      const day=dayEl.value,start=startEl.value,dur=parseInt(durEl.value)||30,note=document.getElementById("m-note").value.trim();
+      const venueVal=document.getElementById("m-venue-select")?.value;
+      const loc=venueVal==="Other (specify)"
+        ?document.getElementById("m-loc")?.value.trim()
+        :venueVal;
       if(!day||!start||!loc)return;
       const dayLabel=MEETING_DAYS.find(d=>d.date===day)?.label||day;
       bookSlot(me.id,p.id,day,start,dur);
