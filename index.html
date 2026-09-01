@@ -16,12 +16,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
 const db=getFirestore(app);
 const storage=getStorage(app);
-window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
+window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -1187,6 +1187,27 @@ function bindRespBtns(p){
       if(!window._fb)return;
       const fb=window._fb;
       await fb.updateDoc(fb.doc(fb.db,"threads",tid(me.id,p.id),"messages",btn.dataset.mid),{resp:btn.dataset.resp});
+      const msgData=threadMessages.find(m=>m.id===btn.dataset.mid);
+      if(msgData?.meeting&&btn.dataset.resp==="accepted"){
+        const meeting=msgData.meeting;
+        const slotData={
+          day:meeting.day,
+          start:meeting.start,
+          end:minsToTime(timeToMins(meeting.start)+(meeting.dur||30)),
+          with:p.id,
+          meetingId:btn.dataset.mid
+        };
+        const myRef=fb.doc(fb.db,"participants",me.id);
+        const theirRef=fb.doc(fb.db,"participants",p.id);
+        await fb.updateDoc(myRef,{
+          bookedSlots:fb.arrayUnion?fb.arrayUnion(slotData):[slotData]
+        });
+        await fb.updateDoc(theirRef,{
+          bookedSlots:fb.arrayUnion?fb.arrayUnion(slotData):[slotData]
+        });
+        me.bookedSlots=[...(me.bookedSlots||[]),slotData];
+        localStorage.setItem("gabs_me",JSON.stringify(me));
+      }
     };
   });
   document.querySelectorAll("[data-gcal]").forEach(btn=>{
@@ -1332,11 +1353,40 @@ function renderSponsors(){
 }
 
 // ── Meeting modal ──────────────────────────────────────────────────────────
-function showMeeting(p,fromThread=false){
+async function getParticipantSlots(participantId){
+  if(!window._fb)return[];
+  try{
+    const snap=await window._fb.getDocs(
+      window._fb.query(window._fb.collection(window._fb.db,"participants"),
+      window._fb.where("__name__","==",participantId))
+    );
+    if(!snap.empty){
+      return snap.docs[0].data().bookedSlots||[];
+    }
+  }catch(e){console.warn("Could not fetch participant slots:",e);}
+  return[];
+}
+
+async function showMeeting(p,fromThread=false){
   const ov=makeOv();
-  ov.innerHTML=`<div class="sheet" id="msheet"></div>`;
+  ov.innerHTML=`<div class="sheet" id="msheet"><div style="text-align:center;padding:40px 0;color:var(--muted)">Loading availability…</div></div>`;
   document.body.appendChild(ov);
   let state={day:"",loc:"",start:"",dur:30,note:"",sent:false};
+
+  const theirSlots=await getParticipantSlots(p.id);
+  const myFirestoreSlots=me.bookedSlots||[];
+
+  function isSlotBlocked(day,start,dur){
+    const ns=timeToMins(start);
+    const ne=ns+dur;
+    const allBooked=[...myFirestoreSlots,...theirSlots,...(bookedSlots[me.id+day]||[]).map(s=>({day,start:s.start,end:s.end}))];
+    return allBooked.some(s=>{
+      if(s.day!==day)return false;
+      const bs=timeToMins(s.start);
+      const be=timeToMins(s.end);
+      return ns<be&&ne>bs;
+    });
+  }
 
   function render(){
     if(state.sent){
@@ -1344,7 +1394,7 @@ function showMeeting(p,fromThread=false){
       setTimeout(()=>ov.remove(),1700);return;
     }
     const slots=allSlots();
-    const slotOpts=slots.map(s=>{const blocked=state.day&&(isBlocked(me.id,state.day,s,state.dur)||isBlocked(p.id,state.day,s,state.dur));return`<option value="${esc(s)}"${state.start===s?" selected":""}${blocked?" disabled":""}>${esc(s)}${blocked?" (busy)":""}</option>`;});
+    const slotOpts=slots.map(s=>{const blocked=state.day&&isSlotBlocked(state.day,s,state.dur||30);return`<option value="${esc(s)}"${state.start===s?" selected":""}${blocked?" disabled":""}>${esc(s)}${blocked?" (unavailable)":""}</option>`;});
     document.getElementById("msheet").innerHTML=`
       <div style="display:flex;gap:13px;align-items:center;margin-bottom:18px">
         ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL)}
@@ -1358,6 +1408,7 @@ function showMeeting(p,fromThread=false){
         <div><div class="form-label">Start time *</div><select class="form-inp" id="m-start"${!state.day?" disabled":""}><option value="">--</option>${slotOpts.join("")}</select></div>
         <div><div class="form-label">Duration</div><select class="form-inp" id="m-dur">${DURATIONS.map(d=>`<option value="${d}"${state.dur===d?" selected":""}>${d} min</option>`).join("")}</select></div>
       </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">⚠ Unavailable slots are already booked by you or the other participant</div>
       <div class="form-label">Venue *</div>
       <select class="form-inp" id="m-venue-select">
         <option value="">-- Select venue --</option>
