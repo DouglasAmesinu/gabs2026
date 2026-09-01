@@ -1563,7 +1563,7 @@ function showAI(){
   }
 
   const seenIds=[];
-  const LOADING_MESSAGES=["AI is analysing profiles…","Finding the best connection…","Almost there…"];
+  const LOADING_MESSAGES=["Finding the best connection…","Analysing profiles…","Almost there…"];
   let msgInterval=null;
 
   function stopMsgCycle(){
@@ -1571,7 +1571,7 @@ function showAI(){
   }
   function startMsgCycle(){
     stopMsgCycle();
-    let i=0;
+    let i=1;
     msgInterval=setInterval(()=>{
       const el=document.getElementById("ai-loading-msg");
       if(!el){stopMsgCycle();return;}
@@ -1579,7 +1579,7 @@ function showAI(){
       i++;
     },2000);
   }
-  function showLoading(poolSize){
+  function showLoading(){
     const title=document.getElementById("ai-title");
     if(title)title.textContent="✦ Finding your best match";
     const aiC=document.getElementById("ai-c");
@@ -1587,8 +1587,7 @@ function showAI(){
       aiC.style.textAlign="center";
       aiC.style.padding="40px 0";
       aiC.innerHTML=`<div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div>
-        <div style="color:var(--muted);margin-top:16px;font-size:13px" id="ai-loading-msg">AI is analysing ${poolSize} participant${poolSize!==1?"s":""}…</div>
-        <div style="color:var(--muted);margin-top:8px;font-size:12px">This takes a few seconds</div>`;
+        <div style="color:var(--muted);margin-top:16px;font-size:13px" id="ai-loading-msg">${LOADING_MESSAGES[0]}</div>`;
     }
     startMsgCycle();
   }
@@ -1598,8 +1597,7 @@ function showAI(){
     <div class="sheet-title" id="ai-title">✦ Finding your best match</div>
     <div id="ai-c" style="text-align:center;padding:40px 0">
       <div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div>
-      <div style="color:var(--muted);margin-top:16px;font-size:13px" id="ai-loading-msg">AI is analysing ${fullPool.length} participant${fullPool.length!==1?"s":""}…</div>
-      <div style="color:var(--muted);margin-top:8px;font-size:12px">This takes a few seconds</div>
+      <div style="color:var(--muted);margin-top:16px;font-size:13px" id="ai-loading-msg">${LOADING_MESSAGES[0]}</div>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -1657,7 +1655,7 @@ function showAI(){
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">No more participants to show.</div>`;}
       return;
     }
-    showLoading(pool.length);
+    showLoading();
 
     const timeoutPromise=new Promise(resolve=>{
       setTimeout(()=>resolve({timeout:true}),10000);
