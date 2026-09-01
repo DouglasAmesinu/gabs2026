@@ -1472,36 +1472,43 @@ function generateReason(match){
   const myInterests=me?.interests||[];
   const mySector=me?.sector||"";
 
-  // Cross border pairing
-  if((myCountry==="Germany"&&match.country!=="Germany")||
-     (myCountry!=="Germany"&&match.country==="Germany")){
-    reasons.push(`${match.name} brings a ${match.country} perspective that complements your ${myCountry} base — exactly the kind of cross-border connection GABS is designed to create.`);
+  // Cross border
+  if((myCountry==="Germany"&&match.country!=="Germany")||(myCountry!=="Germany"&&match.country==="Germany")){
+    reasons.push(`${match.name} is based in ${match.country} and brings exactly the kind of cross-border perspective that makes GABS worth attending. This is the type of introduction that rarely happens by chance.`);
   }
 
   // Shared sector
   if(match.sector&&match.sector===mySector){
-    reasons.push(`You share a focus in ${match.sector}, creating immediate common ground for a substantive conversation.`);
+    reasons.push(`You are both working in ${match.sector}, which gives you immediate common ground and makes for a much more focused conversation from the start.`);
   }
 
   // Overlapping interests
   const overlap=myInterests.filter(i=>(match.interests||[]).includes(i));
-  if(overlap.length>0){
-    reasons.push(`You are both looking for ${overlap.slice(0,2).join(" and ")}, which signals strong alignment in what you each hope to achieve at this summit.`);
+  if(overlap.length===1){
+    reasons.push(`You are both here looking for ${overlap[0]}, which suggests your goals for this summit are closely aligned.`);
+  } else if(overlap.length>1){
+    reasons.push(`You share an interest in ${overlap.slice(0,-1).join(", ")} and ${overlap[overlap.length-1]}, which gives you more than enough to talk about before you even sit down.`);
   }
 
   // Participant type complementarity
-  if(match.ptype==="Investor"||match.ptype==="Startup"||match.ptype==="Exhibitor"){
-    reasons.push(`As a${match.ptype==="Exhibitor"?"n":""} ${match.ptype}, ${match.name} represents a direct opportunity for the kind of introduction that can move beyond the summit itself.`);
+  if(match.ptype==="Investor"&&myInterests.includes("Funding & Finance")){
+    reasons.push(`${match.name.split(" ")[0]} is attending as an investor, which lines up directly with what you are looking for at this summit.`);
+  }
+  if(match.ptype==="Startup"&&myInterests.includes("Investment Opportunities")){
+    reasons.push(`${match.name.split(" ")[0]} is here representing a startup, which could be exactly the kind of early-stage opportunity you are looking for.`);
+  }
+  if(match.ptype==="Speaker"){
+    reasons.push(`${match.name.split(" ")[0]} is speaking at the summit, so this is a good chance to connect before the sessions get busy.`);
   }
 
   // Bio context
   if(match.bio){
-    reasons.push(`Their own words: "${match.bio.slice(0,100)}${match.bio.length>100?"…":""}"`);
+    reasons.push(`In their own words: "${match.bio.slice(0,120)}${match.bio.length>120?"...":""}"`);
   }
 
   // Fallback
   if(reasons.length===0){
-    reasons.push(`${match.name} from ${match.company} in ${match.country} is a strong match based on their profile and summit objectives.`);
+    reasons.push(`Based on their profile and what they are looking to achieve here, ${match.name} looks like a genuinely useful connection for you at this summit.`);
   }
 
   return reasons.slice(0,2).join(" ");
@@ -1550,7 +1557,7 @@ function showAI(){
         ${match.ptype?`<span class="chip" style="background:#EDE9FE;color:#5B21B6">${esc(match.ptype)}</span>`:""}
       </div>
       ${reason?`<div style="background:#FFFBEB;border:1.5px solid ${GOLD};border-radius:12px;padding:14px 15px;font-size:13px;color:var(--text);line-height:1.7;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;color:${GOLD};letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">✦ Why this match?</div>
+        <div style="font-size:10px;font-weight:700;color:${GOLD};letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">✦ Why meet ${esc(match.name.split(" ")[0])}?</div>
         ${esc(reason)}
       </div>`:""}
       ${match.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px;font-style:italic">${esc(match.bio)}</div>`:""}
