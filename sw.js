@@ -4,7 +4,7 @@ self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promis
 self.addEventListener('fetch',e=>{
   const url=e.request.url;
   if(!url.startsWith('http'))return;
-  if(url.includes('firestore')||url.includes('firebase')||url.includes('gstatic')||url.includes('googleapis')||url.includes('cdnjs')||url.includes('fonts.')||url.includes('emailjs')){
+  if(url.includes('firestore')||url.includes('firebase')||url.includes('gstatic')||url.includes('googleapis')||url.includes('cdnjs')||url.includes('fonts.')||url.includes('emailjs')||url.includes('cloudfunctions.net')){
     e.respondWith(fetch(e.request).catch(()=>new Response('',{status:503})));return;
   }
   if(e.request.mode==='navigate'||url.endsWith('index.html')||url.endsWith('gabsconnect.com/')||url.endsWith('gabsconnect.com')){
