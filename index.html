@@ -855,6 +855,15 @@ function pCardHTML(p){
   </div>`;
 }
 
+function discSubText(){
+  const hasFilters=discSectors.length>0||discCountry||discSearch;
+  const filteredCount=filtered().length;
+  const totalCount=participants.length;
+  return hasFilters
+    ?`${filteredCount} participant${filteredCount!==1?"s":""} matching`
+    :`${totalCount} participant${totalCount!==1?"s":""} attending`;
+}
+
 function renderDiscover(){
   const list=filtered();
   const secs=[...new Set(participants.map(p=>p.sector).filter(Boolean))].sort();
@@ -868,7 +877,7 @@ function renderDiscover(){
     </div>
     <div class="page-hdr" style="padding-top:14px">
       <div class="page-title">Discover</div>
-      <div class="page-sub">${participants.length} participant${participants.length!==1?"s":""} attending</div>
+      <div class="page-sub">${discSubText()}</div>
     </div>
     <div class="search-wrap">
       <div class="search-box">
@@ -922,8 +931,7 @@ function bindDiscover(){
         const match=!discSearch||p.name.toLowerCase().includes(discSearch)||p.company?.toLowerCase().includes(discSearch)||p.sector?.toLowerCase().includes(discSearch);
         card.style.display=match?"":"none";
       });
-      const vis=document.querySelectorAll(".p-card:not([style*='none'])").length;
-      document.querySelector(".page-sub").textContent=`${vis} participant${vis!==1?"s":""} attending`;
+      document.querySelector(".page-sub").textContent=discSubText();
     };
   }
   bindCards();
@@ -937,7 +945,7 @@ function refreshDisc(){
     ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`
     :list.map(p=>pCardHTML(p)).join("");
   const sub=document.querySelector(".page-sub");
-  if(sub)sub.textContent=`${list.length} participant${list.length!==1?"s":""} attending`;
+  if(sub)sub.textContent=discSubText();
   bindCards();
 }
 
