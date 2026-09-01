@@ -1558,16 +1558,53 @@ function showAI(){
   }
 
   const seenIds=[];
+  const LOADING_MESSAGES=["AI is analysing profiles…","Finding the best connection…","Almost there…"];
+  let msgInterval=null;
+
+  function stopMsgCycle(){
+    if(msgInterval){clearInterval(msgInterval);msgInterval=null;}
+  }
+  function startMsgCycle(){
+    stopMsgCycle();
+    let i=0;
+    msgInterval=setInterval(()=>{
+      const el=document.getElementById("ai-loading-msg");
+      if(!el){stopMsgCycle();return;}
+      el.textContent=LOADING_MESSAGES[i%LOADING_MESSAGES.length];
+      i++;
+    },2000);
+  }
+  function showLoading(poolSize){
+    const title=document.getElementById("ai-title");
+    if(title)title.textContent="✦ Finding your best match";
+    const aiC=document.getElementById("ai-c");
+    if(aiC){
+      aiC.style.textAlign="center";
+      aiC.style.padding="40px 0";
+      aiC.innerHTML=`<div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div>
+        <div style="color:var(--muted);margin-top:16px;font-size:13px" id="ai-loading-msg">AI is analysing ${poolSize} participant${poolSize!==1?"s":""}…</div>
+        <div style="color:var(--muted);margin-top:8px;font-size:12px">This takes a few seconds</div>`;
+    }
+    startMsgCycle();
+  }
 
   const ov=makeOv(true);
   ov.innerHTML=`<div class="sheet pop" style="max-width:420px">
-    <div class="sheet-title">✦ Your Best Match</div>
-    <div id="ai-c" style="text-align:center;padding:40px 0"></div>
+    <div class="sheet-title" id="ai-title">✦ Finding your best match</div>
+    <div id="ai-c" style="text-align:center;padding:40px 0">
+      <div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div>
+      <div style="color:var(--muted);margin-top:16px;font-size:13px" id="ai-loading-msg">AI is analysing ${fullPool.length} participant${fullPool.length!==1?"s":""}…</div>
+      <div style="color:var(--muted);margin-top:8px;font-size:12px">This takes a few seconds</div>
+    </div>
   </div>`;
   document.body.appendChild(ov);
-  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+  ov.addEventListener("click",e=>{if(e.target===ov){stopMsgCycle();ov.remove();}});
+  startMsgCycle();
 
   function renderMatch(match){
+    stopMsgCycle();
+    const title=document.getElementById("ai-title");
+    if(title)title.textContent="✦ Your Best Match";
     const reason=match._aiReason||generateReason(match);
     const pool=fullPool.filter(p=>!seenIds.includes(p.id));
     const hasMore=pool.length>0;
@@ -1599,7 +1636,7 @@ function showAI(){
         ${hasMore?`<button class="btn-outline" id="ai-next" style="font-size:13px">Show another match →</button>`:""}
         <button class="btn-navy" id="ai-meet" style="color:#fff">Propose Meeting →</button>
       </div>`;
-    document.getElementById("ai-cancel").onclick=()=>ov.remove();
+    document.getElementById("ai-cancel").onclick=()=>{stopMsgCycle();ov.remove();};
     document.getElementById("ai-meet").onclick=()=>{ov.remove();showMeeting(match);};
     document.getElementById("ai-next")?.addEventListener("click",()=>{
       seenIds.push(match.id);
@@ -1608,20 +1645,31 @@ function showAI(){
   }
 
   async function doLoad(){
+    stopMsgCycle();
     const pool=fullPool.filter(p=>!seenIds.includes(p.id));
     if(!pool.length){
       const aiC=document.getElementById("ai-c");
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">No more participants to show.</div>`;}
       return;
     }
+    showLoading(pool.length);
+
+    const timeoutPromise=new Promise(resolve=>{
+      setTimeout(()=>resolve({timeout:true}),10000);
+    });
+    const result=await Promise.race([claudeMatch(pool),timeoutPromise]);
+    if(result&&result.timeout){
+      console.log("AI match timed out after 10s, falling back to local formula");
+    }
+
     let match=null;
-    const aiResult=await claudeMatch(pool);
-    if(aiResult&&aiResult.matchId){
-      match=pool.find(p=>p.id===aiResult.matchId)||null;
-      if(match)match._aiReason=aiResult.reason;
+    if(result&&!result.timeout&&result.matchId){
+      match=pool.find(p=>p.id===result.matchId)||null;
+      if(match)match._aiReason=result.reason;
     }
     if(!match)match=bestMatch(pool);
     if(!match){
+      stopMsgCycle();
       const aiC=document.getElementById("ai-c");
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">Not enough participants yet.</div>`;}
       return;
