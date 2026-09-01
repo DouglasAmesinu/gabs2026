@@ -285,6 +285,7 @@ const VENUES=["Cabana Ground Floor","Cabana 1st Floor","Garden","Ghana2Germany V
 const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
+const CLAUDE_API_KEY=""; // TODO: set your Anthropic API key here
 const SALUTATIONS=["Mr","Mrs","Ms","Dr","Prof","Prof Dr","Eng","Ambassador","Hon","Rev","Other"];
 const PARTICIPANT_TYPES=["Participant","Delegate","Exhibitor","Startup","Speaker","Organiser","Media","Other"];
 const SECTORS=["Agriculture","Consulting","Construction","Design & Creative","Energy","Finance","Government & Politics","Healthcare","Human Resources","Logistics","Manufacturing","Media","Mining","Real Estate","Technology","Trade","Other"];
@@ -1514,6 +1515,46 @@ function generateReason(match){
   return reasons.slice(0,2).join(" ");
 }
 
+async function claudeMatch(pool){
+  console.log("Calling Claude API with", pool.length, "participants");
+  try{
+    const response=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key":CLAUDE_API_KEY,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true",
+      },
+      body:JSON.stringify({
+        model:"claude-sonnet-5",
+        max_tokens:400,
+        messages:[{
+          role:"user",
+          content:`You are matching attendees at the German-African Business Summit. Given the current user's profile and a pool of candidate participants, pick the single best match and explain why in 2 sentences.
+
+Current user: ${JSON.stringify({name:me?.name,title:me?.title,company:me?.company,sector:me?.sector,country:me?.country,interests:me?.interests,ptype:me?.ptype})}
+
+Candidates: ${JSON.stringify(pool.map(p=>({id:p.id,name:p.name,title:p.title,company:p.company,sector:p.sector,country:p.country,interests:p.interests,ptype:p.ptype})))}
+
+Respond with ONLY valid JSON in this exact shape, no other text: {"matchId":"<id of the best candidate>","reason":"<why this is a good match>"}`,
+        }],
+      }),
+    });
+    console.log("API response status:", response.status);
+    const data=await response.json();
+    console.log("API response data:", JSON.stringify(data).slice(0,500));
+    const text=data.content[0].text;
+    console.log("Raw text from API:", text);
+    const result=JSON.parse(text);
+    console.log("Parsed result:", result);
+    return result;
+  }catch(e){
+    console.error("SHOWAI FAILED AT:", e.message, e);
+    return null;
+  }
+}
+
 function showAI(){
   const fullPool=participants.filter(p=>p.id!==me?.id&&p.ptype!=="Organiser");
   if(!fullPool.length){
@@ -1535,7 +1576,7 @@ function showAI(){
   ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
 
   function renderMatch(match){
-    const reason=generateReason(match);
+    const reason=match._aiReason||generateReason(match);
     const pool=fullPool.filter(p=>!seenIds.includes(p.id));
     const hasMore=pool.length>0;
     const aiC=document.getElementById("ai-c");
@@ -1574,14 +1615,22 @@ function showAI(){
     });
   }
 
-  function doLoad(){
+  async function doLoad(){
     const pool=fullPool.filter(p=>!seenIds.includes(p.id));
     if(!pool.length){
       const aiC=document.getElementById("ai-c");
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">No more participants to show.</div>`;}
       return;
     }
-    const match=bestMatch(pool);
+    let match=null;
+    if(CLAUDE_API_KEY){
+      const aiResult=await claudeMatch(pool);
+      if(aiResult&&aiResult.matchId){
+        match=pool.find(p=>p.id===aiResult.matchId)||null;
+        if(match)match._aiReason=aiResult.reason;
+      }
+    }
+    if(!match)match=bestMatch(pool);
     if(!match){
       const aiC=document.getElementById("ai-c");
       if(aiC){aiC.style.textAlign="center";aiC.style.padding="40px 0";aiC.innerHTML=`<div style="color:var(--muted);font-size:14px">Not enough participants yet.</div>`;}
