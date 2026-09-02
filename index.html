@@ -640,15 +640,13 @@ function showEditProfile(){
       </div>
       <input type="file" id="ep-photo-input" accept="image/*" style="display:none"/>
       <div id="ep-photo-status" style="font-size:12px;color:var(--muted)">Tap photo to change</div>
+      ${me.photoURL?`<div id="ep-remove-photo" style="font-size:12px;color:var(--red);cursor:pointer;text-align:center;margin-top:4px">Remove photo</div>`:""}
     </div>
-    <div style="background:#F8FAFC;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;align-items:center">
-      ${avHTML(me.av||initials(me.name||"?"),44,me.photoURL)}
-      <div>
-        <div style="font-weight:700;color:var(--text);font-size:15px">${esc(me.name)}</div>
-        <div style="color:var(--muted);font-size:12px">${esc(me.company||"")}</div>
-        <div style="color:var(--steel);font-size:11px;margin-top:3px">Name and company are fixed to your ticket</div>
-      </div>
-    </div>
+    <div class="form-label">Full Name</div>
+    <input class="form-inp" id="ep-name" value="${esc(me.name||"")}" placeholder="Your full name"/>
+    <div class="form-label">Company</div>
+    <input class="form-inp" id="ep-company" value="${esc(me.company||"")}" placeholder="Your company name"/>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Changes will be visible to all participants immediately</div>
     <div class="form-label">Salutation *</div>
     <select class="form-inp" id="ep-salutation">
       <option value="">-- Select --</option>
@@ -676,7 +674,7 @@ function showEditProfile(){
         </div>
       </div>
     </div>
-    <div class="form-label">Email *</div>
+    <div class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
     <input class="form-inp" id="ep-email" type="email" value="${esc(me.email||"")}" placeholder="you@company.com"/>
     <div class="form-label">LinkedIn <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
     <input class="form-inp" id="ep-linkedin" value="${esc(me.linkedin||"")}" placeholder="linkedin.com/in/yourname"/>
@@ -745,6 +743,25 @@ function showEditProfile(){
     }
   });
 
+  document.getElementById("ep-remove-photo")?.addEventListener("click",async()=>{
+    if(!confirm("Remove your profile photo?"))return;
+    try{
+      if(window._fb&&me.id){
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{photoURL:""});
+      }
+      me.photoURL="";
+      localStorage.setItem("gabs_me",JSON.stringify(me));
+      const preview=document.getElementById("ep-avatar-preview");
+      if(preview)preview.innerHTML=`<span style="color:#fff;font-size:28px;font-weight:700">${esc(initials(me.name||"?"))}</span><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
+      const removeBtn=document.getElementById("ep-remove-photo");
+      if(removeBtn)removeBtn.remove();
+      const status=document.getElementById("ep-photo-status");
+      if(status)status.textContent="Photo removed";
+    }catch(err){
+      console.error("Remove photo error:",err);
+    }
+  });
+
   document.getElementById("ep-logout").onclick=()=>{
     ov.remove();
     me=null;localStorage.removeItem("gabs_me");
@@ -768,20 +785,32 @@ function showEditProfile(){
     const linkedin=document.getElementById("ep-linkedin").value.trim();
     const interests=[...document.querySelectorAll("#ep-interests .interest-chip.sel")].map(c=>c.dataset.interest);
     const bio=document.getElementById("ep-bio")?.value.trim()||"";
+    const newName=document.getElementById("ep-name")?.value.trim()||me.name;
+    const newCompany=document.getElementById("ep-company")?.value.trim()||me.company;
     const fb=document.getElementById("ep-feedback");
     const btn=document.getElementById("ep-save");
 
     if(!salutation){if(fb)fb.innerHTML=`<div class="err-msg">Please select a salutation.</div>`;return;}
     if(!ptype){if(fb)fb.innerHTML=`<div class="err-msg">Please select a participant type.</div>`;return;}
-    if(!email){if(fb)fb.innerHTML=`<div class="err-msg">Please enter your email address.</div>`;return;}
-    if(!email.includes("@")){if(fb)fb.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
+    if(email&&!email.includes("@")){if(fb)fb.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
+
+    const nameChanged=newName!==me.name;
+    const companyChanged=newCompany!==me.company;
+    if(nameChanged||companyChanged){
+      const changes=[];
+      if(nameChanged)changes.push(`Name: "${me.name}" → "${newName}"`);
+      if(companyChanged)changes.push(`Company: "${me.company}" → "${newCompany}"`);
+      const confirmed=confirm(`You are making the following changes:\n\n${changes.join("\n")}\n\nThis will update how you appear to all other participants. Confirm?`);
+      if(!confirmed)return;
+    }
+
     if(btn){btn.disabled=true;btn.textContent="Saving…";}
 
     try{
       if(window._fb&&me.id){
-        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{salutation,ptype,website,title,sector,country,email,linkedin,interests,bio});
+        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{salutation,ptype,website,name:newName,company:newCompany,title,sector,country,email,linkedin,interests,bio,av:initials(newName)});
       }
-      me={...me,salutation,ptype,website,title,sector,country,email,linkedin,interests,bio};
+      me={...me,salutation,ptype,website,name:newName,company:newCompany,title,sector,country,email,linkedin,interests,bio,av:initials(newName)};
       localStorage.setItem("gabs_me",JSON.stringify(me));
       if(fb)fb.innerHTML=`<div class="ok-msg">✓ Profile updated</div>`;
       if(btn){btn.disabled=false;btn.textContent="Save changes";}
