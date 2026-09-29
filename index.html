@@ -320,28 +320,28 @@ const SCHEDULE=[
   ]},
   {day:"TUE 24 NOV 2026 · DAY ONE",dayShort:"Day 1",date:"Tue 24 Nov",sessions:[
     {time:"09:00",title:"Opening by VIP Speakers",loc:"Main Hall",type:"plenary"},
-    {time:"10:00",title:"Opening Panel: The future of African German Business Relations in a changing world: More Opportunities than Challenges!?",loc:"Main Hall",type:"panel"},
+    {time:"10:00",title:"The future of African German Business Relations in a changing world: More Opportunities than Challenges",loc:"Main Hall",type:"panel"},
     {time:"11:00",title:"VIP Speaker: Business Key Note",loc:"Main Hall",type:"plenary"},
     {time:"11:20",title:"Fireside Chat: How we can change the world — The perspective of young entrepreneurs from Africa and Germany",loc:"Main Hall",type:"fireside"},
-    {time:"12:00",title:"Lunch Break — Visit to the Startup Villages",loc:"Asana Bar & Restaurant",type:"lunch"},
-    {time:"14:00",title:"Panel: Africa in the World of Tomorrow – How is the continent preparing technologically for the future?",loc:"Main Hall",type:"panel"},
-    {time:"15:15",title:"Panel 2: Natural Resources and Mining",loc:"Main Hall",type:"panel"},
-    {time:"16:30",title:"Fireside Chat with VIP Speaker",loc:"Main Hall",type:"fireside"},
-    {time:"17:00–18:00",title:"Transfer to German Ambassador Residence (by invitation only)",loc:"German Ambassador Residence",type:"logistics"},
+    {time:"12:00",title:"Lunch Break for all participants / Visit to the Startup Villages",loc:"Asana Bar & Restaurant",type:"lunch"},
+    {time:"14:00",title:"Africa in the World of Tomorrow — How is the continent preparing technologically for the future? Rapid digitalisation, AI and automation are reshaping global industry and power structures.",loc:"Main Hall",type:"panel"},
+    {time:"15:15",title:"How Can Africa's Resources Power the Next Era of Industrial Growth?",loc:"Main Hall",type:"panel"},
+    {time:"16:30",title:"Fireside Chat with VIP speaker",loc:"Main Hall",type:"fireside"},
+    {time:"17:00–18:00",title:"Transfer to the residence of the German Ambassador for a dinner reception (by invitation only)",loc:"German Ambassador Residence",type:"logistics"},
     {time:"18:30",title:"Dinner Reception hosted by the German Ambassador",loc:"German Ambassador Residence",type:"social"},
     {time:"21:30",title:"Transfer back to Hotels",loc:"Various Hotels",type:"logistics"},
   ]},
   {day:"WED 25 NOV 2026 · DAY TWO",dayShort:"Day 2",date:"Wed 25 Nov",sessions:[
-    {time:"08:00",title:"Breakfast Meeting with German Ambassadors in Africa and Investment Promotion Agencies",loc:"Garden / Asana Bar",type:"breakfast"},
-    {time:"09:30",title:"Panel 3: Financing your African Business",loc:"Main Hall",type:"panel"},
-    {time:"10:45",title:"Panel 4: Regulations and Legal Context",loc:"Main Hall",type:"panel"},
-    {time:"12:00",title:"Fireside Chat with VIP Speaker: AfCFTA — From Borders to Business: How AfCFTA shapes African Trade",loc:"Main Hall",type:"fireside"},
-    {time:"12:30",title:"Lunch Break",loc:"Asana Bar & Restaurant & Board Room",type:"lunch"},
-    {time:"14:00",title:"Panel 5: Automotive",loc:"Main Hall",type:"panel"},
-    {time:"15:15",title:"Closing Panel: Made in Africa - Made by Germany: German Investment on the Rise",loc:"Main Hall",type:"panel"},
+    {time:"08:00",title:"Breakfast Meeting with German Ambassadors in Africa and Investment Promotion Agencies from African countries",loc:"Garden / Asana Bar",type:"breakfast"},
+    {time:"09:30",title:"Trade Finance, Risk Mitigation and Investment: What Will it Take to Finance and Scale Trade, Trade and Growth Between Germany and Africa?",loc:"Main Hall",type:"panel"},
+    {time:"10:45",title:"New African-German Partnerships: Are the Rules Fit for Purpose?",loc:"Main Hall",type:"panel"},
+    {time:"12:00",title:"From Borders to Business: How AfCFTA shapes African Trade — Fireside Chat with VIP Speaker: AfCFTA",loc:"Main Hall",type:"fireside"},
+    {time:"12:30",title:"Lunch Break",loc:"Asana Bar & Restaurant & separate Board Room",type:"lunch"},
+    {time:"14:00",title:"German-African Automotive Panel: Tackling Growth Barriers, Creating Value",loc:"Main Hall",type:"panel"},
+    {time:"15:15",title:"Made in Africa — Made by Germany: German Investment on the Rise",loc:"Main Hall",type:"panel"},
     {time:"16:30",title:"Closing Remarks and Farewell Drinks",loc:"Main Hall",type:"closing"},
     {time:"17:30",title:"Buses leaving for Moevenpick Hotel",loc:"Moevenpick Hotel",type:"logistics"},
-    {time:"19:00",title:"educataGhana Kickoff (see separate program)",loc:"Moevenpick Hotel / Piazza",type:"social"},
+    {time:"19:00",title:"educataGhana Kickoff (see separate programme)",loc:"Moevenpick Hotel / Piazza",type:"social"},
   ]},
 ];
 
@@ -521,6 +521,15 @@ function generateGoogleCalURL(meeting,fromName,toName){
   const endMins=h*60+m+(meeting.dur||30);
   const endStr=`${date}T${pad(Math.floor(endMins/60))}${pad(endMins%60)}00`;
   return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(`B2B Meeting at GABS 2026\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`)}&location=${encodeURIComponent(meeting.loc||"GABS 2026 Venue, Accra")}`;
+}
+function generateOutlookCalURL(meeting,fromName,toName){
+  const date=meeting.day||"20261124";
+  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const pad=n=>String(n).padStart(2,"0");
+  const startStr=`${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}T${pad(h)}:${pad(m)}:00`;
+  const endMins=h*60+m+(meeting.dur||30);
+  const endStr=`${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}T${pad(Math.floor(endMins/60))}:${pad(endMins%60)}:00`;
+  return`https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`)}&startdt=${encodeURIComponent(startStr)}&enddt=${encodeURIComponent(endStr)}&body=${encodeURIComponent(`B2B Meeting at GABS 2026\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`)}&location=${encodeURIComponent(meeting.loc||"GABS 2026 Venue, Accra")}`;
 }
 function generateICS(meeting,fromName,toName){
   const base=meeting.day||"20261124";
@@ -1168,6 +1177,7 @@ function renderMsgs(){
         const r=rMap[m.resp]||{txt:m.resp,bg:"#F3F4F6",c:"var(--muted)"};
         const calBtns=m.resp==="accepted"?`<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
           <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-gcal="${m.id}">📅 Add to Calendar</button>
+          <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE" data-outlook="${m.id}">📧 Outlook</button>
           <button class="meet-btn" style="background:#F3F4F6;color:var(--text);border-color:var(--border)" data-ics="${m.id}">📥 Download .ics</button>
         </div>`:"";
         respHTML=`<div class="meet-status" style="background:${r.bg};color:${r.c}">${r.txt}</div>${calBtns}`;
@@ -1253,6 +1263,12 @@ function bindRespBtns(p){
       if(msg?.meeting)window.open(generateGoogleCalURL(msg.meeting,me.name,p.name),"_blank");
     };
   });
+  document.querySelectorAll("[data-outlook]").forEach(btn=>{
+    btn.onclick=()=>{
+      const msg=threadMessages.find(m=>m.id===btn.dataset.outlook);
+      if(msg?.meeting)window.open(generateOutlookCalURL(msg.meeting,me.name,p.name),"_blank");
+    };
+  });
   document.querySelectorAll("[data-ics]").forEach(btn=>{
     btn.onclick=()=>{
       const msg=threadMessages.find(m=>m.id===btn.dataset.ics);
@@ -1307,8 +1323,9 @@ function renderSchedule(){
             <span>🕐 ${esc(m.meeting.start||"")} · ${esc(String(m.meeting.dur||30))} min</span>
             <span>📍 ${esc(m.meeting.loc||"")}</span>
           </div>
-          ${isConfirmed?`<div style="display:flex;gap:8px;margin-top:10px">
+          ${isConfirmed?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateGoogleCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">📅 Add to Calendar</button>
+            <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateOutlookCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">📧 Outlook</button>
           </div>`:""}
         </div>`;
       }).join("")}
@@ -1376,11 +1393,35 @@ function renderSponsors(){
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALEAAABQCAYAAABWMZTiAAAg80lEQVR42u2daXBc15Xff/e+1zsauwgQCwGCFAmQAgFIEClqM8mSbCrjjC1Ljh3FUcYep5xx/GHKrngcT2pSU5NJVSpLzbhclXHZmbg8LtuyLM+4JIuyZMuyZUmRRErcBZAARIAAsTeWRm9vuTcfXnezGwS4gIspqQ8L7O633Pf69f+e+z/LPVekba0pSUnew2Ku5SQBoL03pR5QklUxkhV9kf36WoJYLruovsTNiQIAi5XufKU7vJL9V3Pule6/nm3fyO91Mz2zFW5NcH2Unrn8Hla6iNTeDSgBCtDS+0ODqUDoFb5UST64KliDK0FJDztkMSKyWFLXeAQXOU6ssyAUemXqIKR3cRdwtMJ1FbpEJ0qyisj8q8CQElMIjOwQr7J4E9cIPCtz4rzu1yAFrgTXdck4DrgKQwqk8P7ExTRwiU588OhEjjMIjUagNDiWTVorDMPE5/NhGgLt5iipRuirG8bFcu9Evj2tEULgaEUyk0FrTSjgJ2iamKLEHkpy+eJqsJUi4zhkXAepBZFQEJH1DOQ08lqNvTyIZYFBp4X3l3Ec7IxFJOAj6PcVeyZQee/E9SLsJXkPU2MtitS1yjoDlNakbYeU5RAM+PGbBrqAM68FxOaKDEBAxrZwHIfySIiA9NCq8bSzFufNQInh9SZRohMlOnFeoy1nCDKrcSWCiN+HaRgspTJoZRLw+dB67aO7SNta5zSpKzyVnLFslGNTGQljoJY54EpSkqsTjy2DpWA+kSIUDGAaBkKdZwRrMSI9rSrAVQrHdoiGw0g0uhTQK8m1phqA1hpDCsrDIdIZC611UezhikHs8WBPmWfSGSJBP4bgqlR8SUpyUSALgQB8hiDoM8ikrTVHgGXhu4xlYwAB0/A2CeE5iEtSkuugj2VWK4f9frRycZV7cZftRTVxNhLnOJ7FKIvQXdLFJbkehOI8AKUAv99H2nbRawUxgKs9B5vfMPCcI6r0rEty3U28nPhMA8d1104nBOA6LoZpeFy4BOCS3DBRoDWmIZECHKWveOyXuf9crRCGzDYr0Vrm49wlKcl1oxVaItAYAFKitLpiBpunEzobZi6F3kry+xIpJXoNAJQr0+2SlOTGc2OxRrduCcQluSkNvTWBWJSQXJLfJzfOv14lnShJSd6TXLr0CEpys+njKxXzqq+sr8+3WTUrMJf0vHzkWUtaoSh4FcWniQs+lORaiSKbP6yzczU5P//OEdcgn/iGdZ+L9gu9Khq1EOdDk+Iq7qugDVlwsCiY6+0lRYkShq+zKSeuEkrmzfjFRNGXK56HLZBXPSfrohctmC+jsgAugfjmlqsG8cXzjdXa6LjKaV0PXUrprEbMziopmCarC2jB8gyoy92X08DnKYTwopdCFKuKkrw/QSwumjtnrK1Ro3iwMeTvx/6U2sl+P6OElPcbiHMh6ozlMDgycc1tO6EMNAJtCDK2yy+e/zXziymkGQStvL98Jyq0v8RFuPWlmJlGYyKExM0k+cynHqKrvRntKkQJw+9fTWw7LoNjM1xu3pG+TLtLaIFCotBIX5DfvtXHSy+/SSBUgVKrVd3IQrhgyqwu5NJCFFkS52mQV9RDaokrDIQhSC9NsWt3N13tzSjtYpQ8ke9vOmH6/KgrII0ye6jSsFqERqAwAK0EgaDJ3bt7Of7OIPjKkcpGCHCFH2FItHZB2Rhao5EoI6s5bRPhKIThooSBa4QxHAufsrF9ARQa03ZRUqKEwJQShQItCElNwOfL3oxEa53/y3WG3KtSCimlNwu8wD7IfV6+rXDfaiPc8vZX27f8GkKI/LbCfcu3F9oyhecWbhNCeAk5Be3LLK0rPE4WUD3XdYvuL3e+EOLmBrHW6pKWj85aUqZpEF9c4PjRo+y+534c10EKcQGMdYFGdi2btuZmopEIC0saIUzcbM5zZnEWhMYfLgdtILUPJ5Mgk4kTCtRgyiBaWLhOmqVMkkggiCk1iYVZpOnHMMuyxWosEkspHMMlEilHKReNk+9QQhhFP4TjOGit8fl8GIaB67pF4JBS4rquNxnSMIpAkgN9DhyFwMi9z7VXCIBcOwC2bV/QcXL7XddFSonjOBiGkb+X3LGF184BdTX7xnEcpJT5NnLtKKUwTTP/vvD+C9so7EzXE8g3bJzU2cTn+NwsycV5kok4hmFclLcKoXFdh4qKctY31GPbaaTpx8Uk4tN8/pG9PPaH92NIgRZ+HNtlc+Mt/PvHP05TXSVppckol5b1FXzpM/vZ0FCN5Tp8+mN7ePCeHmztolSaSn+Kxx/Zw+cf/wRlZQEcbWUr4YHSnnY5deo0Tz75JIODg5imV45pbm6O/v7+PFiklBiGB3jDMDBNk0wmg2VZ9PX1oZTK7y88NgfswcFB4vF4vr3cqxCCV155haeffpr5+fl858kdYxgGiUQiD2YhBKZpopTi5MmTRccWXltKyfT0NAMDA4yNjTE8PMzk5CQHDx5kenoa0zSRUubvKXeOaZqMjo4yPT1d9L211jz//POcPHkS27ZvCIBvqJ9YCoF2bFLxBUxc4gsxotEoGUcj5OpfUmmXYMhPc1MDR48PIQxBammJD+/u5r/95z/BAU6N/iVvHRvBtZPctauH//IfHmdq7pucfO4gAotdO+/gv371cf7tn/0dZ8en+as//xP6+ob51e/+E0Gfw19+/Ys8sv8+/vdPf008HkdKP0p7j0Y7Bpjwy1++gGVZnDhxgk9/+tNMT0+TTCYZHR1FKcXi4iINDQ2cOHGCHTt2MDIyQm1tLc888wzBYJDt27cTDod555136O3t5fTp01iWxT333INhGBw5coQf/OAHPPbYY8zPz9Pc3My5c+dobW2lsbGRF154gZqaGkZHR9mzZw+zs7M0NzcjpSSdTvPd736XvXv3Ul5eTktLC0NDQywuLvLcc8/x6KOPsm3bNt566y3a2to4d+4cWmvuvfde4vE4r776KtPT0ywsLNDV1UUymSQcDjM8PMzQ0BBHjhzhk5/8JEIIamtr6evrY3h4mLGxMT73uc+xuLhIOp1mYmKCH/3oR9x55508/fTTfPnLX853nPcwiM87WQWgXYezw4McOfQm9U3NNDY1IYUXVEALhNCIXGkNLTyHsfZ8uI31dUgJjrLxywz79+3EcWxM08eD93dz6O0+tNBoHJRSCCeDsjJIU+HaCqUU2rEAF9dKolNxdHqGr3/tyzyy/z5++PNX+Ou//ib4qvFqfxaPEEop9u7dyy9/+Uu+9a1vUVVVxaZNm4jFYnz729+mtbWVpaUllpaWmJycZG5ujlQqhRCCqqoq+vv7efXVVwmHwxw+fJhYLEYymWTr1q34fD6eeOIJamtreeqpp0gmk+zYsYPXX3+dr33tayiliEajPPTQQ3zjG9+gr6+PLVu2cPToUSoqKojFYkQiERKJBC+++CJbt25lYmKCLVu2YNs2zz//PC+99BKxWIyuri4OHjyIlJJNmzaxceNGvvOd7xAOhykrK+Pw4cP09PTw8ssvMzIyQldXF+FwmIMHD7K4uIhlWWzevJlUKsXo6ChPPfUUjY2NvPTSS3R2dtLZ2UldXR2jo6MX2A3vKTqhtfZogvb+ctwwvjjP1LkxhgdPMTczSTqV8IIQOhvAUJ4xpwsicl79Lpd162oJ+gwsK0VjbRn77u3hxz97noGRMf75vruojvpwHYHQAaSUhAyDdWGT2qBBxOfLDnvCmwArQdsZvvi5R/jCv3iQ5397iL/4q28hjGpMGQbtILGK3CihUIif/OQnhMNhtm3bxq233kpbWxt+v5/a2lp27txJQ0MDUkpisRgTExOEQiE2btyYN3ii0SiO4+D3++np6aGnp4dkMpmnJ47jUFtbS3t7O1u2bOH222+nubkZrTWJRIIf/vCH7Ny5k8bGRnp7e6mtreXAgQNUVVVRW1tLRUUFVVVVnD17FsMwaGhooKOjgzvuuINQKERHRwdbt26ls7OT9vZ20um0VzTScdiyZQs7d+5kYWGB9evXk8lkuPfee9m7dy9CCLZt28bY2BipVIpwOExDQwP33Xcffr+fwcFBpJRUV1fT3NzM1q1bPQ1pmpcRS7gJNbE0pBdZK7SatUZKwcLcHJPjYywtzDE0NMBtt99JeagM1/WicUIKpPSQq5UG5fk9lHKJhMOEQkHmZufZvfceairD/O13fsq/jtt86Y8+zm1bNzPy4mGMLDX5j1/5Y/70Tz+HFoqwX2Yfpg9DCJZSabq7O+jd1Y0AhqdmmMkkCYciCO1iFIwgMmswPfLII5w+fZr29nYCgQCHDx+mubmZO+64g0Qiwfj4OL29vbz++uvcfffd7N+/n3A4THl5OcPDw9TX1xMMBhkYGKC9vZ1kMonWmvLyckKhEI8//jipVIqtW7dy4sQJqquraWtryxtRjz32GPF4nJ6eHiYmJjh37hwPPPAAbW1ttLW1YVkWk5OTfOQjH2Hz5s0MDw9jWVaeBjz44IP09/dTWVnJww8/jGVZVFdXo7Xmq1/9KsFgENM06ejoIBKJ0Nrais/no6qqio9//OO4rssXv/hF1q9fz9GjR6mvrycSiaC1ZmlpiUwmQ11dHbZtU1lZiVIK27YxTfO68+KrBLHgfGUtz08bn5/H0C5SaIxACKU8ipBBMT0xyuTEOI5ymZ0cIzYxTjgYxbJtDMNFakHGcrGUixkIEQ5HvLiGqygLBwiFAviVy969vQgNn314P1taGgHYe383T//yFdxsIOSto6c5PjaDFoqejet58J4uHKkQwkTaEK0Nc2RglEwizr955CM89+v/x29/c5pAVQ2WYSN1sTtpbm6Ozs5OgsEgADt37gTg1VdfZXJykrvvvpu3336bL3zhC+zYsaNo+Kyqqsq/7+3tBaCsrKzoSW7atCn/vru7u3hU05rNmzfnP9fX11NfXw9AdXV1/tjcNoCOjo4Lfq3CdgultrY2/z73/Qrvb9u2bUXH33XXXUWf161bt+q1lrvhbkIQn89j1Ah8psHA6VPYyUVuqSpnaGiQUCgMWiGFIDY7xdzCPGYwxNjIu4wM9DEydAYtwdUZlKNoa9vCqXfP0NlzJ2XRCo/Lahe/37OUN9TWcOftt7FkZfjYJx/Ctl2W0hkevH8XNdHv4mbdXz/+x5/zvWffACT/7tH7eeDuHaBtUBK/aTC3sMiX//wbuHaSn//wf/L1L/0RJw7+BYtOOuuZKE48Gh0dJRaLMTs7S01NDT09PfT39/OLX/yCzs5OXn31VY4dO8ajjz7K9PQ0hw8fpquri9OnTyOlZMuWLRw6dIienh7WrVtX5L8tBKuU0uP0y3zChfsLfczLtdxKx1wqZWC5/7jQdbeS/7vw/lbzcRf6z2/6YEehTnZcl9vvuIPxkTOcG3mX08ff5sjbb+Pz+xBS4iiFRmAYfhYWFvjRD76HFCZpK43hM9l934e4pa6BXXfdTWVNPbbt5nW9P+BHa5edt29m47oK/ux//T1P/tMrCOXwxT9+iK989tP0bNuKlfLyHcJlAaqiFYBJKBL23F7am4noj4Q41tfHsb4JHG3xd//wT3zl85/is4/v5398+2eYwp+PQqrsDzg8PMzMzAyDg4MEg0F6enqYnJykvr6e6upqjhw5QiqV4vvf/z579+7l2WefZXBwkLNnz+Lz+dBa88wzz7CwsMCnPvWpC4ydQkCvpLkK9xcCYzlIVjrmcsG82vnL21rt/i51zHuCE3sGnaC5pZVQMEA0aFBdVcOvX/oVaAfTH8BVCjAQ0kRpl0w6QUVlFXse+DDtO26npa2dYCiKZSukYXjBFK0QwuOn3b3dnJmO89yvDjK7aILSPPPcG3zm4T/k9p09DI+MsJS0WEx6ETyNYi7psJDMkMxoXBTnYglm4hr8AUwR5v/+w/Pc07uTj3/yIZ54/i2GTp3BEEbeV10Ykdq1axczMzNYlsX27dt5/fXX6evrw7Isenp6sG2bU6dOYVkWSinuuusuUqkU/f39ZDKZi/64y7Xfcm19pb/FcnCttG2t7d0I/+9ld8K0rbUUsGhnCJgGZaaJS/GKSXKV8OhSMsNv3z6NRp5fSUQrpNYE/D7iCwuMnh3i1Mm3+fULB4jPz2EaXmVwV/pQyqGpqZF9D3yEjbduZ33rJoQ/iMq4CAyUACG8yJmtA/z3v/0/LC2k8PlNxqYnQJR5oHASNNbVk7JTJJaWaKqrZ3RymqSr0UJTZpqsv+UWzs3MkLRTNNdV4WQcJmcTIIJoR1FVrqmpCzE6rZifiPH9b3yZf7avF9tJYxoB4vF43l2UTCapqakhEAgwOTnJu+++S0dHB5lMJn/M5OQkDQ0NeSvdcRzGxsZobW2lvLz8guhZYdRtOUA8SqVX1aK54wujgbm2HMfJa8Zch8jRgVy0Lbe9MPJYeGzhfeTavRpNWzizQ8lsVBRJPGNjCygzvKLbN1ATLytSn62imbE1/vJamjb6CPgNrFSCn/30x/jCZQhDoF0N0mD/Rz9KU8tWmja2YylQjsJvSC9ZDY1W3g+ilUAryfDEDMFAGNPwI5THH5EhBs9NYUgHQ/h4591JpM8AA6TWpCyX/qEJjIBAm4Izo4v4tMD0gdIWyhchlkgxdXoGGYgiDF2QZ+z9oPPz8xw/fpyuri4aGz1jcnx8nEgkcoGhs9zIGh8fp6qq6gLDKgeQHDBGR0fzBuTQ0BCnTp2io6ODlpaWy/MMFYSwFxcXicVitLa25vdblsXMzEy+c+Wua9u2tyCMaV6grArD3YXvR0ZGaGxsLNr23kwAErmghACh8u9dQAqJVA5+U+I6NsMjZ0AaWK4mk7aIBgO4tsXo2TE2ddyBowy0Upg+5QE8N2lIeJdxHIVtuwR8AXxmAIWNknYWawZ+vx+hDcDECDqgwXANJBItbQIhA6EErjIx/D4MV4BSaOniiCQ+YeL3VWELF5dM3qxTWS/F0aNHcRyHl19+me7ubmZmZshkMtTU1BCPx1m/fj0LCwsopaiqqiIWixEIBHjttdfYs2cPSin6+vrYvn07586dY2lpifvuuw/XdXnllVdYv349Bw4cYOPGjWzbto1XXnmFpqYmJiYmiMfjLC0tUV1dTSwWwzAMFhcXiUajtLW1ceLECW677TZOnz6d9x5MTU1x4sQJkskksViMzs5ODhw4gN/vZ8+ePdi2zfj4OGVlZRw6dIjKykrq6+uJx+P09vYyPj5OS0sLb775JtFolFAoRH9/Pzt37uTYsWOcOnWKz372s++DLDZdPMsi994zxhRCCtKpOHNTE4wOn8GxHZqa19PRvo03fvcbkvFFRkbeZWFulpraZm+xR+V6lWuFQmgvfoeQZGyLZHrJC34o11sQEofcnA9Udq0GoRBaZadueLW9vNt00doAJdA4uFogtETp7HCmFVo5aKkpLmwr81qou7ubN998kx//+Mc0NTXR2NhIf38/Z8+eZcOGDfnhu6WlhaNHj9LU1MT69etJJBL56NqLL75IKpXCNE26u7uZmppibGyMxcVFysrK2LFjR35/U1MTr732GpOTk2zatImTJ0+ybt06JicnSaVSRCIRhBAMDg4yMzNDLBbD5/OxY8cOAoEAjuNw6NAhDMPgzJkzlJWVkUgkOHXqFOl0mr6+Ptra2ohEIoRCIQ4fPsy6det48sknaW9vp6WlhbGxMZaWlhBC5KN/fr+fioqKm2YVgWtgQi5fRDebYK69WrOZdJozQwNMTU7T2dXDxx7+BLvvv4+HP/0vqd/QQt87J5ibmcJKL2FKT/O5eeedzi5iIllKJUmn00gTkA5oE4GJxPQcfCK3tKlGaAOBRAs3O5vWQGOcX3Ay2+G09LwfMrdShHCzuca+CxLzpJQ8++yz+P1+2tvbue2226ipqSEUCtHW1kZPT08+e+zdd99lZmaGioqKPB8Oh8MsLS3h8/no7Oykra0N27YJBAJkMhmEEKxfv55gMEg4HMYwDI4fP45hGNTV1dHV1UVrayubNm2ivb2d3t5etm3bxtmzZ5mYmMB1XTo7O2lpaclnsuX8xZs3b8Y0TRKJBGVlZYyMjHDo0KG8xtZaY9s2HR0d7NmzhxMnTtDe3k4qlWJoaIhkMsm6devo6uoiFAphWRa2bd80+cTXyLATq2StCU4df4t//OH3CUfCfOiBB2lo3khFZSWT584xOT7CL559hpaWNj72yL+ioraelPLSM4XOLqGqXPzhCMf6zvI33/x7VM79dQ21gBYaQ3nBGtsnsRbjfO9vvsIf7OvFdlwv+y4eZ2pqKp83MDAwQENDA9FolJGREcLhMEeOHGFsbIz9+/eTSqVoaGhgenqaaDRKJBJhaGiI5ubm/PMJBoP5sG00GiUcDuPz+QgEAriuS39/P5s3byYejxOLxairq8t3ihxfTafTzM7OUldXl88kC4fDeQM0FzHLce7Gxkbm5+fzhp5SisrKSmZmZli3bh2u6/Liiy/mo3RnzpwhHA4TiUTyGWznzp0jEAjkbYP3gWG3upHhWhnm5+bYtKWdbZ07aN2yjXCZZ5k3tm0lEC7joY+apJaWWIrPU3FLHVrL81o4p+OlweT0DGnLJRCUaHXjCs7m7kNKydDQELOzs+zatYvOzs78MbloGsC+ffsIBAL5z5FIZNXIF5CnIr5cEj6wuLjIa6+9RlNTE1NTUzQ2NlJTU7Pi/ZWVlRVF3PIKxDTx+/1F23NRvPLy8gvaiUajeePvwx/+cN6DURhJzElbW9tN5Wa7LiDWWuPz+zkz8i7xRIq77vkQDRtaEP4IllLZecuC+qZWwsEQo2cGOT04QH3LZiS+bF897+3QWjIxOY3r5rwfNw7ESoMpBC+88AKVlZVIKXnjjTfy3PfYsWNorWlrayMQCPCb3/wGrTXd3d2MjIzkc3C11sRiMerr6/Mcc+fOnaTTac6cOcPAwAAbN26kvb2d3/3udyilGB8f55133sGyLPbt28fAwAD19fVorRkcHOTOO+/kyJEjbNq0iQ0bNlzUr7xaBG75Nr/fXwT+a+1vfm+lYmqN7ShaN91K25atWA5YrkYKicAra29ZisraBnyBIPFjh8nYaXx+nwfRrJdLSEHashgdG0cY5g2vn5z7nRYXF9m/fz+hUIinnnqKmpqafFabZVlYlkUymWR2dpZAIMDS0hJDQ0Ns376d8fFxgsEg9fX1LC4ucuDAAXbv3p3PyTh79izT09PYtk17ezuJRIKOjg4GBgawLItMJkNfXx+pVIqxsTEcx8F1Xd555518KDznhlsNWBeLwF3ueZc69n0FYs+Stdi4aTM+Q5KxMqjsFB+BwtAqq0v9ZByBP1LJznvuw7ad7Exmle8IhuljNjbP2Ng5zGz49vouw6tX/HjrrbfyxBNPsH37dhzHYXZ2loaGBpqbm3Fdl3Q6TTQapbm5GSEEqVSKuro62traME2T5uZm3nrrLe68804aGhrYsmVLXqsFAgG6u7tJJpMAbNiwgSNHjiClpLy8nMbGRqampjh+/DgVFRXceuut1NbWMjg4yMmTJ4uSg242gL0nQCyy9v2KPgsFlnIRmJxf8slbVkzk/RgKJ5t26ZW+z1b5QeAKMP0RzpwdZCGexvRVeh6E7NRUfSV4vEitNokAaaCR3j+ZQmeDNjKb2nn33XdTVVVFRUUFra2tJBIJGhsb856FQhAppQiFQsRiMRKJBLt37yYajRIIBIhGo3ziE58gkUigtaazszPPP3Pt7Nq1i6qqKkKhELfccks+37e9vZ1IJEI47OWCbNy4kc7Oznwmm5QfzFnZVw1i5TqXsCQLJ4J6S9rkda1wLgCayq7/qwEXQSZj8cYbB4nPzxMMahQyn8+guTYqWWKjhUbhR0qBtTSL7WZdSNolVzylML3xlltuASgyyJbL8hTFnEFUyC3D4fCK5+Y0daEUGomFht0HXdYE4pzGMA1JXXXZ6jhaju7LHuqyAQpDksxkaK0P8Af7ejDMADpbWGW5cl25CGaBMbLs0kWlK4QNwkFjIoXATi1SXx3NL9VaGCZezi0vldNwsWNXSn9cPqV++eeLtf9BlTX5iS/BIq+AihS3IVYMm1y6+KW+RNurg7x43/J65Uq52ZkipeIp19Tjc/P5iZWn1cTq6M7vvgiyRFHhv+x0ItQyLSTOh7q1KC4WeAmtL1ban13lRBSt0+6lkwohMaRRqif4QeDEK6q9ZdvF5Z53AdIlLBvSwVg+6WJlVXypnqyXDQE5j4go1rwlAH8gQHzth1pdgC4hCisEZ7XwtUaWziUPLacWBRq/JO9fEF8LPnyxVvUVnLXmgUQUc/DigaFEKK7PQz//Iq7yFzav0b1c4+8nfm/PVdyATvNBF0m+lvl5L5EoMPiuUDmWzO6SvC86RUlKUgJxSUpy7WwTccV2VgnEJSlp4pKU5CYCsSjaWLLLS3JjOMQyd6pYI4iV8NxaSufcHK6XR1lCckmuF3YBjUthLWhH6+wqrmvRxBoMIVGuyjr8xQr6uSQluUail435uRTDFQoVXhGITcNbXETlzEQhbvhUoJJ8gNRw/kWClLhao7TAL+UVT2TPc2IzW83HzlauzKZ3laQk1xXNOlsxKuW42Ur+V2HYScD0m6TS1poJdklKcqW0QgOOhpRlEzDNNbnL8nRC6Gz1Rq2wcty4RCdKcl2wW7DAI5BxbLQQmKZcUzWGXPY5Gm8mWSgQIJFK4+oLs7ouxdP1sr+Vjrvc/Vdz7pXuf6+2fTM+M31pa64owcvWmlTGJhD0g1plxeNLkZK0XaxvhYSkZaFcRSQSRGvwZ5fmKiLjhbd2iZkdq7o6LmfO0FrOvdL917PtG/m9boZnJlbCg1oGTokS4ADziTQ+n4+gz0A6a/MnXABiDQgDkmmv0nlZOIBfFPQdvdJdl6QkK6GrAM26oDiZ8DTwYiKFafoI+n0oBaagYGH5qwFxzv0hIJ2xcF2XSNCP3zTOQzavfhVaGKUfqyQr+h08RMqiaqQaSNouS5k0IdNP0Ocrmou5likIF4A4B2QNSAG2ckmlMxhSEvL7ME0jn0lf0sEluRx7yfNAaGzHJZOxUUIQCPnxIxFuNkleeLG7okT5qwFxEWEQ4EpwHBfb8lbZNAyJIcT51Lncch3LG1+G8kuVodD62px7pfuva9vLuOT1/F43xTPL117wDnCz5Xld5dXV8/v8mIZX+dRQYBRMXlecX/rlmoE4T8uzATwEOEqhlPbKq2qN1CV9XJIVMINGSxBSIhEYhswtYJFXz+JShum1ArEo6Fg5miHkeYJTgnBJLjqSF/hfRS4rJ6v4dG6VipzPQq8Ny/8fucI4Wo/I12UAAAAASUVORK5CYII=" alt="AHK Ghana" style="height:36px;width:auto;object-fit:contain"/>
         </a>
       </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);margin-bottom:12px">MEDIA PARTNERS</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <a href="https://www.dw.com/en/top-stories/s-9097" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px 8px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:56px">
+          <span style="font-weight:700;font-size:12px;color:var(--text);line-height:1.3">DW</span>
+        </a>
+        <a href="https://aktion.faz.net/faz-premium/?gabs" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px 8px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:56px">
+          <span style="font-weight:700;font-size:12px;color:var(--text);line-height:1.3">Frankfurter Allgemeine</span>
+        </a>
+        <a href="https://table.media/" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px 8px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:56px">
+          <span style="font-weight:700;font-size:12px;color:var(--text);line-height:1.3">Table.Briefings</span>
+        </a>
+      </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);margin-bottom:12px">SUPPORTERS & PARTNERS</div>
-      <div style="background:#F8FAFC;border:1.5px dashed var(--border);border-radius:14px;padding:32px 20px;text-align:center;margin-bottom:20px">
-        <div style="font-size:32px;margin-bottom:10px">🤝</div>
-        <div style="font-weight:700;color:var(--text);font-size:15px;margin-bottom:6px">Sponsors & Partners</div>
-        <div style="color:var(--muted);font-size:13px;line-height:1.6">To be announced<br/>Check back soon</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px">
+        <a href="https://bdi.eu/en" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 10px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:64px">
+          <span style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">BDI</span>
+        </a>
+        <a href="https://www.afrikaverein.de/en/" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 10px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:64px">
+          <span style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">Afrika-Verein</span>
+        </a>
+        <a href="https://www.dgwa.org/" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 10px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:64px">
+          <span style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">Bravura</span>
+        </a>
+        <a href="https://www.giz.de/en/regions/africa/ghana" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 10px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:64px">
+          <span style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">GIZ</span>
+        </a>
+        <a href="https://www.freiheit.org/sub-saharan-africa" target="_blank" rel="noopener" style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 10px;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;min-height:64px">
+          <span style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">Friedrich Naumann Foundation</span>
+        </a>
       </div>
     </div>
     <div style="padding:0 16px 30px;text-align:center;color:var(--muted);font-size:12px;line-height:1.8">
