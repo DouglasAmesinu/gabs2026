@@ -2121,10 +2121,20 @@ function showAdminPanel(){
         <div id="at-parts" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="participants"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Participants</div>
       </div>
       <div id="admin-body"></div>
+      <button class="btn-outline" id="a-signout" style="color:var(--red);border-color:#FECACA;margin-top:14px">Sign out</button>
     </div>`;
     document.getElementById("a-cl").onclick=()=>ov.remove();
     document.getElementById("at-pending").onclick=()=>{adminTab="pending";renderAdminBody();};
     document.getElementById("at-parts").onclick=()=>{adminTab="participants";renderAdminBody();};
+    document.getElementById("a-signout").onclick=async()=>{
+      if(window._auth)await window._auth.signOut(window._auth.auth);
+      ov.remove();
+      const t=document.createElement("div");
+      t.style.cssText="position:fixed;left:50%;bottom:calc(24px + var(--safe-b));transform:translateX(-50%);background:#F0FDF4;color:var(--green);border-left:3px solid var(--green);border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.15)";
+      t.textContent="Signed out";
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),1800);
+    };
     renderAdminBody();
   }
   function renderAdminBody(){
