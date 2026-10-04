@@ -1350,9 +1350,17 @@ async function doSend(p,textOverride,meeting){
 function renderSchedule(){
   const day=SCHEDULE[schedDay];
   const typeColors={plenary:"#3B82F6",panel:"#0EA5E9",fireside:"#F59E0B",networking:"#22C55E",social:"#EC4899",logistics:"#9CA3AF",reception:"#EC4899",breakfast:"#22C55E",lunch:"#22C55E",closing:"#3B82F6",workshop:"#A855F7",b2b:"#F97316"};
-  const pendingMeetings=myMeetings.filter(m=>!m.resp);
-  const confirmedMeetings=myMeetings.filter(m=>m.resp==="accepted");
-  const allMyMeetings=[...confirmedMeetings,...pendingMeetings];
+  const toMs=(m,end)=>{const d=String(m.meeting.day||"");const [h,mi]=String(m.meeting.start||"00:00").split(":").map(Number);if(!/^\d{8}$/.test(d)||isNaN(h)||isNaN(mi))return NaN;return Date.UTC(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),h,mi+(end?(m.meeting.dur||30):0));};
+  const nowMs=Date.now();
+  const byTime=(a,b)=>(toMs(a)||0)-(toMs(b)||0);
+  const isPast=m=>{const e=toMs(m,true);return !isNaN(e)&&nowMs>e;};
+  const isNow=m=>{const s=toMs(m),e=toMs(m,true);return !isNaN(s)&&nowMs>=s&&nowMs<=e;};
+  const upcoming=myMeetings.filter(m=>!isPast(m));
+  const respondMeetings=upcoming.filter(m=>!m.resp&&m.fromId!==me.id).sort(byTime);
+  const confirmedMeetings=upcoming.filter(m=>m.resp==="accepted").sort(byTime);
+  const awaitingMeetings=upcoming.filter(m=>!m.resp&&m.fromId===me.id).sort(byTime);
+  const pastMeetings=myMeetings.filter(m=>isPast(m)&&(m.resp==="accepted"||!m.resp)).sort(byTime).reverse();
+  const allMyMeetings=[...respondMeetings,...confirmedMeetings,...awaitingMeetings,...pastMeetings];
   return`<div>
     <div class="page-hdr"><div class="page-title">Schedule</div><div class="page-sub">3-day programme · All times GMT</div></div>
     ${allMyMeetings.length?`
@@ -1361,9 +1369,9 @@ function renderSchedule(){
       ${allMyMeetings.map(m=>{
         const isConfirmed=m.resp==="accepted";
         const isSent=m.fromId===me.id;
-        const statusColor=isConfirmed?"var(--green)":"var(--gold)";
-        const statusText=isConfirmed?"✓ Confirmed":isSent?"⏳ Awaiting response":"📩 Respond required";
-        return`<div style="background:var(--white);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;border-left:3px solid ${statusColor}">
+        const past=isPast(m),live=isNow(m);const statusColor=past?"var(--muted)":isConfirmed?"var(--green)":"var(--gold)";
+        const statusText=past?(isConfirmed?"✓ Done":"Expired"):live&&isConfirmed?"🟢 Happening now":isConfirmed?"✓ Confirmed":isSent?"⏳ Awaiting response":"📩 Respond required";
+        return`<div style="background:var(--white);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;border-left:3px solid ${statusColor}${past?";opacity:.6":""}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
             <div style="display:flex;align-items:center;gap:10px">
               ${avHTML(m.otherParticipant.av||initials(m.otherParticipant.name||"?"),36,m.otherParticipant.photoURL||null)}
@@ -1372,14 +1380,14 @@ function renderSchedule(){
                 <div style="font-size:12px;color:var(--muted)">${esc(m.otherParticipant.company||"")}</div>
               </div>
             </div>
-            <span style="font-size:11px;font-weight:700;color:${statusColor};background:${isConfirmed?"#F0FDF4":"#FFFBEB"};padding:3px 9px;border-radius:20px">${statusText}</span>
+            <span style="font-size:11px;font-weight:700;color:${statusColor};background:${past?"#F3F4F6":isConfirmed?"#F0FDF4":"#FFFBEB"};padding:3px 9px;border-radius:20px">${statusText}</span>
           </div>
           <div style="display:flex;gap:14px;font-size:12px;color:var(--muted)">
             <span>📅 ${esc(m.meeting.dayLabel||m.meeting.day||"")}</span>
             <span>🕐 ${esc(m.meeting.start||"")} · ${esc(String(m.meeting.dur||30))} min</span>
             <span>📍 ${esc(m.meeting.loc||"")}</span>
           </div>
-          ${isConfirmed?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          ${isConfirmed&&!past?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="downloadMeetingICS('${m.id}')">${calBtnLabel()}</button>
             <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateGoogleCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">Google Calendar (web)</button>
             <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateOutlookCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">Outlook (web)</button>
