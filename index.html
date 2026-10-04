@@ -1228,6 +1228,17 @@ function startInbox(){
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
     let notifFirst=true;
     const u=fb.onSnapshot(q,snap=>{
+      snap.docChanges().forEach(ch=>{
+        const dd=ch.doc.data();
+        if(!dd.meeting)return;
+        const threadId=tid(me.id,p.id);
+        const idx=myMeetings.findIndex(x=>x.threadId===threadId&&x.id===ch.doc.id);
+        if(ch.type==="removed"){if(idx>-1)myMeetings.splice(idx,1);return;}
+        const rec={id:ch.doc.id,threadId,otherParticipant:p,meeting:dd.meeting,fromId:dd.fromId,resp:dd.resp||null,ts:dd.ts};
+        if(idx>-1)myMeetings[idx]=rec;else myMeetings.push(rec);
+      });
+      clearTimeout(window._schedT);
+      window._schedT=setTimeout(()=>{if(currentTab==="schedule"){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}}},150);
       const wasFirst=notifFirst;notifFirst=false;
       if(!wasFirst){snap.docChanges().forEach(ch=>{if(ch.type!=="added")return;const dd=ch.doc.data();if(dd.fromId===me.id)return;notifyIncoming(p,dd);});}
       if(snap.empty){delete inboxData[p.id];}
