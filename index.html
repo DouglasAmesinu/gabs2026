@@ -1231,7 +1231,7 @@ function renderMsgs(){
         const rMap={accepted:{txt:"✓ Accepted",bg:"#F0FDF4",c:"var(--green)"},declined:{txt:"✗ Declined",bg:"#FEF2F2",c:"var(--red)"},busy:{txt:"⏱ Busy",bg:"#FFF7ED",c:"var(--orange)"}};
         const r=rMap[m.resp]||{txt:m.resp,bg:"#F3F4F6",c:"var(--muted)"};
         const calBtns=m.resp==="accepted"?`<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
-          <button class="meet-btn" style="background:var(--gold);color:var(--navy);border-color:var(--gold);font-weight:800" data-ics="${m.id}">${calBtnLabel()}</button>
+          <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-ics="${m.id}">${calBtnLabel()}</button>
           <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-gcal="${m.id}">Google Calendar (web)</button>
           <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE" data-outlook="${m.id}">Outlook (web)</button>
         </div>`:"";
@@ -1379,7 +1379,7 @@ function renderSchedule(){
             <span>📍 ${esc(m.meeting.loc||"")}</span>
           </div>
           ${isConfirmed?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-            <button class="meet-btn" style="background:var(--gold);color:var(--navy);border-color:var(--gold);font-weight:800;font-size:11px" onclick="downloadMeetingICS('${m.id}')">${calBtnLabel()}</button>
+            <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="downloadMeetingICS('${m.id}')">${calBtnLabel()}</button>
             <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateGoogleCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">Google Calendar (web)</button>
             <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateOutlookCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">Outlook (web)</button>
           </div>`:""}
