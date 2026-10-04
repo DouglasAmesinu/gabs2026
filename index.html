@@ -16,11 +16,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
-const db=getFirestore(app);
+const db=initializeFirestore(app,{experimentalAutoDetectLongPolling:true});
 const storage=getStorage(app);
 const auth=getAuth(app);
 window._auth={auth,signInWithEmailAndPassword,signOut,onAuthStateChanged};
@@ -363,6 +363,7 @@ let draftText="";
 let inboxData={};
 let readThreadIds=new Set();
 try{const s=localStorage.getItem("gabs_read");if(s)readThreadIds=new Set(JSON.parse(s));}catch(e){}
+let participantsReady=false,pendingReady=false;
 let threadUnsub=null;
 let inboxUnsubs=[];
 let inboxStarted=false;
@@ -490,33 +491,32 @@ function sendConfirmationEmail({name,email,company,title,ticket,status}){
 }
 
 // ── Meetings ───────────────────────────────────────────────────────────────
+let meetBusy=false,meetAgain=false;
 function loadMyMeetings(){
   if(!me||!window._fb)return;
+  if(meetBusy){meetAgain=true;return;}
+  meetBusy=true;
   const fb=window._fb;
-  myMeetings=[];
-  participants.filter(p=>p.id!==me.id).forEach(p=>{
+  const others=participants.filter(p=>p.id!==me.id);
+  Promise.all(others.map(p=>{
     const threadId=tid(me.id,p.id);
     const q=fb.query(fb.collection(fb.db,"threads",threadId,"messages"),fb.orderBy("ts","asc"));
-    fb.getDocs(q).then(snap=>{
+    return fb.getDocs(q).then(snap=>{
+      const out=[];
       snap.docs.forEach(doc=>{
         const data=doc.data();
-        if(data.meeting){
-          myMeetings.push({
-            id:doc.id,
-            threadId,
-            otherParticipant:p,
-            meeting:data.meeting,
-            fromId:data.fromId,
-            resp:data.resp||null,
-            ts:data.ts,
-          });
-        }
+        if(data.meeting)out.push({id:doc.id,threadId,otherParticipant:p,meeting:data.meeting,fromId:data.fromId,resp:data.resp||null,ts:data.ts});
       });
-      if(currentTab==="schedule"){
-        const tc=document.getElementById("tab-content");
-        if(tc){tc.innerHTML=renderSchedule();bindSchedule();}
-      }
-    });
+      return out;
+    }).catch(()=>[]);
+  })).then(parts=>{
+    const seen=new Set(),list=[];
+    parts.flat().forEach(m=>{const k=m.threadId+"|"+m.id;if(!seen.has(k)){seen.add(k);list.push(m);}});
+    myMeetings=list;
+  }).finally(()=>{
+    meetBusy=false;
+    if(currentTab==="schedule"){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}}
+    if(meetAgain){meetAgain=false;loadMyMeetings();}
   });
 }
 
@@ -607,6 +607,7 @@ function startParticipantListener(){
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
   participantsUnsub=fb.onSnapshot(q,snap=>{
     participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(!snap.metadata.fromCache)participantsReady=true;
     refreshDisc();
     if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
     const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
@@ -614,7 +615,7 @@ function startParticipantListener(){
     updateMsgBadge();
   });
   const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
-  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));});
+  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));if(!snap.metadata.fromCache)pendingReady=true;});
 }
 
 async function loadTicketsFromCloud(){
@@ -640,7 +641,7 @@ function renderApp(){
   bindBottomNav();
   bindTab();
   bindProfileBar();
-  loadMyMeetings();
+  if(currentTab==="schedule")loadMyMeetings();
   if(!inboxStarted&&me)startInbox();
 }
 
@@ -1175,7 +1176,7 @@ function startInbox(){
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
     const u=fb.onSnapshot(q,snap=>{
       if(snap.empty){delete inboxData[p.id];}
-      else if(activeThreadId!==p.id){const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
+      else{const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(activeThreadId!==p.id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
       updateMsgBadge();
       if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
     });
@@ -1952,6 +1953,9 @@ function showEntry(){
     if(!val){const err=document.getElementById("t-err");if(err)err.innerHTML=`<div class="err-msg" style="margin-top:10px">Please enter your ticket reference.</div>`;return;}
     ticketInput=val;stage="checking";render();
     if(!window._fb){stage="invalid";render();return;}
+    const localHit=participants.find(p=>p.ticket===ticketInput)||pendingRegs.find(p=>p.ticket===ticketInput);
+    if(localHit){foundParticipant={...localHit};stage="already";render();return;}
+    if(participantsReady&&pendingReady){stage=validTicketRefs.includes(ticketInput)?"claim":"invalid";render();return;}
     try{
       const fbs=window._fb;
       const claimed=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("ticket","==",ticketInput)));
