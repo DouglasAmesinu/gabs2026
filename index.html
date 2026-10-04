@@ -1167,6 +1167,57 @@ function bindInboxRows(){
   document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=()=>{const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
 }
 
+let notifBuf={},notifTimer=null,notifEl=null;
+function notifText(){
+  const ids=Object.keys(notifBuf),bs=ids.map(i=>notifBuf[i]);
+  const total=bs.reduce((n,b)=>n+b.count,0),people=bs.length;
+  const mt=bs.filter(b=>b.meeting);
+  if(mt.length){
+    if(mt.length===1)return"📅 Meeting request from "+(mt[0].p.name||"a delegate")+(total>1?" (+"+(total-1)+" more)":"");
+    return"📅 "+mt.length+" new meeting requests";
+  }
+  if(people===1){
+    const b=bs[0],nm=b.p.name||"A delegate";
+    if(total===1){const t=String(b.text||"").replace(/\s+/g," ").trim();return"💬 "+nm+(t?": "+(t.length>40?t.slice(0,40)+"…":t):" sent a message");}
+    return"💬 "+nm+" sent "+total+" messages";
+  }
+  return"💬 "+total+" new messages from "+people+" people";
+}
+function notifyIncoming(p,d){
+  if(!d||!p)return;
+  if(currentTab==="messages"&&!activeThreadId)return;
+  if(activeThreadId===p.id)return;
+  const b=notifBuf[p.id]||(notifBuf[p.id]={p,count:0,meeting:false,text:""});
+  b.count++;
+  if(d.meeting)b.meeting=true;
+  b.text=d.meeting?"":String(d.text||"");
+  showNotifBanner();
+}
+function hideNotifBanner(){
+  if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}
+  if(notifEl){notifEl.remove();notifEl=null;}
+  notifBuf={};
+}
+function showNotifBanner(){
+  const first=!notifEl;
+  if(first){
+    notifEl=document.createElement("div");
+    notifEl.style.cssText="position:fixed;left:10px;right:10px;top:calc(8px + env(safe-area-inset-top,0px));z-index:450;background:#1B3A6B;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;border-left:4px solid #C49A2A;max-width:480px;margin:0 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    notifEl.onclick=()=>{
+      const bs=Object.values(notifBuf);
+      const target=bs.length===1?bs[0].p:null;
+      hideNotifBanner();
+      if(target){openThread(target);}
+      else{currentTab="messages";activeThreadId=null;threadMessages=[];draftText="";renderApp();}
+    };
+    document.body.appendChild(notifEl);
+    try{if(navigator.vibrate)navigator.vibrate(60);}catch(e){}
+  }
+  notifEl.textContent=notifText();
+  if(notifTimer)clearTimeout(notifTimer);
+  notifTimer=setTimeout(hideNotifBanner,4000);
+}
+
 function startInbox(){
   if(!me||!window._fb)return;
   inboxStarted=true;
@@ -1174,7 +1225,10 @@ function startInbox(){
   participants.filter(p=>p.id!==me.id&&!inboxListenedIds.has(p.id)).forEach(p=>{
     inboxListenedIds.add(p.id);
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
+    let notifFirst=true;
     const u=fb.onSnapshot(q,snap=>{
+      const wasFirst=notifFirst;notifFirst=false;
+      if(!wasFirst){snap.docChanges().forEach(ch=>{if(ch.type!=="added")return;const dd=ch.doc.data();if(dd.fromId===me.id)return;notifyIncoming(p,dd);});}
       if(snap.empty){delete inboxData[p.id];}
       else{const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(activeThreadId!==p.id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
       updateMsgBadge();
