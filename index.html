@@ -382,6 +382,12 @@ const esc=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>
 const tid=(a,b)=>[a,b].sort().join("__");
 const fmtTime=ts=>ts?.seconds?new Date(ts.seconds*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
 const initials=name=>name.trim().split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+const safeWebsiteURL=u=>{
+  const s=String(u||"").trim();
+  if(!s)return null;
+  const withScheme=/^https?:\/\//i.test(s)?s:"https://"+s;
+  return /^https?:\/\//i.test(withScheme)?withScheme:null;
+};
 
 function avHTML(av,sz=42,photoURL=null){
   const fs=Math.round(sz*.36);
@@ -941,7 +947,7 @@ function pCardHTML(p){
     ${(p.phone||p.linkedin||p.website)?`<div class="p-contact">
       ${p.phone?`<a href="tel:${esc(p.phone)}">📞 ${esc(p.phone)}</a>`:""}
       ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener">🔗 LinkedIn</a>`:""}
-      ${p.website?`<a href="${esc(p.website)}" target="_blank" rel="noopener">🌐 Website</a>`:""}
+      ${safeWebsiteURL(p.website)?`<a href="${esc(safeWebsiteURL(p.website))}" target="_blank" rel="noopener">🌐 Website</a>`:""}
     </div>`:""}
     ${self?"":`<div class="p-actions" style="margin-top:12px">
       <button class="btn-outline btn-sm p-msg" data-id="${p.id}">💬 Message</button>
@@ -1076,7 +1082,7 @@ function showParticipantProfile(p){
       ${hasContact?`<div style="padding:16px 0">
         <div style="font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Contact</div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          ${p.website?`<a href="${esc(p.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🌐 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.website.replace(/^https?:\/\//,""))}</span></a>`:""}
+          ${safeWebsiteURL(p.website)?`<a href="${esc(safeWebsiteURL(p.website))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🌐 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.website.replace(/^https?:\/\//,""))}</span></a>`:""}
           ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🔗 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.linkedin.replace(/^https?:\/\//,""))}</span></a>`:""}
         </div>
       </div>`:""}
