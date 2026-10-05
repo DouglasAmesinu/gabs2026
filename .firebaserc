@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "gabs2026-4f482"
+    "staging": "gabs2026-staging",
+    "live": "gabs2026-4f482",
+    "default": "gabs2026-staging"
   }
 }
