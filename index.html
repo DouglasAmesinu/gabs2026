@@ -19,7 +19,24 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-ap
 import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-const app=initializeApp({apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"});
+const LIVE_HOSTS=["gabsconnect.com","www.gabsconnect.com"];
+const IS_LIVE=LIVE_HOSTS.includes(location.hostname);
+const firebaseConfig=IS_LIVE?{apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"}:{
+  apiKey:"AIzaSyAhnYFaLkV39ac3l8_WwbZ5cDoW70MeEds",
+  authDomain:"gabs2026-staging.firebaseapp.com",
+  projectId:"gabs2026-staging",
+  storageBucket:"gabs2026-staging.firebasestorage.app",
+  messagingSenderId:"209724664937",
+  appId:"1:209724664937:web:2e1cb4ccf704b6cbd346f8"
+};
+window.GABS_ENV=IS_LIVE?"live":"staging";
+if(!IS_LIVE){
+  const sb=document.createElement("div");
+  sb.textContent="STAGING";
+  sb.style.cssText="position:fixed;left:6px;bottom:6px;z-index:600;background:rgba(220,38,38,.65);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 7px;border-radius:5px;pointer-events:none";
+  document.body.appendChild(sb);
+}
+const app=initializeApp(firebaseConfig);
 const isApple=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 const db=initializeFirestore(app,isApple?{experimentalForceLongPolling:true}:{experimentalAutoDetectLongPolling:true});
 const storage=getStorage(app);
@@ -489,6 +506,7 @@ function bestMatch(pool){
 // ── EmailJS ────────────────────────────────────────────────────────────────
 if(window.emailjs){try{window.emailjs.init(EMAILJS_PUBLIC_KEY);}catch(e){}}
 function sendConfirmationEmail({name,email,company,title,ticket,status}){
+  if(window.GABS_ENV!=="live"){console.log("[staging] skipped confirmation email:",{name,email,company,title,ticket,status});return;}
   if(!window.emailjs||!email)return;
   window.emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
     to_name:name,to_email:email,company,title,ticket_ref:ticket,
