@@ -19,7 +19,7 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-ap
 import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-const LIVE_HOSTS=["gabsconnect.com","www.gabsconnect.com"];
+const LIVE_HOSTS=["gabsconnect.com","www.gabsconnect.com","gabsconnect.pages.dev"];
 const IS_LIVE=LIVE_HOSTS.includes(location.hostname);
 const firebaseConfig=IS_LIVE?{apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"}:{
   apiKey:"AIzaSyAhnYFaLkV39ac3l8_WwbZ5cDoW70MeEds",
