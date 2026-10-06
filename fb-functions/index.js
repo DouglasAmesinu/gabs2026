@@ -11,6 +11,7 @@ const { normalizeRef, isValidRef } = require("./lib/ticketRef");
 const { applyRateLimit } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
 const { buildSlot } = require("./lib/slots");
+const { planMigration } = require("./lib/migrate");
 
 const REGION = "europe-west1";
 setGlobalOptions({ region: REGION });
@@ -142,6 +143,88 @@ exports.adminUploadTickets = onCall({ region: REGION }, async (request) => {
   }
 
   return { added, alreadyExisted, invalid };
+});
+
+/**
+ * Admin-only callable: one-time legacy-data migration. Plans (pure,
+ * via planMigration) what needs to happen to move legacy tickets and
+ * participant email/ticket fields into their new homes, then — only
+ * when dryRun is false — applies it with batched writes (<=400 ops
+ * per batch). Idempotent: a second run plans (and so applies)
+ * nothing further for anything already migrated. Never logs names,
+ * emails, or refs.
+ */
+exports.migrateLegacy = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+
+  const dryRun = !(request.data && request.data.dryRun === false);
+
+  const [configSnap, participantsSnap, ticketsSnap] = await Promise.all([
+    db.collection("config").doc("tickets").get(),
+    db.collection("participants").get(),
+    db.collection("tickets").get(),
+  ]);
+
+  const legacyRefs = (configSnap.exists && configSnap.data().refs) || [];
+  const participants = participantsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const existingTickets = {};
+  ticketsSnap.docs.forEach((d) => {
+    existingTickets[d.id] = d.data();
+  });
+
+  const plan = planMigration({ legacyRefs, participants, existingTickets });
+
+  if (!dryRun) {
+    const ops = [];
+    plan.ticketCreates.forEach(({ ref, uid }) => {
+      ops.push({
+        type: "set",
+        ref: db.collection("tickets").doc(ref),
+        data: { uid, createdAt: admin.firestore.FieldValue.serverTimestamp() },
+      });
+    });
+    plan.ticketLinks.forEach(({ ref, uid }) => {
+      ops.push({ type: "update", ref: db.collection("tickets").doc(ref), data: { uid } });
+    });
+    plan.emailMoves.forEach(({ id, email }) => {
+      ops.push({
+        type: "set",
+        merge: true,
+        ref: db.doc(`participants/${id}/private/contact`),
+        data: { email, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      });
+    });
+    plan.publicCleanups.forEach(({ id, deleteEmail, deleteTicket }) => {
+      const data = {};
+      if (deleteEmail) data.email = admin.firestore.FieldValue.delete();
+      if (deleteTicket) data.ticket = admin.firestore.FieldValue.delete();
+      ops.push({ type: "update", ref: db.collection("participants").doc(id), data });
+    });
+
+    for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+      const chunk = ops.slice(i, i + BATCH_SIZE);
+      const batch = db.batch();
+      chunk.forEach((op) => {
+        if (op.type === "update") batch.update(op.ref, op.data);
+        else batch.set(op.ref, op.data, op.merge ? { merge: true } : undefined);
+      });
+      await batch.commit();
+    }
+  }
+
+  return {
+    refsTotal: plan.refsTotal,
+    ticketsToCreate: plan.ticketsToCreate,
+    ticketsToLink: plan.ticketsToLink,
+    emailsToMove: plan.emailsToMove,
+    participantsToClean: plan.participantsToClean,
+    conflicts: plan.conflicts,
+    invalidRefs: plan.invalidRefs,
+    csvSkipped: plan.csvSkipped,
+    dryRun,
+  };
 });
 
 /**

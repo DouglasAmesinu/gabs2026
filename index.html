@@ -2325,6 +2325,14 @@ function showAdminPanel(){
       <button class="btn-outline" id="a-rst" style="color:var(--red);border-color:#FECACA">Reset all data</button>
       <div style="font-size:11px;color:var(--muted);text-align:center">Columns: name, company, sector, country, title, email</div>
     </div>
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);margin-bottom:10px">Data migration (one-time)</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-outline" id="a-mig-dry" style="flex:1">Dry run</button>
+        <button class="btn-outline" id="a-mig-run" style="flex:1;color:var(--red);border-color:#FECACA">Run migration</button>
+      </div>
+      <div id="a-mig-fb"></div>
+    </div>
     <input type="file" id="a-csv" accept=".csv" style="display:none"/>
     <input type="file" id="tickets-file" accept=".csv,.txt" style="display:none"/>`;
     document.getElementById("a-up").onclick=()=>document.getElementById("a-csv").click();
@@ -2426,6 +2434,35 @@ function showAdminPanel(){
         if(fbErr)fbErr.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
         console.error("Reset failed:",e);
       }
+    };
+    function migResultHTML(r){
+      return`<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12px;color:var(--text);line-height:1.7">
+        <div style="font-weight:700;margin-bottom:4px">${r.dryRun?"🔍 Dry run (no changes made)":"✓ Migration applied"}</div>
+        <div>Refs total: ${r.refsTotal}</div>
+        <div>Tickets to create: ${r.ticketsToCreate}</div>
+        <div>Tickets to link: ${r.ticketsToLink}</div>
+        <div>Emails to move: ${r.emailsToMove}</div>
+        <div>Participants to clean: ${r.participantsToClean}</div>
+        <div>Invalid refs: ${r.invalidRefs}</div>
+        <div>CSV rows skipped: ${r.csvSkipped}</div>
+        <div>Conflicts: ${r.conflicts.length}${r.conflicts.length?` (${r.conflicts.map(id=>esc(id)).join(", ")})`:""}</div>
+      </div>`;
+    }
+    async function runMigration(dryRun){
+      const fb3=document.getElementById("a-mig-fb");
+      if(!window._fn){if(fb3)fb3.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+      if(fb3)fb3.innerHTML=`<div class="ok-msg">⏳ ${dryRun?"Running dry run…":"Running migration…"}</div>`;
+      try{
+        const res=await window._fn.httpsCallable("migrateLegacy")({dryRun});
+        if(fb3)fb3.innerHTML=migResultHTML(res.data);
+      }catch(err){
+        if(fb3)fb3.innerHTML=`<div class="err-msg">${esc(err.code||err.message||"unknown error")}</div>`;
+      }
+    }
+    document.getElementById("a-mig-dry").onclick=()=>runMigration(true);
+    document.getElementById("a-mig-run").onclick=()=>{
+      if(!confirm("This permanently moves legacy ticket links and emails into their new storage and CANNOT be undone. Run the real migration now?"))return;
+      runMigration(false);
     };
   }
   document.body.appendChild(ov);
