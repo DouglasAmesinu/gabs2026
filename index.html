@@ -2246,14 +2246,32 @@ function showAdminLogin(){
 function showAdminPanel(){
   const ov=makeOv();
   let adminTab="pending";
+  let adminParticipants=[];
+  let adminLoadError=null;
+
+  async function loadAdminParticipants(){
+    adminLoadError=null;
+    try{
+      const fbs=window._fb;
+      const snap=await fbs.getDocs(fbs.collection(fbs.db,"participants"));
+      adminParticipants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){
+      adminLoadError=e;
+      adminParticipants=[];
+    }
+  }
+  const pendingList=()=>adminParticipants.filter(p=>p.status==="pending");
+  const approvedList=()=>adminParticipants.filter(p=>p.status==="approved");
+
   async function renderMain(){
+    const pendingCount=pendingList().length;
     ov.innerHTML=`<div class="sheet" style="padding-bottom:calc(22px + var(--safe-b))">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-size:17px;font-weight:800;color:var(--text)">⚙️ Admin Panel</div>
         <button class="btn-outline btn-sm" id="a-cl">Close</button>
       </div>
       <div style="display:flex;background:#F3F4F6;border-radius:12px;padding:3px;margin-bottom:16px">
-        <div id="at-pending" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="pending"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Pending ${pendingRegs.length>0?`<span style="background:#DC2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">${pendingRegs.length}</span>`:""}
+        <div id="at-pending" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="pending"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Pending ${pendingCount>0?`<span style="background:#DC2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">${pendingCount}</span>`:""}
         </div>
         <div id="at-parts" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="participants"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Participants</div>
       </div>
@@ -2266,13 +2284,22 @@ function showAdminPanel(){
   }
   function renderAdminBody(){
     const body=document.getElementById("admin-body");if(!body)return;
+    if(adminLoadError){
+      body.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:16px;color:var(--red);font-size:13px;font-weight:600;line-height:1.5">⚠️ Couldn't load participant data: ${esc(adminLoadError.code||adminLoadError.message||"unknown error")}</div>`;
+      return;
+    }
     if(adminTab==="pending")renderPendingBody(body);
     else renderPartsBody(body);
   }
+  async function reloadAndRerender(){
+    await loadAdminParticipants();
+    renderMain();
+  }
   async function renderPendingBody(body){
-    if(!pendingRegs.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">✓ No pending registrations</div>`;return;}
-    const emails=await fetchPrivateEmails(pendingRegs.map(p=>p.id));
-    body.innerHTML=pendingRegs.map(p=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
+    const pending=pendingList();
+    if(!pending.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">✓ No pending registrations</div>`;return;}
+    const emails=await fetchPrivateEmails(pending.map(p=>p.id));
+    body.innerHTML=pending.map(p=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
         ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
         <div><div style="font-weight:700;color:var(--text)">${esc(p.name)}</div><div style="color:var(--muted);font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div><div style="color:var(--steel);font-size:11px">${esc(emails[p.id]||"")} · ${esc(p.country||"")}</div></div>
@@ -2282,9 +2309,9 @@ function showAdminPanel(){
         <button class="btn-navy btn-sm" style="color:#fff" data-id="${p.id}" id="apr-${p.id}">Approve</button>
       </div>
     </div>`).join("");
-    pendingRegs.forEach(p=>{
-      document.getElementById(`apr-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});});
-      document.getElementById(`rej-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));});
+    pending.forEach(p=>{
+      document.getElementById(`apr-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});await reloadAndRerender();});
+      document.getElementById(`rej-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));await reloadAndRerender();});
     });
   }
   function renderPartsBody(body){
@@ -2362,8 +2389,9 @@ function showAdminPanel(){
       r.readAsText(f);e.target.value="";
     };
     document.getElementById("a-exp").onclick=async()=>{
-      const emails=await fetchPrivateEmails(participants.map(p=>p.id));
-      const rows=[["name","company","sector","country","title","email","status","source"],...participants.map(p=>[p.name,p.company,p.sector,p.country,p.title,emails[p.id]||"",p.status||"approved",p.source||"csv"])];
+      const approved=approvedList();
+      const emails=await fetchPrivateEmails(approved.map(p=>p.id));
+      const rows=[["name","company","sector","country","title","email","status","source"],...approved.map(p=>[p.name,p.company,p.sector,p.country,p.title,emails[p.id]||"",p.status||"approved",p.source||"csv"])];
       const csv=rows.map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
       const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`GABS2026_participants_${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
     };
@@ -2387,18 +2415,22 @@ function showAdminPanel(){
           await Promise.all(mSnap.docs.map(m=>fbs.deleteDoc(m.ref)));
           await fbs.deleteDoc(t.ref);
         }));
-        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ All data cleared. Returning to start…</div>`;
+        await reloadAndRerender();
+        const fb3=document.getElementById("a-fb");
+        if(fb3)fb3.innerHTML=`<div class="ok-msg">✓ All data cleared. Returning to start…</div>`;
         await new Promise(r=>setTimeout(r,1500));
         localStorage.clear();
         window.location.reload();
       }catch(e){
-        if(fb2)fb2.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
+        const fbErr=document.getElementById("a-fb")||fb2;
+        if(fbErr)fbErr.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
         console.error("Reset failed:",e);
       }
     };
   }
   document.body.appendChild(ov);
-  renderMain();
+  ov.innerHTML=`<div class="sheet" style="padding:40px 0;text-align:center;color:var(--muted)">Loading…</div>`;
+  loadAdminParticipants().then(renderMain);
   ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
 }
 
