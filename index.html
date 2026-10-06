@@ -18,7 +18,8 @@
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import{getAuth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 const LIVE_HOSTS=["gabsconnect.com","www.gabsconnect.com","gabsconnect.pages.dev"];
 const IS_LIVE=LIVE_HOSTS.includes(location.hostname);
 const firebaseConfig=IS_LIVE?{apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"}:{
@@ -41,7 +42,9 @@ const isApple=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform=
 const db=initializeFirestore(app,isApple?{experimentalForceLongPolling:true}:{experimentalAutoDetectLongPolling:true});
 const storage=getStorage(app);
 const auth=getAuth(app);
-window._auth={auth,signInWithEmailAndPassword,signOut,onAuthStateChanged};
+const functions=getFunctions(app,"europe-west1");
+window._auth={auth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged};
+window._fn={httpsCallable:(n)=>httpsCallable(functions,n)};
 window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
@@ -381,7 +384,6 @@ let draftText="";
 let inboxData={};
 let readThreadIds=new Set();
 try{const s=localStorage.getItem("gabs_read");if(s)readThreadIds=new Set(JSON.parse(s));}catch(e){}
-let participantsReady=false,pendingReady=false;
 let threadUnsub=null;
 let inboxUnsubs=[];
 let inboxStarted=false;
@@ -392,7 +394,6 @@ let discSearch="",discSectors=[],discCountry="";
 let myMeetings=[];
 let schedDay=0;
 let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
-let validTicketRefs=[];try{const s=localStorage.getItem("gabs_tickets");if(s)validTicketRefs=JSON.parse(s);}catch(e){}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const esc=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -632,7 +633,6 @@ function startParticipantListener(){
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
   participantsUnsub=fb.onSnapshot(q,snap=>{
     participants=snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(!snap.metadata.fromCache)participantsReady=true;
     refreshDisc();
     if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
     const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
@@ -640,18 +640,7 @@ function startParticipantListener(){
     updateMsgBadge();
   });
   const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
-  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));if(!snap.metadata.fromCache)pendingReady=true;});
-}
-
-async function loadTicketsFromCloud(){
-  if(!window._fb)return;
-  try{
-    const fbs=window._fb;
-    const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"config")));
-    const doc=snap.docs.find(d=>d.id==="tickets");
-    if(doc){validTicketRefs=doc.data().refs||[];localStorage.setItem("gabs_tickets",JSON.stringify(validTicketRefs));console.log(`Loaded ${validTicketRefs.length} ticket refs from Firestore`);}
-    else{console.warn("No tickets doc in Firestore yet");}
-  }catch(e){console.error("Ticket load failed:",e.code||e.message);}
+  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));});
 }
 
 // ── App shell ──────────────────────────────────────────────────────────────
@@ -852,8 +841,9 @@ function showEditProfile(){
     }
   });
 
-  document.getElementById("ep-logout").onclick=()=>{
+  document.getElementById("ep-logout").onclick=async()=>{
     ov.remove();
+    if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
     me=null;localStorage.removeItem("gabs_me");
     inboxStarted=false;inboxListenedIds=new Set();
     inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};readThreadIds=new Set();
@@ -1923,12 +1913,14 @@ function showAI(){
 }
 
 // ── Entry screen ──────────────────────────────────────────────────────────
-function showEntry(){
+function showEntry(opts){
   const el=document.createElement("div");
   el.id="entry";
-  let stage="enter";
+  let pendingUid=(opts&&opts.pendingUid)||null;
+  let stage=pendingUid?"claim":"enter";
   let ticketInput="";
-  let foundParticipant=null;
+  let invalidTitle="Ticket not found";
+  let invalidMsg="We couldn't find this ticket reference. Please check and try again, or contact AHK Ghana.";
 
   function render(){
     el.innerHTML=`
@@ -1954,21 +1946,11 @@ function showEntry(){
 
     if(stage==="checking")return`<div style="text-align:center;padding:60px 0"><div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">Checking ticket…</div></div>`;
 
-    if(stage==="already")return`
-      <div class="already-card">
-        ${avHTML(foundParticipant.av||initials(foundParticipant.name||"?"),64,foundParticipant.photoURL)}
-        <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:14px">This ticket is already linked to</div>
-        <div style="font-size:17px;font-weight:700;color:${STEEL};margin-top:4px">${esc(foundParticipant.name)}</div>
-        <div style="color:var(--muted);font-size:13px;margin-top:3px">${esc(foundParticipant.title||"")} · ${esc(foundParticipant.company||"")}</div>
-      </div>
-      <button class="btn-gold" id="a-continue">Continue as ${esc(foundParticipant.name.split(" ")[0])} →</button>
-      <button class="btn-outline mt12" id="a-back">This isn't me</button>`;
-
     if(stage==="invalid")return`
       <div class="invalid-card">
         <div style="font-size:44px;margin-bottom:12px">🎫</div>
-        <div style="font-size:17px;font-weight:800;color:var(--text)">Ticket not found</div>
-        <div style="color:var(--muted);font-size:13px;margin-top:10px;line-height:1.6">We couldn't find this ticket reference. Please check and try again, or contact AHK Ghana.</div>
+        <div style="font-size:17px;font-weight:800;color:var(--text)">${esc(invalidTitle)}</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:10px;line-height:1.6">${esc(invalidMsg)}</div>
       </div>
       <button class="btn-outline mt16" id="i-back">Try again</button>`;
 
@@ -1978,7 +1960,7 @@ function showEntry(){
 
   function renderClaimForm(){
     return`
-      <div class="stage-badge">✓ Ticket verified · ${esc(ticketInput)}</div>
+      <div class="stage-badge">✓ Ticket verified</div>
       <div class="sheet-title">Complete your profile</div>
       <div class="sheet-sub">So other participants can find and connect with you</div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)">
@@ -2033,34 +2015,49 @@ function showEntry(){
       if(inp){inp.oninput=e=>{ticketInput=e.target.value.toUpperCase();};inp.addEventListener("keydown",e=>{if(e.key==="Enter")checkTicket();});setTimeout(()=>inp.focus(),150);}
       goBtn?.addEventListener("click",checkTicket);
     }
-    else if(stage==="already"){
-      document.getElementById("a-continue")?.addEventListener("click",()=>{
-        me={...foundParticipant};localStorage.setItem("gabs_me",JSON.stringify(me));
-        if(!participants.find(p=>p.id===me.id))participants.push({...me});
-        el.style.opacity="0";el.style.transition="opacity .3s";
-        setTimeout(()=>{el.remove();renderApp();startInbox();},300);
-      });
-      document.getElementById("a-back")?.addEventListener("click",()=>{stage="enter";ticketInput="";render();});
-    }
-    else if(stage==="invalid"){document.getElementById("i-back")?.addEventListener("click",()=>{stage="enter";render();});}
+    else if(stage==="invalid"){document.getElementById("i-back")?.addEventListener("click",()=>{stage="enter";ticketInput="";render();});}
     else if(stage==="claim")bindClaimForm();
   }
 
   async function checkTicket(){
-    const val=(document.getElementById("t-input")?.value||"").replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-").toUpperCase();
+    const val=(document.getElementById("t-input")?.value||"").trim().replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-").toUpperCase();
     if(!val){const err=document.getElementById("t-err");if(err)err.innerHTML=`<div class="err-msg" style="margin-top:10px">Please enter your ticket reference.</div>`;return;}
-    ticketInput=val;stage="checking";render();
-    if(!window._fb){stage="invalid";render();return;}
-    const localHit=participants.find(p=>p.ticket===ticketInput)||pendingRegs.find(p=>p.ticket===ticketInput);
-    if(localHit){foundParticipant={...localHit};stage="already";render();return;}
-    if(participantsReady&&pendingReady){stage=validTicketRefs.includes(ticketInput)?"claim":"invalid";render();return;}
+    stage="checking";render();
+    if(!window._fb||!window._fn||!window._auth){
+      invalidTitle="Connection problem";invalidMsg="Connection problem. Please try again.";
+      stage="invalid";render();return;
+    }
     try{
+      const result=await window._fn.httpsCallable("signInWithTicket")({ref:val});
+      const A=window._auth;
+      await A.signInWithCustomToken(A.auth,result.data.token);
+      const uid=result.data.uid;
       const fbs=window._fb;
-      const claimed=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("ticket","==",ticketInput)));
-      if(!claimed.empty){foundParticipant={id:claimed.docs[0].id,...claimed.docs[0].data()};stage="already";render();return;}
-      if(!validTicketRefs.includes(ticketInput)){stage="invalid";render();return;}
-      stage="claim";render();
-    }catch(e){stage="invalid";render();}
+      const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",uid)));
+      if(!snap.empty){
+        me={id:uid,...snap.docs[0].data()};
+        localStorage.setItem("gabs_me",JSON.stringify(me));
+        if(!participants.find(p=>p.id===me.id))participants.push({...me});
+        el.style.opacity="0";el.style.transition="opacity .3s";
+        setTimeout(()=>{el.remove();renderApp();startInbox();},300);
+      }else{
+        pendingUid=uid;
+        stage="claim";render();
+      }
+    }catch(e){
+      const code=String((e&&e.code)||"");
+      if(code.endsWith("not-found")){
+        invalidTitle="Ticket not found";
+        invalidMsg="We couldn't find this ticket reference. Please check and try again, or contact AHK Ghana.";
+      }else if(code.endsWith("resource-exhausted")){
+        invalidTitle="Please slow down";
+        invalidMsg="Too many attempts. Please wait a few minutes and try again.";
+      }else{
+        invalidTitle="Connection problem";
+        invalidMsg="Connection problem. Please try again.";
+      }
+      stage="invalid";render();
+    }
   }
 
   function bindClaimForm(){
@@ -2122,27 +2119,25 @@ function showEntry(){
       const fb2=document.getElementById("c-feedback");
       if(!salutation||!ptype||!name||!company||!title||!sector||!country){if(fb2)fb2.innerHTML=`<div class="err-msg">Please fill in all required fields.</div>`;return;}
       if(email&&!email.includes("@")){if(fb2)fb2.innerHTML=`<div class="err-msg">Please enter a valid email address.</div>`;return;}
-      if(!window._fb)return;
+      if(!window._fb||!pendingUid)return;
       const btn=document.getElementById("c-submit");
       try{
         const fbs=window._fb;
-        const recheck=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("ticket","==",ticketInput)));
-        if(!recheck.empty){if(fb2)fb2.innerHTML=`<div class="err-msg">This ticket was just claimed. Please contact AHK Ghana.</div>`;return;}
         if(btn){btn.disabled=true;btn.textContent="Submitting…";}
-        const docRef=await fbs.addDoc(fbs.collection(fbs.db,"participants"),{
-          salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,ticket:ticketInput,
+        await fbs.setDoc(fbs.doc(fbs.db,"participants",pendingUid),{
+          salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,
           av:initials(name),status:"approved",registeredAt:fbs.serverTimestamp(),source:"ticket-claim",
         });
-        if(email)sendConfirmationEmail({name,email,company,title,ticket:ticketInput,status:"approved"});
-        me={id:docRef.id,salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
+        if(email)sendConfirmationEmail({name,email,company,title,ticket:"",status:"approved"});
+        me={id:pendingUid,salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(pendingPhotoFile&&window._storage){
           try{
             const st=window._storage;
-            const storageRef=st.ref(st.storage,`photos/${docRef.id}`);
+            const storageRef=st.ref(st.storage,`photos/${pendingUid}`);
             await st.uploadBytes(storageRef,pendingPhotoFile);
             const url=await st.getDownloadURL(storageRef);
-            await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",docRef.id),{photoURL:url});
+            await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",pendingUid),{photoURL:url});
             me.photoURL=url;
             localStorage.setItem("gabs_me",JSON.stringify(me));
           }catch(photoErr){
@@ -2172,7 +2167,7 @@ function showEntry(){
 async function showAdmin(){
   const A=window._auth;
   if(A){await new Promise(r=>{const u=A.onAuthStateChanged(A.auth,()=>{u();r();});});}
-  if(A&&A.auth.currentUser){showAdminPanel();return;}
+  if(A&&A.auth.currentUser&&A.auth.currentUser.email){showAdminPanel();return;}
   showAdminLogin();
 }
 function showAdminLogin(){
@@ -2297,19 +2292,20 @@ function showAdminPanel(){
         const ignored=raw.length-raw.filter(r=>/^GABS[A-Z0-9-]{6,40}$/.test(r)).length;
         const fb2=document.getElementById("a-fb");
         if(!refs.length){if(fb2)fb2.innerHTML=`<div class="err-msg">No ticket references found in that file. Nothing was changed.</div>`;return;}
-        if(window._fb){
+        if(window._fn){
           try{
-            const fbx=window._fb;
-            if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Syncing…</div>`;
-            let existing=[];
-            const snap=await fbx.getDocs(fbx.collection(fbx.db,"config"));
-            const d0=snap.docs.find(x=>x.id==="tickets");
-            if(d0)existing=d0.data().refs||[];
-            const merged=[...new Set([...existing,...refs])];
-            await fbx.setDoc(fbx.doc(fbx.db,"config","tickets"),{refs:merged,updatedAt:fbx.serverTimestamp()});
-            validTicketRefs=merged;localStorage.setItem("gabs_tickets",JSON.stringify(merged));
-            if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${merged.length} ticket refs now live (${merged.length-existing.length} new${ignored?`, ${ignored} lines ignored`:""})</div>`;
-          }catch(err){if(fb2)fb2.innerHTML=`<div class="err-msg">Sync failed: ${esc(err.code||err.message)}</div>`;}
+            if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Uploading…</div>`;
+            const upload=window._fn.httpsCallable("adminUploadTickets");
+            let added=0,alreadyExisted=0,invalid=ignored;
+            for(let i=0;i<refs.length;i+=1000){
+              const chunk=refs.slice(i,i+1000);
+              const res=await upload({refs:chunk});
+              added+=res.data.added||0;
+              alreadyExisted+=res.data.alreadyExisted||0;
+              invalid+=res.data.invalid||0;
+            }
+            if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${added} added, ${alreadyExisted} already existed, ${invalid} ignored</div>`;
+          }catch(err){if(fb2)fb2.innerHTML=`<div class="err-msg">Upload failed: ${esc(err.code||err.message)}</div>`;}
         }
       };
       r.readAsText(f);e.target.value="";
@@ -2376,14 +2372,41 @@ async function boot(){
   document.getElementById("app").style.display="flex";
   if(window.location.hash==="#admin"){
     window.location.hash="";
-    if(window._fb){startParticipantListener();await loadTicketsFromCloud();await new Promise(r=>setTimeout(r,600));}
+    if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
     document.getElementById("loader").classList.add("gone");
     showAdmin();return;
   }
-  if(window._fb){startParticipantListener();await loadTicketsFromCloud();await new Promise(r=>setTimeout(r,600));}
+  if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
+
+  const A=window._auth;
+  const user=A?await new Promise(resolve=>{const u=A.onAuthStateChanged(A.auth,usr=>{u();resolve(usr);});}):null;
+
+  let delegateUid=null;
+  if(user&&!user.email){
+    try{
+      const tokRes=await user.getIdTokenResult();
+      if(tokRes.claims&&tokRes.claims.delegate===true)delegateUid=user.uid;
+    }catch(e){}
+  }
+
   document.getElementById("loader").classList.add("gone");
-  if(!me){showEntry();}
-  else{renderApp();startInbox();}
+
+  if(!delegateUid){
+    me=null;localStorage.removeItem("gabs_me");
+    showEntry();return;
+  }
+
+  if(window._fb){
+    const fbs=window._fb;
+    const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",delegateUid)));
+    if(!snap.empty){
+      me={id:delegateUid,...snap.docs[0].data()};
+      localStorage.setItem("gabs_me",JSON.stringify(me));
+      renderApp();startInbox();return;
+    }
+  }
+  me=null;localStorage.removeItem("gabs_me");
+  showEntry({pendingUid:delegateUid});
 }
 
 if(window._fb){boot();}
