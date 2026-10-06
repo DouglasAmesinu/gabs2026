@@ -310,7 +310,7 @@ exports.aiMatch = onCall(
         },
         body: JSON.stringify({
           model: AI_MODEL.value(),
-          max_tokens: 150,
+          max_tokens: 200,
           messages: [{ role: "user", content: prompt }],
         }),
         signal: controller.signal,
