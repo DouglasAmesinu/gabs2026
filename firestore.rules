@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isDelegate() { return signedIn() && request.auth.token.delegate == true; }
+    function isAdmin() { return signedIn() && request.auth.token.email == 'REPLACE_WITH_ADMIN_EMAIL'; }
+    function inThread(t) { return isDelegate() && request.auth.uid in t.split('_'); }
+
+    match /participants/{uid} {
+      allow read: if isDelegate() || isAdmin();
+      allow create: if isAdmin()
+        || (isDelegate() && request.auth.uid == uid
+            && request.resource.data.name is string
+            && request.resource.data.name.size() <= 200
+            && request.resource.data.status == 'approved'
+            && (!('bookedSlots' in request.resource.data) || request.resource.data.bookedSlots.size() == 0)
+            && !('email' in request.resource.data) && !('ticket' in request.resource.data));
+      allow update: if isAdmin()
+        || (isDelegate() && request.auth.uid == uid
+            && !request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['bookedSlots','status','source','registeredAt','email','ticket']));
+      allow delete: if isAdmin();
+
+      match /private/{doc} {
+        allow read: if isAdmin() || (isDelegate() && request.auth.uid == uid);
+        allow write: if isAdmin() || (isDelegate() && request.auth.uid == uid
+            && request.resource.data.keys().hasOnly(['email','updatedAt'])
+            && request.resource.data.email is string
+            && request.resource.data.email.size() <= 200);
+      }
+    }
+
+    match /threads/{tid} {
+      allow read, write: if isAdmin();
+      match /messages/{mid} {
+        allow read: if inThread(tid) || isAdmin();
+        allow create: if inThread(tid)
+          && request.resource.data.fromId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['text','fromId','fromName','fromAvatar','ts','meeting'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000;
+        allow update: if inThread(tid)
+          && resource.data.fromId != request.auth.uid
+          && resource.data.get('meeting', null) != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resp'])
+          && request.resource.data.resp in ['accepted','declined','busy'];
+        allow delete: if isAdmin();
+      }
+    }
+  }
+}
