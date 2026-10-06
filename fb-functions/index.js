@@ -4,7 +4,8 @@ const crypto = require("crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const { defineString } = require("firebase-functions/params");
+const { defineString, defineSecret } = require("firebase-functions/params");
+const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
 const { normalizeRef, isValidRef } = require("./lib/ticketRef");
@@ -12,6 +13,7 @@ const { applyRateLimit } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
 const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
+const { validateInput, buildPrompt, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
 
 const REGION = "europe-west1";
 setGlobalOptions({ region: REGION });
@@ -24,6 +26,11 @@ const db = admin.firestore();
 // No default — must be configured per environment. Never hard-code an
 // admin email/UID in the repo.
 const ADMIN_UID = defineString("ADMIN_UID");
+
+// Secret already exists in the live project under this name.
+const ANTHROPIC_KEY = defineSecret("ANTHROPIC_KEY");
+const AI_MODEL = defineString("AI_MODEL", { default: "claude-haiku-4-5-20251001" });
+const AI_GLOBAL_DAILY_LIMIT = 1500;
 
 const MAX_REFS_PER_CALL = 2000;
 const BATCH_SIZE = 400;
@@ -226,6 +233,108 @@ exports.migrateLegacy = onCall({ region: REGION }, async (request) => {
     dryRun,
   };
 });
+
+/**
+ * Authenticated callable: AI-assisted best-match suggestion. Only a
+ * signed-in delegate may call it; the server controls everything
+ * that costs money (model, max_tokens, prompt contents, timeout) —
+ * the client only ever supplies a candidateId shortlist. Never logs
+ * prompts, profile data, names, bios, or the key — status codes and
+ * counts only.
+ */
+exports.aiMatch = onCall(
+  {
+    region: REGION,
+    secrets: [ANTHROPIC_KEY],
+    timeoutSeconds: 30,
+    memory: "256MiB",
+    maxInstances: 5,
+  },
+  async (request) => {
+    if (!request.auth || request.auth.token.delegate !== true) {
+      throw new HttpsError("unauthenticated", "Please sign in again.");
+    }
+
+    const candidateIds = validateInput(request.data);
+    if (!candidateIds) {
+      throw new HttpsError("invalid-argument", "Invalid candidate list.");
+    }
+
+    const uid = request.auth.uid;
+    const now = Date.now();
+    const userRef = db.collection("aiUsage").doc(uid);
+    const globalRef = db.collection("aiUsage").doc(`global_${dayKeyFor(now)}`);
+
+    await db.runTransaction(async (tx) => {
+      const [userSnap, globalSnap] = await Promise.all([tx.get(userRef), tx.get(globalRef)]);
+      const decision = rateDecision(userSnap.exists ? userSnap.data() : null, now);
+      if (!decision.allowed) {
+        throw new HttpsError("resource-exhausted", "The matchmaker is busy. Please try again later.");
+      }
+      const globalCount = globalSnap.exists ? globalSnap.data().count || 0 : 0;
+      if (globalCount >= AI_GLOBAL_DAILY_LIMIT) {
+        throw new HttpsError("resource-exhausted", "The matchmaker is busy. Please try again later.");
+      }
+      tx.set(userRef, decision.nextState, { merge: true });
+      tx.set(globalRef, { count: globalCount + 1 }, { merge: true });
+    });
+
+    const refs = [
+      db.collection("participants").doc(uid),
+      ...candidateIds.map((id) => db.collection("participants").doc(id)),
+    ];
+    const snaps = await db.getAll(...refs);
+    const me = { id: uid, ...(snaps[0].exists ? snaps[0].data() : {}) };
+    const candidates = snaps
+      .slice(1)
+      .map((snap, i) => (snap.exists ? { id: candidateIds[i], ...snap.data() } : null))
+      .filter((p) => p && p.status === "approved" && p.ptype !== "Organiser" && p.id !== uid);
+
+    if (!candidates.length) {
+      throw new HttpsError("failed-precondition", "No candidates");
+    }
+    logger.info("aiMatch: candidates", candidates.length);
+
+    const prompt = buildPrompt(me, candidates);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    let text;
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_KEY.value(),
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: AI_MODEL.value(),
+          max_tokens: 150,
+          messages: [{ role: "user", content: prompt }],
+        }),
+        signal: controller.signal,
+      });
+      logger.info("aiMatch: upstream status", resp.status);
+      if (!resp.ok) {
+        throw new HttpsError("unavailable", "Matchmaker unavailable.");
+      }
+      const data = await resp.json();
+      text = data && data.content && data.content[0] && data.content[0].text;
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      throw new HttpsError("unavailable", "Matchmaker unavailable.");
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const result = parseMatchReply(text, candidateIds);
+    if (!result) {
+      throw new HttpsError("unavailable", "Matchmaker unavailable.");
+    }
+    return result;
+  }
+);
 
 /**
  * Firestore trigger: keeps each participant's bookedSlots in sync
