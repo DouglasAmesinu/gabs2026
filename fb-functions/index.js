@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineString } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -9,6 +10,7 @@ const admin = require("firebase-admin");
 const { normalizeRef, isValidRef } = require("./lib/ticketRef");
 const { applyRateLimit } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
+const { buildSlot } = require("./lib/slots");
 
 const REGION = "europe-west1";
 setGlobalOptions({ region: REGION });
@@ -141,3 +143,43 @@ exports.adminUploadTickets = onCall({ region: REGION }, async (request) => {
 
   return { added, alreadyExisted, invalid };
 });
+
+/**
+ * Firestore trigger: keeps each participant's bookedSlots in sync
+ * with the meeting response on a thread message, so a slot is only
+ * ever recorded server-side (the client no longer writes it).
+ */
+exports.syncBookedSlots = onDocumentUpdated(
+  { document: "threads/{tid}/messages/{mid}", region: REGION },
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!after || !after.meeting) return;
+    if (before.resp === after.resp) return;
+
+    const ids = String(event.params.tid).split("_");
+    if (ids.length !== 2) return;
+    const [a, b] = ids;
+    const mid = event.params.mid;
+
+    const FieldValue = admin.firestore.FieldValue;
+
+    if (after.resp === "accepted") {
+      const slotForA = buildSlot(after.meeting, b, mid);
+      const slotForB = buildSlot(after.meeting, a, mid);
+      if (!slotForA || !slotForB) return;
+      await Promise.all([
+        db.collection("participants").doc(a).set({ bookedSlots: FieldValue.arrayUnion(slotForA) }, { merge: true }),
+        db.collection("participants").doc(b).set({ bookedSlots: FieldValue.arrayUnion(slotForB) }, { merge: true }),
+      ]);
+    } else if (before.resp === "accepted") {
+      const slotForA = buildSlot(before.meeting, b, mid);
+      const slotForB = buildSlot(before.meeting, a, mid);
+      if (!slotForA || !slotForB) return;
+      await Promise.all([
+        db.collection("participants").doc(a).set({ bookedSlots: FieldValue.arrayRemove(slotForA) }, { merge: true }),
+        db.collection("participants").doc(b).set({ bookedSlots: FieldValue.arrayRemove(slotForB) }, { merge: true }),
+      ]);
+    }
+  }
+);

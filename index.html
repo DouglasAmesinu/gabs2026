@@ -16,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -45,7 +45,7 @@ const auth=getAuth(app);
 const functions=getFunctions(app,"europe-west1");
 window._auth={auth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged};
 window._fn={httpsCallable:(n)=>httpsCallable(functions,n)};
-window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,arrayUnion};
+window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -633,6 +633,15 @@ function startParticipantListener(){
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
   participantsUnsub=fb.onSnapshot(q,snap=>{
     participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(me){
+      const mine=participants.find(x=>x.id===me.id);
+      if(mine){
+        const existing=me.bookedSlots||[];
+        const seen=new Set(existing.map(s=>s.meetingId));
+        me.bookedSlots=[...existing,...(mine.bookedSlots||[]).filter(s=>!seen.has(s.meetingId))];
+        localStorage.setItem("gabs_me",JSON.stringify(me));
+      }
+    }
     refreshDisc();
     if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
     const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
@@ -1380,14 +1389,6 @@ function bindRespBtns(p){
           with:p.id,
           meetingId:btn.dataset.mid
         };
-        const myRef=fb.doc(fb.db,"participants",me.id);
-        const theirRef=fb.doc(fb.db,"participants",p.id);
-        await fb.updateDoc(myRef,{
-          bookedSlots:fb.arrayUnion?fb.arrayUnion(slotData):[slotData]
-        });
-        await fb.updateDoc(theirRef,{
-          bookedSlots:fb.arrayUnion?fb.arrayUnion(slotData):[slotData]
-        });
         me.bookedSlots=[...(me.bookedSlots||[]),slotData];
         localStorage.setItem("gabs_me",JSON.stringify(me));
       }
