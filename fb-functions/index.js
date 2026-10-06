@@ -13,7 +13,7 @@ const { applyRateLimit } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
 const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
-const { validateInput, buildPrompt, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
+const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
 
 const REGION = "europe-west1";
 setGlobalOptions({ region: REGION });
@@ -320,7 +320,14 @@ exports.aiMatch = onCall(
         throw new HttpsError("unavailable", "Matchmaker unavailable.");
       }
       const data = await resp.json();
-      text = data && data.content && data.content[0] && data.content[0].text;
+      logger.info("aiMatch: stop_reason", data && data.stop_reason);
+      text = extractText(data && data.content);
+      if (!text) {
+        // Covers both "no text block at all" and "stop_reason was
+        // max_tokens before any text block was produced" — either way
+        // there's nothing usable to parse, and we never retry.
+        throw new HttpsError("unavailable", "Matchmaker unavailable.");
+      }
     } catch (e) {
       if (e instanceof HttpsError) throw e;
       throw new HttpsError("unavailable", "Matchmaker unavailable.");

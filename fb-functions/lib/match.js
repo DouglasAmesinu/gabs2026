@@ -97,6 +97,19 @@ Respond ONLY with valid JSON, no other text:
 
 // ── Reply parsing ────────────────────────────────────────────────────────
 /**
+ * Finds the first block in an Anthropic response's `content` array
+ * whose type is "text" (never content[0] blindly — a response can
+ * start with a {type:"thinking"} block) and returns its text.
+ * @param {Array<{type?:string, text?:string}>} content
+ * @returns {string|null}
+ */
+function extractText(content) {
+  if (!Array.isArray(content)) return null;
+  const block = content.find((b) => b && b.type === "text" && typeof b.text === "string");
+  return block ? block.text : null;
+}
+
+/**
  * Extracts the first balanced {...} block from `text` (brace-depth
  * counted, so it's unaffected by markdown fences or trailing prose).
  * @param {string} text
@@ -209,6 +222,7 @@ module.exports = {
   validateInput,
   cleanField,
   buildPrompt,
+  extractText,
   parseMatchReply,
   rateDecision,
   dayKeyFor,

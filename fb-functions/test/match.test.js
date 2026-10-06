@@ -6,6 +6,7 @@ const {
   validateInput,
   cleanField,
   buildPrompt,
+  extractText,
   parseMatchReply,
   rateDecision,
 } = require("../lib/match");
@@ -161,6 +162,41 @@ test("parseMatchReply rejects an overlong matchName or reason", () => {
 test("parseMatchReply rejects non-string matchName/reason", () => {
   const text = JSON.stringify({ matchId: "p1", matchName: 123, reason: "ok" });
   assert.equal(parseMatchReply(text, ["p1"]), null);
+});
+
+// ── extractText ──────────────────────────────────────────────────────────
+
+test("extractText skips a leading thinking block and finds the text block", () => {
+  const content = [
+    { type: "thinking", thinking: "" },
+    { type: "text", text: '{"matchId":"p1","matchName":"Ama","reason":"ok"}' },
+  ];
+  assert.equal(extractText(content), '{"matchId":"p1","matchName":"Ama","reason":"ok"}');
+  // and the end-to-end path through parseMatchReply succeeds too:
+  assert.deepEqual(parseMatchReply(extractText(content), ["p1"]), {
+    matchId: "p1",
+    matchName: "Ama",
+    reason: "ok",
+  });
+});
+
+test("extractText returns null for a response with only a thinking block (fails cleanly)", () => {
+  const content = [{ type: "thinking", thinking: "still working this out..." }];
+  assert.equal(extractText(content), null);
+  // feeding that straight into parseMatchReply must also fail cleanly,
+  // never throw.
+  assert.equal(parseMatchReply(extractText(content), ["p1"]), null);
+});
+
+test("extractText returns null for a non-array or empty content", () => {
+  assert.equal(extractText(undefined), null);
+  assert.equal(extractText(null), null);
+  assert.equal(extractText([]), null);
+});
+
+test("extractText ignores a text-typed block with a non-string text field", () => {
+  const content = [{ type: "text", text: 123 }, { type: "text", text: "real one" }];
+  assert.equal(extractText(content), "real one");
 });
 
 // ── rateDecision ─────────────────────────────────────────────────────────
