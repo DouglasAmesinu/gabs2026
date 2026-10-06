@@ -10,7 +10,7 @@ const admin = require("firebase-admin");
 const { normalizeRef, isValidRef } = require("./lib/ticketRef");
 const { applyRateLimit } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
-const { buildSlot } = require("./lib/slots");
+const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
 
 const REGION = "europe-west1";
@@ -240,8 +240,8 @@ exports.syncBookedSlots = onDocumentUpdated(
     if (!after || !after.meeting) return;
     if (before.resp === after.resp) return;
 
-    const ids = String(event.params.tid).split("_");
-    if (ids.length !== 2) return;
+    const ids = splitThreadId(event.params.tid);
+    if (!ids) return;
     const [a, b] = ids;
     const mid = event.params.mid;
 

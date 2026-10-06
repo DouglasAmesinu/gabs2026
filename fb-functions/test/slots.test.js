@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { timeToMins, minsToTime, buildSlot } = require("../lib/slots");
+const { timeToMins, minsToTime, buildSlot, splitThreadId } = require("../lib/slots");
 
 test("timeToMins converts HH:MM to minutes since midnight", () => {
   assert.equal(timeToMins("00:00"), 0);
@@ -61,4 +61,20 @@ test("buildSlot accepts a single-digit hour start time", () => {
   const slot = buildSlot({ day: "20261124", start: "9:00", dur: 30 }, "other-uid", "msg1");
   assert.equal(slot.start, "9:00");
   assert.equal(slot.end, "09:30");
+});
+
+test("splitThreadId splits a well-formed double-underscore thread id", () => {
+  assert.deepEqual(splitThreadId("A__B"), ["A", "B"]);
+});
+
+test("splitThreadId returns null for a single underscore (not the client's separator)", () => {
+  assert.equal(splitThreadId("A_B"), null);
+});
+
+test("splitThreadId returns null when the second id is empty", () => {
+  assert.equal(splitThreadId("A__"), null);
+});
+
+test("splitThreadId leaves a single underscore inside an id alone", () => {
+  assert.deepEqual(splitThreadId("csv_0__XYZ"), ["csv_0", "XYZ"]);
 });

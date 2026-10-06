@@ -38,4 +38,21 @@ function buildSlot(meeting, otherId, meetingId) {
   return { day, start, end, with: otherId, meetingId };
 }
 
-module.exports = { timeToMins, minsToTime, buildSlot, DAY_RE, START_RE };
+/**
+ * Split a thread id built by the client as [a,b].sort().join("__")
+ * back into its two participant ids. Splits on the double underscore
+ * the client actually joins with — a single "_" inside either id
+ * (e.g. "csv_0") is left alone.
+ * @param {string} tid
+ * @returns {[string,string]|null} null unless it splits into exactly
+ *   two non-empty ids
+ */
+function splitThreadId(tid) {
+  const parts = String(tid == null ? "" : tid).split("__");
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
+  if (!a || !b) return null;
+  return [a, b];
+}
+
+module.exports = { timeToMins, minsToTime, buildSlot, splitThreadId, DAY_RE, START_RE };
