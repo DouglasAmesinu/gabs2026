@@ -14,12 +14,21 @@ service cloud.firestore {
             && request.resource.data.name is string
             && request.resource.data.name.size() <= 200
             && request.resource.data.status == 'approved'
-            && (!('bookedSlots' in request.resource.data) || request.resource.data.bookedSlots.size() == 0));
+            && (!('bookedSlots' in request.resource.data) || request.resource.data.bookedSlots.size() == 0)
+            && !('email' in request.resource.data) && !('ticket' in request.resource.data));
       allow update: if isAdmin()
         || (isDelegate() && request.auth.uid == uid
             && !request.resource.data.diff(resource.data).affectedKeys()
-                  .hasAny(['bookedSlots','status','source','registeredAt']));
+                  .hasAny(['bookedSlots','status','source','registeredAt','email','ticket']));
       allow delete: if isAdmin();
+
+      match /private/{doc} {
+        allow read: if isAdmin() || (isDelegate() && request.auth.uid == uid);
+        allow write: if isAdmin() || (isDelegate() && request.auth.uid == uid
+            && request.resource.data.keys().hasOnly(['email','updatedAt'])
+            && request.resource.data.email is string
+            && request.resource.data.email.size() <= 200);
+      }
     }
 
     match /threads/{tid} {

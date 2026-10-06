@@ -16,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{initializeFirestore,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{initializeFirestore,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -45,7 +45,7 @@ const auth=getAuth(app);
 const functions=getFunctions(app,"europe-west1");
 window._auth={auth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged};
 window._fn={httpsCallable:(n)=>httpsCallable(functions,n)};
-window._fb={db,collection,doc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
+window._fb={db,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -394,6 +394,7 @@ let discSearch="",discSectors=[],discCountry="";
 let myMeetings=[];
 let schedDay=0;
 let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
+let privateEmailLoaded=false;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const esc=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -666,6 +667,13 @@ function renderApp(){
   bindProfileBar();
   if(currentTab==="schedule")loadMyMeetings();
   if(!inboxStarted&&me)startInbox();
+  if(!privateEmailLoaded&&me&&window._fb){
+    privateEmailLoaded=true;
+    const fbs=window._fb;
+    fbs.getDoc(fbs.doc(fbs.db,"participants",me.id,"private","contact")).then(snap=>{
+      me.email=snap.exists()?(snap.data().email||""):"";
+    }).catch(()=>{});
+  }
 }
 
 function renderBottomNav(){
@@ -782,6 +790,16 @@ function showEditProfile(){
   </div>`;
   document.body.appendChild(ov);
 
+  if(window._fb&&me.id){
+    const fbs=window._fb;
+    fbs.getDoc(fbs.doc(fbs.db,"participants",me.id,"private","contact")).then(snap=>{
+      const email=snap.exists()?(snap.data().email||""):"";
+      me.email=email;
+      const inp=document.getElementById("ep-email");
+      if(inp)inp.value=email;
+    }).catch(()=>{});
+  }
+
   document.getElementById("ep-close").onclick=()=>ov.remove();
   document.querySelectorAll("#ep-interests .interest-chip").forEach(chip=>{
     chip.onclick=()=>chip.classList.toggle("sel");
@@ -897,7 +915,9 @@ function showEditProfile(){
 
     try{
       if(window._fb&&me.id){
-        await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",me.id),{salutation,ptype,website,name:newName,company:newCompany,title,sector,country,email,linkedin,interests,bio,av:initials(newName)});
+        const fbs=window._fb;
+        await fbs.updateDoc(fbs.doc(fbs.db,"participants",me.id),{salutation,ptype,website,name:newName,company:newCompany,title,sector,country,linkedin,interests,bio,av:initials(newName)});
+        await fbs.setDoc(fbs.doc(fbs.db,"participants",me.id,"private","contact"),{email,updatedAt:fbs.serverTimestamp()},{merge:true});
       }
       me={...me,salutation,ptype,website,name:newName,company:newCompany,title,sector,country,email,linkedin,interests,bio,av:initials(newName)};
       localStorage.setItem("gabs_me",JSON.stringify(me));
@@ -1583,6 +1603,22 @@ function renderSponsors(){
 }
 
 // ── Meeting modal ──────────────────────────────────────────────────────────
+async function fetchPrivateEmails(ids){
+  const emails={};
+  const fb=window._fb;
+  if(!fb)return emails;
+  for(let i=0;i<ids.length;i+=25){
+    const chunk=ids.slice(i,i+25);
+    const results=await Promise.all(chunk.map(id=>
+      fb.getDoc(fb.doc(fb.db,"participants",id,"private","contact"))
+        .then(snap=>snap.exists()?(snap.data().email||""):"")
+        .catch(()=>"")
+    ));
+    chunk.forEach((id,idx)=>{emails[id]=results[idx];});
+  }
+  return emails;
+}
+
 async function getParticipantSlots(participantId){
   if(!window._fb)return[];
   try{
@@ -2126,10 +2162,13 @@ function showEntry(opts){
         const fbs=window._fb;
         if(btn){btn.disabled=true;btn.textContent="Submitting…";}
         await fbs.setDoc(fbs.doc(fbs.db,"participants",pendingUid),{
-          salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,
+          salutation,ptype,name,company,website,title,sector,country,linkedin,interests,bio,
           av:initials(name),status:"approved",registeredAt:fbs.serverTimestamp(),source:"ticket-claim",
         });
-        if(email)sendConfirmationEmail({name,email,company,title,ticket:"",status:"approved"});
+        if(email){
+          await fbs.setDoc(fbs.doc(fbs.db,"participants",pendingUid,"private","contact"),{email,updatedAt:fbs.serverTimestamp()});
+          sendConfirmationEmail({name,email,company,title,ticket:"",status:"approved"});
+        }
         me={id:pendingUid,salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(pendingPhotoFile&&window._storage){
@@ -2230,12 +2269,13 @@ function showAdminPanel(){
     if(adminTab==="pending")renderPendingBody(body);
     else renderPartsBody(body);
   }
-  function renderPendingBody(body){
+  async function renderPendingBody(body){
     if(!pendingRegs.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">✓ No pending registrations</div>`;return;}
+    const emails=await fetchPrivateEmails(pendingRegs.map(p=>p.id));
     body.innerHTML=pendingRegs.map(p=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
         ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
-        <div><div style="font-weight:700;color:var(--text)">${esc(p.name)}</div><div style="color:var(--muted);font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div><div style="color:var(--steel);font-size:11px">${esc(p.email||"")} · ${esc(p.country||"")}</div></div>
+        <div><div style="font-weight:700;color:var(--text)">${esc(p.name)}</div><div style="color:var(--muted);font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div><div style="color:var(--steel);font-size:11px">${esc(emails[p.id]||"")} · ${esc(p.country||"")}</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button class="btn-outline btn-sm" style="color:var(--red);border-color:#FECACA" data-id="${p.id}" id="rej-${p.id}">Reject</button>
@@ -2278,7 +2318,17 @@ function showAdminPanel(){
           }).filter(p=>p.name);
           const fb2=document.getElementById("a-fb");
           if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Syncing ${parsed.length} participants…</div>`;
-          if(window._fb){const fbs=window._fb;await Promise.all(parsed.map((p,i)=>fbs.setDoc(fbs.doc(fbs.db,"participants",`csv_${i}`),{...p,id:`csv_${i}`})));if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${parsed.length} participants synced</div>`;}
+          if(window._fb){
+            const fbs=window._fb;
+            await Promise.all(parsed.map((p,i)=>{
+              const{email,...pub}=p;
+              const id=`csv_${i}`;
+              const writes=[fbs.setDoc(fbs.doc(fbs.db,"participants",id),{...pub,id})];
+              if(email)writes.push(fbs.setDoc(fbs.doc(fbs.db,"participants",id,"private","contact"),{email,updatedAt:fbs.serverTimestamp()}));
+              return Promise.all(writes);
+            }));
+            if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ ${parsed.length} participants synced</div>`;
+          }
         }catch(err){const fb2=document.getElementById("a-fb");if(fb2)fb2.innerHTML=`<div class="err-msg">${esc(err.message)}</div>`;}
       };
       reader.readAsText(f);e.target.value="";
@@ -2311,8 +2361,9 @@ function showAdminPanel(){
       };
       r.readAsText(f);e.target.value="";
     };
-    document.getElementById("a-exp").onclick=()=>{
-      const rows=[["name","company","sector","country","title","email","status","source"],...participants.map(p=>[p.name,p.company,p.sector,p.country,p.title,p.email||"",p.status||"approved",p.source||"csv"])];
+    document.getElementById("a-exp").onclick=async()=>{
+      const emails=await fetchPrivateEmails(participants.map(p=>p.id));
+      const rows=[["name","company","sector","country","title","email","status","source"],...participants.map(p=>[p.name,p.company,p.sector,p.country,p.title,emails[p.id]||"",p.status||"approved",p.source||"csv"])];
       const csv=rows.map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
       const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`GABS2026_participants_${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
     };
