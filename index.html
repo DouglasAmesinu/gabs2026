@@ -1593,7 +1593,8 @@ async function doSend(p,textOverride,meeting){
   if(inp){inp.value="";inp.style.height="auto";}
   if(sbt)sbt.className="send-btn off";
   const fb=window._fb;const tid2=tid(me.id,p.id);
-  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av||initials(me.name),ts:fb.serverTimestamp()};
+  // participants: same sorted pair as tid(), so collection-group queries can find the thread from either side
+  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av||initials(me.name),ts:fb.serverTimestamp(),participants:[me.id,p.id].sort(),hasMeeting:!!meeting};
   if(meeting)payload.meeting=meeting;
   await fb.addDoc(fb.collection(fb.db,"threads",tid2,"messages"),payload);
 }
