@@ -44,7 +44,7 @@ const storage=getStorage(app);
 const auth=getAuth(app);
 const functions=getFunctions(app,"europe-west1");
 window._auth={auth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged};
-window._fn={httpsCallable:(n)=>httpsCallable(functions,n)};
+window._fn={httpsCallable:(n,o)=>httpsCallable(functions,n,o)};
 window._fb={db,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
@@ -2453,15 +2453,8 @@ function showAdminPanel(){
       <button class="btn-outline" id="a-dl">↓ CSV Template</button>
       <div id="a-fb"></div>
       <button class="btn-outline" id="a-rst" style="color:var(--red);border-color:#FECACA">Reset all data</button>
+      <button class="btn-outline" id="a-rst-unlink" style="color:var(--red);border-color:#FECACA">Reset all data and unlink tickets</button>
       <div style="font-size:11px;color:var(--muted);text-align:center">Columns: name, company, sector, country, title, email</div>
-    </div>
-    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--steel);margin-bottom:10px">Data migration (one-time)</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn-outline" id="a-mig-dry" style="flex:1">Dry run</button>
-        <button class="btn-outline" id="a-mig-run" style="flex:1;color:var(--red);border-color:#FECACA">Run migration</button>
-      </div>
-      <div id="a-mig-fb"></div>
     </div>
     <input type="file" id="a-csv" accept=".csv" style="display:none"/>
     <input type="file" id="tickets-file" accept=".csv,.txt" style="display:none"/>`;
@@ -2538,62 +2531,32 @@ function showAdminPanel(){
       const csv=["name,company,sector,country,title,email","Hans Mueller,Berlin Tech GmbH,Technology,Germany,Managing Director,hans@berlintech.de"].join("\n");
       const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="GABS2026_template.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
     };
-    document.getElementById("a-rst").onclick=async()=>{
+    async function runReset(unlinkTickets){
       const fb2=document.getElementById("a-fb");
-      if(!confirm("Delete ALL participants and messages from Firestore? This cannot be undone."))return;
-      if(!window._fb){if(fb2)fb2.innerHTML=`<div class="err-msg">Not connected to Firestore.</div>`;return;}
+      const msg=unlinkTickets
+        ?"⚠️ RESET ALL DATA AND UNLINK TICKETS\n\nThis permanently deletes every participant profile, all conversations and meeting requests, all private contact records (emails) and all usage counters.\n\nIt ALSO detaches every ticket from its profile, so each ticket can be claimed again from scratch. Ticket references themselves are kept.\n\nThis cannot be undone. Continue?"
+        :"Reset all data?\n\nThis permanently deletes every participant profile, all conversations and meeting requests, all private contact records (emails) and all usage counters.\n\nTicket references are kept and stay linked to their delegates.\n\nThis cannot be undone. Continue?";
+      if(!confirm(msg))return;
+      if(!window._fn){if(fb2)fb2.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+      const btns=[document.getElementById("a-rst"),document.getElementById("a-rst-unlink")];
+      btns.forEach(b=>{if(b)b.disabled=true;});
       if(fb2)fb2.innerHTML=`<div class="ok-msg">⏳ Deleting…</div>`;
       try{
-        const fbs=window._fb;
-        const pSnap=await fbs.getDocs(fbs.collection(fbs.db,"participants"));
-        await Promise.all(pSnap.docs.map(d=>fbs.deleteDoc(d.ref)));
-        const tSnap=await fbs.getDocs(fbs.collection(fbs.db,"threads"));
-        await Promise.all(tSnap.docs.map(async t=>{
-          const mSnap=await fbs.getDocs(fbs.collection(fbs.db,"threads",t.id,"messages"));
-          await Promise.all(mSnap.docs.map(m=>fbs.deleteDoc(m.ref)));
-          await fbs.deleteDoc(t.ref);
-        }));
-        await reloadAndRerender();
-        const fb3=document.getElementById("a-fb");
-        if(fb3)fb3.innerHTML=`<div class="ok-msg">✓ All data cleared. Returning to start…</div>`;
-        await new Promise(r=>setTimeout(r,1500));
+        const res=await window._fn.httpsCallable("adminReset",{timeout:540000})({confirm:"RESET",unlinkTickets});
+        const r=res.data||{};
+        const fb3=document.getElementById("a-fb")||fb2;
+        if(fb3)fb3.innerHTML=`<div class="ok-msg">✓ Deleted ${esc(r.participants)} participants, ${esc(r.threads)} conversations, ${esc(r.aiUsage)} usage counters, ${esc(r.rate)} rate records${unlinkTickets?`; unlinked ${esc(r.ticketsUnlinked)} tickets`:""}. Returning to start…</div>`;
+        await new Promise(r=>setTimeout(r,2500));
         localStorage.clear();
         window.location.reload();
       }catch(e){
         const fbErr=document.getElementById("a-fb")||fb2;
-        if(fbErr)fbErr.innerHTML=`<div class="err-msg">Delete failed: ${esc(e.code||e.message||"unknown error")}</div>`;
-        console.error("Reset failed:",e);
-      }
-    };
-    function migResultHTML(r){
-      return`<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12px;color:var(--text);line-height:1.7">
-        <div style="font-weight:700;margin-bottom:4px">${r.dryRun?"🔍 Dry run (no changes made)":"✓ Migration applied"}</div>
-        <div>Refs total: ${r.refsTotal}</div>
-        <div>Tickets to create: ${r.ticketsToCreate}</div>
-        <div>Tickets to link: ${r.ticketsToLink}</div>
-        <div>Emails to move: ${r.emailsToMove}</div>
-        <div>Participants to clean: ${r.participantsToClean}</div>
-        <div>Invalid refs: ${r.invalidRefs}</div>
-        <div>CSV rows skipped: ${r.csvSkipped}</div>
-        <div>Conflicts: ${r.conflicts.length}${r.conflicts.length?` (${r.conflicts.map(id=>esc(id)).join(", ")})`:""}</div>
-      </div>`;
-    }
-    async function runMigration(dryRun){
-      const fb3=document.getElementById("a-mig-fb");
-      if(!window._fn){if(fb3)fb3.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
-      if(fb3)fb3.innerHTML=`<div class="ok-msg">⏳ ${dryRun?"Running dry run…":"Running migration…"}</div>`;
-      try{
-        const res=await window._fn.httpsCallable("migrateLegacy")({dryRun});
-        if(fb3)fb3.innerHTML=migResultHTML(res.data);
-      }catch(err){
-        if(fb3)fb3.innerHTML=`<div class="err-msg">${esc(err.code||err.message||"unknown error")}</div>`;
+        if(fbErr)fbErr.innerHTML=`<div class="err-msg">Reset failed: ${esc(e.code||"unknown error")}</div>`;
+        btns.forEach(b=>{if(b)b.disabled=false;});
       }
     }
-    document.getElementById("a-mig-dry").onclick=()=>runMigration(true);
-    document.getElementById("a-mig-run").onclick=()=>{
-      if(!confirm("This permanently moves legacy ticket links and emails into their new storage and CANNOT be undone. Run the real migration now?"))return;
-      runMigration(false);
-    };
+    document.getElementById("a-rst").onclick=()=>runReset(false);
+    document.getElementById("a-rst-unlink").onclick=()=>runReset(true);
   }
   document.body.appendChild(ov);
   ov.innerHTML=`<div class="sheet" style="padding:40px 0;text-align:center;color:var(--muted)">Loading…</div>`;
