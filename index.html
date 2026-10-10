@@ -403,16 +403,89 @@ let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlo
 let privateEmailLoaded=false;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-const esc=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const tid=(a,b)=>[a,b].sort().join("__");
 const fmtTime=ts=>ts?.seconds?new Date(ts.seconds*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
 const initials=name=>name.trim().split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
 const safeWebsiteURL=u=>{
-  const s=String(u||"").trim();
+  const s=String(u??"").trim();
   if(!s)return null;
-  const withScheme=/^https?:\/\//i.test(s)?s:"https://"+s;
-  return /^https?:\/\//i.test(withScheme)?withScheme:null;
+  return safeUrl(/^https?:\/\//i.test(s)?s:"https://"+s)||null;
 };
+// LinkedIn is stored without a scheme ("linkedin.com/in/..."): always link over https
+const linkedinText=u=>String(u??"").trim().replace(/^https?:\/\//i,"");
+const safeLinkedInURL=u=>{const s=linkedinText(u);return s?safeUrl("https://"+s,{protocols:["https:"]}):"";};
+// The rules only type-check name on create, so coerce profile fields here:
+// one malformed profile must not break rendering for everyone
+const PROFILE_TEXT_FIELDS=["name","company","title","bio","sector","country","ptype","salutation","website","linkedin","phone","av","photoURL"];
+function normParticipant(p){
+  const out={...p};
+  PROFILE_TEXT_FIELDS.forEach(k=>{if(k in out&&typeof out[k]!=="string")out[k]=out[k]==null?"":String(out[k]);});
+  if("interests" in out)out.interests=Array.isArray(out.interests)?out.interests.filter(i=>typeof i==="string"):[];
+  return out;
+}
+// Meeting fields are written by whoever proposed the meeting: only well-formed
+// values reach calendar links and files (otherwise the old defaults)
+function calParts(meeting){
+  const day=/^\d{8}$/.test(String(meeting.day||""))?String(meeting.day):"20261124";
+  const start=/^\d{1,2}:\d{2}$/.test(String(meeting.start||""))?String(meeting.start):"09:00";
+  const[h,m]=start.split(":").map(Number);
+  const d=Number(meeting.dur);
+  const dur=Number.isInteger(d)&&d>0&&d<=600?d:30;
+  return{day,h,m,dur};
+}
+
+// BEGIN safe-helpers
+// Pure functions (no DOM, no globals). Unit-tested from
+// fb-functions/test/safeHelpers.test.js, which evaluates this block.
+
+// HTML-escape for text and for quoted attribute values; null/undefined become "".
+const ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"};
+function esc(s){
+  if(s===null||s===undefined)return"";
+  return String(s).replace(/[&<>"'`]/g,c=>ESC_MAP[c]);
+}
+
+// The id itself when it is a plain Firestore-style id, else "".
+function safeId(s){
+  return typeof s==="string"&&/^[A-Za-z0-9_-]{1,64}$/.test(s)?s:"";
+}
+
+// The URL normalised by the URL parser, only when it is absolute, its protocol is
+// allowed and it carries no user:password; else "".
+function safeUrl(u,opts){
+  const protocols=(opts&&opts.protocols)||["https:","http:"];
+  if(u===null||u===undefined)return"";
+  const s=String(u).trim();
+  if(!s||s.length>2048)return"";
+  let url;
+  try{url=new URL(s);}catch(e){return"";}
+  if(!protocols.includes(url.protocol)||url.username||url.password)return"";
+  return url.href;
+}
+
+// Profile photo URL: https on Firebase Storage (default port) only, else "".
+function safePhoto(u){
+  const href=safeUrl(u,{protocols:["https:"]});
+  if(!href)return"";
+  const url=new URL(href);
+  if(url.port)return"";
+  const host=url.hostname;
+  return host==="firebasestorage.googleapis.com"||host.endsWith(".firebasestorage.app")?href:"";
+}
+
+// At most max characters, counted in code points so emoji are never split;
+// null/undefined become "".
+function clip(s,max){
+  if(s===null||s===undefined)return"";
+  const str=String(s);
+  if(!Number.isFinite(max))return str;
+  const n=Math.max(0,Math.floor(max));
+  if(str.length<=n)return str;
+  const cps=Array.from(str);
+  return cps.length<=n?str:cps.slice(0,n).join("");
+}
+// END safe-helpers
+
 
 // BEGIN inbox-helpers
 // Pure functions (no DOM, no Firestore, no globals). Unit-tested from
@@ -474,8 +547,9 @@ function applyMeetingChange(list,change,myId){
 
 function avHTML(av,sz=42,photoURL=null){
   const fs=Math.round(sz*.36);
-  if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(photoURL)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
-  return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(av)}</div>`;
+  const src=safePhoto(photoURL);
+  if(src)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(src)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
+  return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(clip(av,3))}</div>`;
 }
 // Profile photos: decode, shrink to max 800px on the longest side, re-encode as JPEG
 const PHOTO_MAX_BYTES=30*1024*1024;
@@ -655,20 +729,18 @@ function sendConfirmationEmail({name,email,company,title,ticket,status}){
 
 // ── Calendar ───────────────────────────────────────────────────────────────
 function generateGoogleCalURL(meeting,fromName,toName){
-  const date=meeting.day||"20261124";
-  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const{day:date,h,m,dur}=calParts(meeting);
   const pad=n=>String(n).padStart(2,"0");
   const startStr=`${date}T${pad(h)}${pad(m)}00Z`;
-  const endMins=h*60+m+(meeting.dur||30);
+  const endMins=h*60+m+dur;
   const endStr=`${date}T${pad(Math.floor(endMins/60))}${pad(endMins%60)}00Z`;
   return`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(`B2B Meeting at GABS 2026\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`)}&location=${encodeURIComponent(meeting.loc||"GABS 2026 Venue, Accra")}`;
 }
 function generateOutlookCalURL(meeting,fromName,toName){
-  const date=meeting.day||"20261124";
-  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const{day:date,h,m,dur}=calParts(meeting);
   const pad=n=>String(n).padStart(2,"0");
   const startStr=`${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}T${pad(h)}:${pad(m)}:00Z`;
-  const endMins=h*60+m+(meeting.dur||30);
+  const endMins=h*60+m+dur;
   const endStr=`${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}T${pad(Math.floor(endMins/60))}:${pad(endMins%60)}:00Z`;
   return`https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`)}&startdt=${encodeURIComponent(startStr)}&enddt=${encodeURIComponent(endStr)}&body=${encodeURIComponent(`B2B Meeting at GABS 2026\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`)}&location=${encodeURIComponent(meeting.loc||"GABS 2026 Venue, Accra")}`;
 }
@@ -693,15 +765,14 @@ function generateICS(meeting,fromName,toName){
   }catch(e){generateICSLocal(meeting,fromName,toName);}
 }
 function generateICSLocal(meeting,fromName,toName){
-  const base=meeting.day||"20261124";
-  const[h,m]=(meeting.start||"09:00").split(":").map(Number);
+  const{day:base,h,m,dur}=calParts(meeting);
   const pad=n=>String(n).padStart(2,"0");
   const startDt=`${base}T${pad(h)}${pad(m)}00Z`;
-  const endMins=h*60+m+(meeting.dur||30);
+  const endMins=h*60+m+dur;
   const endDt=`${base}T${pad(Math.floor(endMins/60))}${pad(endMins%60)}00Z`;
   const now=new Date();
   const stamp=`${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
-  const esc2=t=>String(t??"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+  const esc2=t=>String(t??"").replace(/\r/g,"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
   const uid=`gabs2026-${base}-${pad(h)}${pad(m)}-${[fromName,toName].map(n=>String(n||"").toLowerCase().replace(/[^a-z0-9]+/g,"")).sort().join("-")}@gabsconnect.com`;
   const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//GABS 2026//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","BEGIN:VEVENT",
     `UID:${uid}`,`DTSTAMP:${stamp}`,`DTSTART:${startDt}`,`DTEND:${endDt}`,
@@ -732,6 +803,17 @@ function downloadMeetingICS(id){
   const m=myMeetings.find(x=>x.id===id);
   if(m&&m.meeting)generateICS(m.meeting,me.name,m.otherParticipant.name);
 }
+// Schedule's My Meetings calendar buttons: one delegated listener, URLs built at click time
+document.addEventListener("click",e=>{
+  const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
+  if(!btn||!me)return;
+  const m=myMeetings.find(x=>x.id===btn.dataset.id);
+  if(!m||!m.meeting)return;
+  const kind=btn.dataset.cal;
+  if(kind==="ics")downloadMeetingICS(m.id);
+  else if(kind==="gcal")window.open(generateGoogleCalURL(m.meeting,me.name,m.otherParticipant.name),"_blank");
+  else if(kind==="outlook")window.open(generateOutlookCalURL(m.meeting,me.name,m.otherParticipant.name),"_blank");
+});
 
 // ── Firestore listeners ────────────────────────────────────────────────────
 // Participant reads require a delegate token, so this must only start after sign-in
@@ -769,7 +851,7 @@ function subscribeParticipants(){
   const fb=window._fb;
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
   participantsUnsub=fb.onSnapshot(q,{includeMetadataChanges:true},snap=>{
-    participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    participants=snap.docs.map(d=>normParticipant({id:d.id,...d.data()}));
     if(!snap.metadata.fromCache)participantsLoaded=true;
     if(me){
       const mine=participants.find(x=>x.id===me.id);
@@ -871,9 +953,9 @@ function showEditProfile(){
     <div class="sheet-sub">Update your details visible to other participants</div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div id="ep-avatar-preview" style="width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative">
-        ${me.photoURL
-          ? `<img src="${esc(me.photoURL)}" width="80" height="80" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover"/>`
-          : `<span style="color:#fff;font-size:28px;font-weight:700">${initials(me.name||"?")}</span>`}
+        ${safePhoto(me.photoURL)
+          ? `<img src="${esc(safePhoto(me.photoURL))}" width="80" height="80" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover"/>`
+          : `<span style="color:#fff;font-size:28px;font-weight:700">${esc(initials(me.name||"?"))}</span>`}
         <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>
       </div>
       <input type="file" id="ep-photo-input" accept="image/*" style="display:none"/>
@@ -1116,7 +1198,7 @@ function filtered(){
 function pCardHTML(p){
   const self=me&&p.id===me.id;
   const hasContact=p.phone||p.linkedin;
-  return`<div class="p-card${self?" self":""}" data-pid="${p.id}">
+  return`<div class="p-card${self?" self":""}" data-pid="${safeId(p.id)}">
     <div class="p-card-top">
       ${avHTML(p.av||initials(p.name||"?"),46,p.photoURL)}
       <div style="flex:1;min-width:0">
@@ -1134,12 +1216,12 @@ function pCardHTML(p){
     ${p.bio?`<div style="font-size:13px;color:var(--muted);line-height:1.5;padding:8px 0;border-top:1px solid var(--border);margin-top:4px">${esc(p.bio)}</div>`:(self?`<div id="bio-nudge" style="font-size:11px;color:var(--gold);font-weight:600;cursor:pointer;margin-top:4px">+ Add a bio to improve your AI matches</div>`:"")}
     ${(p.phone||p.linkedin||p.website)?`<div class="p-contact">
       ${p.phone?`<a href="tel:${esc(p.phone)}">📞 ${esc(p.phone)}</a>`:""}
-      ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener">🔗 LinkedIn</a>`:""}
+      ${safeLinkedInURL(p.linkedin)?`<a href="${esc(safeLinkedInURL(p.linkedin))}" target="_blank" rel="noopener">🔗 LinkedIn</a>`:""}
       ${safeWebsiteURL(p.website)?`<a href="${esc(safeWebsiteURL(p.website))}" target="_blank" rel="noopener">🌐 Website</a>`:""}
     </div>`:""}
     ${self?"":`<div class="p-actions" style="margin-top:12px">
-      <button class="btn-outline btn-sm p-msg" data-id="${p.id}">💬 Message</button>
-      <button class="btn-navy btn-sm p-mt" data-id="${p.id}" style="color:#fff">📅 Propose Meeting</button>
+      <button class="btn-outline btn-sm p-msg" data-id="${safeId(p.id)}">💬 Message</button>
+      <button class="btn-navy btn-sm p-mt" data-id="${safeId(p.id)}" style="color:#fff">📅 Propose Meeting</button>
     </div>`}
   </div>`;
 }
@@ -1280,8 +1362,8 @@ function showParticipantProfile(p){
       ${hasContact?`<div style="padding:16px 0">
         <div style="font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Contact</div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          ${safeWebsiteURL(p.website)?`<a href="${esc(safeWebsiteURL(p.website))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🌐 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.website.replace(/^https?:\/\//,""))}</span></a>`:""}
-          ${p.linkedin?`<a href="https://${esc(p.linkedin.replace(/^https?:\/\//,""))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🔗 <span style="text-decoration:underline;text-underline-offset:3px">${esc(p.linkedin.replace(/^https?:\/\//,""))}</span></a>`:""}
+          ${safeWebsiteURL(p.website)?`<a href="${esc(safeWebsiteURL(p.website))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🌐 <span style="text-decoration:underline;text-underline-offset:3px">${esc(String(p.website).replace(/^https?:\/\//,""))}</span></a>`:""}
+          ${safeLinkedInURL(p.linkedin)?`<a href="${esc(safeLinkedInURL(p.linkedin))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--steel);text-decoration:none">🔗 <span style="text-decoration:underline;text-underline-offset:3px">${esc(linkedinText(p.linkedin))}</span></a>`:""}
         </div>
       </div>`:""}
     </div>
@@ -1350,7 +1432,7 @@ function renderInbox(){
     <div class="inbox-list">${entries.map(({p,text,ts},idx)=>{
       const unread=!readThreadIds.has(p.id);
       return`
-      <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${p.id}" style="background:${unread?"#fff":"#F8FAFC"}">
+      <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${safeId(p.id)}" style="background:${unread?"#fff":"#F8FAFC"}">
         <div style="position:relative;flex-shrink:0">
           ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL||null)}
           ${unread?`<div style="position:absolute;top:0;right:0;width:11px;height:11px;border-radius:50%;background:var(--gold);border:2px solid #fff"></div>`:""}
@@ -1358,7 +1440,7 @@ function renderInbox(){
         <div class="inbox-meta">
           <div class="inbox-name" style="font-weight:${unread?800:600}">${esc(p.name)}</div>
           <div class="inbox-company">${esc(p.company||"")}</div>
-          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(text||"")}</div>
+          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(clip(text||"",200))}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <span class="inbox-time">${fmtTime(ts)}</span>
@@ -1384,7 +1466,7 @@ function notifText(){
   }
   if(people===1){
     const b=bs[0],nm=b.p.name||"A delegate";
-    if(total===1){const t=String(b.text||"").replace(/\s+/g," ").trim();return"💬 "+nm+(t?": "+(t.length>40?t.slice(0,40)+"…":t):" sent a message");}
+    if(total===1){const t=String(b.text||"").replace(/\s+/g," ").trim();const c=clip(t,40);return"💬 "+nm+(t?": "+(c!==t?c+"…":t):" sent a message");}
     return"💬 "+nm+" sent "+total+" messages";
   }
   return"💬 "+total+" new messages from "+people+" people";
@@ -1547,19 +1629,19 @@ function renderMsgs(){
     if(m.meeting){
       if(!mine&&!m.resp){
         respHTML=`<div class="meet-actions">
-          <button class="meet-btn" style="background:#F0FDF4;color:var(--green);border-color:#BBF7D0" data-mid="${m.id}" data-resp="accepted">✓ Accept</button>
-          <button class="meet-btn" style="background:#FEF2F2;color:var(--red);border-color:#FECACA" data-mid="${m.id}" data-resp="declined">✗ Decline</button>
-          <button class="meet-btn" style="background:#FFF7ED;color:var(--orange);border-color:#FED7AA" data-mid="${m.id}" data-resp="busy">⏱ Busy</button>
+          <button class="meet-btn" style="background:#F0FDF4;color:var(--green);border-color:#BBF7D0" data-mid="${safeId(m.id)}" data-resp="accepted">✓ Accept</button>
+          <button class="meet-btn" style="background:#FEF2F2;color:var(--red);border-color:#FECACA" data-mid="${safeId(m.id)}" data-resp="declined">✗ Decline</button>
+          <button class="meet-btn" style="background:#FFF7ED;color:var(--orange);border-color:#FED7AA" data-mid="${safeId(m.id)}" data-resp="busy">⏱ Busy</button>
         </div>`;
       } else if(m.resp){
         const rMap={accepted:{txt:"✓ Accepted",bg:"#F0FDF4",c:"var(--green)"},declined:{txt:"✗ Declined",bg:"#FEF2F2",c:"var(--red)"},busy:{txt:"⏱ Busy",bg:"#FFF7ED",c:"var(--orange)"}};
-        const r=rMap[m.resp]||{txt:m.resp,bg:"#F3F4F6",c:"var(--muted)"};
+        const r=Object.prototype.hasOwnProperty.call(rMap,m.resp)?rMap[m.resp]:{txt:m.resp,bg:"#F3F4F6",c:"var(--muted)"};
         const calBtns=m.resp==="accepted"?`<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
-          <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-ics="${m.id}">${calBtnLabel()}</button>
-          <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-gcal="${m.id}">Google Calendar (web)</button>
-          <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE" data-outlook="${m.id}">Outlook (web)</button>
+          <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-ics="${safeId(m.id)}">${calBtnLabel()}</button>
+          <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE" data-gcal="${safeId(m.id)}">Google Calendar (web)</button>
+          <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE" data-outlook="${safeId(m.id)}">Outlook (web)</button>
         </div>`:"";
-        respHTML=`<div class="meet-status" style="background:${r.bg};color:${r.c}">${r.txt}</div>${calBtns}`;
+        respHTML=`<div class="meet-status" style="background:${r.bg};color:${r.c}">${esc(r.txt)}</div>${calBtns}`;
       } else if(mine){
         respHTML=`<div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">⏳ Awaiting response</div>`;
       }
@@ -1709,9 +1791,9 @@ function renderSchedule(){
             <span>📍 ${esc(m.meeting.loc||"")}</span>
           </div>
           ${isConfirmed&&!past?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-            <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="downloadMeetingICS('${m.id}')">${calBtnLabel()}</button>
-            <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateGoogleCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">Google Calendar (web)</button>
-            <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE;font-size:11px" onclick="window.open('${generateOutlookCalURL(m.meeting,me.name,m.otherParticipant.name)}','_blank')">Outlook (web)</button>
+            <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" data-cal="ics" data-id="${safeId(m.id)}">${calBtnLabel()}</button>
+            <button class="meet-btn" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;font-size:11px" data-cal="gcal" data-id="${safeId(m.id)}">Google Calendar (web)</button>
+            <button class="meet-btn" style="background:#EFF6FF;color:#0078D4;border-color:#BFDBFE;font-size:11px" data-cal="outlook" data-id="${safeId(m.id)}">Outlook (web)</button>
           </div>`:""}
         </div>`;
       }).join("")}
@@ -2275,7 +2357,7 @@ function showEntry(opts){
       const fbs=window._fb;
       const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",uid)));
       if(!snap.empty){
-        me={id:uid,...snap.docs[0].data()};
+        me=normParticipant({id:uid,...snap.docs[0].data()});
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
         el.style.opacity="0";el.style.transition="opacity .3s";
@@ -2468,7 +2550,7 @@ function showAdminPanel(){
     try{
       const fbs=window._fb;
       const snap=await fbs.getDocs(fbs.collection(fbs.db,"participants"));
-      adminParticipants=snap.docs.map(d=>({id:d.id,...d.data()}));
+      adminParticipants=snap.docs.map(d=>normParticipant({id:d.id,...d.data()}));
     }catch(e){
       adminLoadError=e;
       adminParticipants=[];
@@ -2513,19 +2595,21 @@ function showAdminPanel(){
     const pending=pendingList();
     if(!pending.length){body.innerHTML=`<div style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">✓ No pending registrations</div>`;return;}
     const emails=await fetchPrivateEmails(pending.map(p=>p.id));
-    body.innerHTML=pending.map(p=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
+    body.innerHTML=pending.map((p,i)=>`<div style="background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
         ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
         <div><div style="font-weight:700;color:var(--text)">${esc(p.name)}</div><div style="color:var(--muted);font-size:12px">${esc(p.title||"")} · ${esc(p.company||"")}</div><div style="color:var(--steel);font-size:11px">${esc(emails[p.id]||"")} · ${esc(p.country||"")}</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button class="btn-outline btn-sm" style="color:var(--red);border-color:#FECACA" data-id="${p.id}" id="rej-${p.id}">Reject</button>
-        <button class="btn-navy btn-sm" style="color:#fff" data-id="${p.id}" id="apr-${p.id}">Approve</button>
+        <button class="btn-outline btn-sm" style="color:var(--red);border-color:#FECACA" data-act="rej" data-i="${i}">Reject</button>
+        <button class="btn-navy btn-sm" style="color:#fff" data-act="apr" data-i="${i}">Approve</button>
       </div>
     </div>`).join("");
-    pending.forEach(p=>{
-      document.getElementById(`apr-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});await reloadAndRerender();});
-      document.getElementById(`rej-${p.id}`)?.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));await reloadAndRerender();});
+    body.querySelectorAll("button[data-act]").forEach(btn=>{
+      const p=pending[Number(btn.dataset.i)];
+      if(!p)return;
+      if(btn.dataset.act==="apr")btn.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});await reloadAndRerender();});
+      else btn.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));await reloadAndRerender();});
     });
   }
   function renderPartsBody(body){
@@ -2700,7 +2784,7 @@ async function boot(){
     const fbs=window._fb;
     const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",delegateUid)));
     if(!snap.empty){
-      me={id:delegateUid,...snap.docs[0].data()};
+      me=normParticipant({id:delegateUid,...snap.docs[0].data()});
       localStorage.setItem("gabs_me",JSON.stringify(me));
       renderApp();startMessageListeners();return;
     }
