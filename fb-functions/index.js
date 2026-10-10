@@ -15,6 +15,15 @@ const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
 const { validateResetInput, chunk, RESET_COLLECTIONS } = require("./lib/reset");
 const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
+const { requireAdmin } = require("./lib/adminAuth");
+const {
+  validateBlockInput,
+  validateUnblockInput,
+  isTicketBlocked,
+  isAuthUserNotFound,
+  MESSAGE_DELETE_BATCH,
+  TICKET_LOOKUP_LIMIT,
+} = require("./lib/block");
 
 const REGION = "europe-west1";
 setGlobalOptions({ region: REGION });
@@ -72,6 +81,10 @@ exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10 }, async (r
     await countFailure();
     throw new HttpsError("not-found", "Ticket not found");
   }
+  // A blocked ticket is a known ticket, so it is not a failed attempt
+  if (isTicketBlocked(ticketSnap.data())) {
+    throw new HttpsError("permission-denied", "This ticket is not active. Please contact support.");
+  }
 
   const existingUid = (ticketSnap.data() || {}).uid;
   let uid;
@@ -109,9 +122,7 @@ exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10 }, async (r
  * existing ticket doc.
  */
 exports.adminUploadTickets = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
-  if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
-    throw new HttpsError("permission-denied", "Admin only.");
-  }
+  requireAdmin(request, ADMIN_UID.value());
 
   const refsInput = Array.isArray(request.data && request.data.refs) ? request.data.refs : null;
   if (!refsInput) {
@@ -168,9 +179,7 @@ exports.adminUploadTickets = onCall({ region: REGION, maxInstances: 2 }, async (
  * only — never names or refs.
  */
 exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512MiB", maxInstances: 1 }, async (request) => {
-  if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
-    throw new HttpsError("permission-denied", "Admin only.");
-  }
+  requireAdmin(request, ADMIN_UID.value());
   const opts = validateResetInput(request.data);
   if (!opts) {
     throw new HttpsError("invalid-argument", 'confirm must be "RESET".');
@@ -211,6 +220,96 @@ exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512M
 });
 
 /**
+ * Admin-only callable: block a delegate. Marks their ticket(s) blocked
+ * (signInWithTicket then refuses them), revokes their sessions and
+ * deletes their auth user, and unless deleteProfile === false deletes
+ * their profile (incl. private contact), photo and every message they
+ * are a participant of. Logs counts only, never the uid.
+ */
+exports.adminBlockDelegate = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
+  requireAdmin(request, ADMIN_UID.value());
+  const input = validateBlockInput(request.data);
+  if (!input) {
+    throw new HttpsError("invalid-argument", "Invalid uid.");
+  }
+  const { uid, deleteProfile } = input;
+  const FieldValue = admin.firestore.FieldValue;
+
+  // 1) Tickets
+  const ticketsSnap = await db.collection("tickets").where("uid", "==", uid).limit(TICKET_LOOKUP_LIMIT).get();
+  if (!ticketsSnap.empty) {
+    const batch = db.batch();
+    ticketsSnap.docs.forEach((d) => batch.update(d.ref, { blocked: true, blockedAt: FieldValue.serverTimestamp() }));
+    await batch.commit();
+  }
+
+  // 2) Sessions and auth user
+  let authDeleted = 0;
+  try {
+    await admin.auth().revokeRefreshTokens(uid);
+    await admin.auth().deleteUser(uid);
+    authDeleted = 1;
+  } catch (e) {
+    if (!isAuthUserNotFound(e)) throw e;
+  }
+
+  // 3) Profile, photo, messages
+  let profileDeleted = 0;
+  let messagesDeleted = 0;
+  if (deleteProfile) {
+    const profileRef = db.collection("participants").doc(uid);
+    profileDeleted = (await profileRef.get()).exists ? 1 : 0;
+    await db.recursiveDelete(profileRef);
+
+    await admin.storage().bucket().file(`photos/${uid}`).delete({ ignoreNotFound: true });
+
+    const messagesQuery = db
+      .collectionGroup("messages")
+      .where("participants", "array-contains", uid)
+      .orderBy("ts", "desc")
+      .limit(MESSAGE_DELETE_BATCH);
+    for (;;) {
+      const snap = await messagesQuery.get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      messagesDeleted += snap.size;
+    }
+  }
+
+  const result = { ticketsBlocked: ticketsSnap.size, profileDeleted, messagesDeleted, authDeleted };
+  logger.info("adminBlockDelegate: done", result);
+  return result;
+});
+
+/**
+ * Admin-only callable: unblock a ticket. It also gets a fresh identity
+ * (uid null, claimedAt removed), so the next sign-in creates a new
+ * delegate. Never logs the ref.
+ */
+exports.adminUnblockTicket = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
+  requireAdmin(request, ADMIN_UID.value());
+  const ref = validateUnblockInput(request.data);
+  if (!ref) {
+    throw new HttpsError("invalid-argument", "Invalid ticket reference.");
+  }
+  const ticketRef = db.collection("tickets").doc(ref);
+  if (!(await ticketRef.get()).exists) {
+    throw new HttpsError("not-found", "Ticket not found");
+  }
+  const FieldValue = admin.firestore.FieldValue;
+  await ticketRef.update({
+    blocked: FieldValue.delete(),
+    blockedAt: FieldValue.delete(),
+    uid: null,
+    claimedAt: FieldValue.delete(),
+  });
+  logger.info("adminUnblockTicket: done");
+  return { ok: true };
+});
+
+/**
  * Admin-only callable: one-time legacy-data migration. Plans (pure,
  * via planMigration) what needs to happen to move legacy tickets and
  * participant email/ticket fields into their new homes, then — only
@@ -220,9 +319,7 @@ exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512M
  * emails, or refs.
  */
 exports.migrateLegacy = onCall({ region: REGION }, async (request) => {
-  if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
-    throw new HttpsError("permission-denied", "Admin only.");
-  }
+  requireAdmin(request, ADMIN_UID.value());
 
   const dryRun = !(request.data && request.data.dryRun === false);
 
