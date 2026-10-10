@@ -727,13 +727,13 @@ function bestMatch(pool){
 // ── EmailJS ────────────────────────────────────────────────────────────────
 if(window.emailjs){try{window.emailjs.init(EMAILJS_PUBLIC_KEY);}catch(e){}}
 function sendConfirmationEmail({name,email,company,title,ticket,status}){
-  if(window.GABS_ENV!=="live"){console.log("[staging] skipped confirmation email:",{name,email,company,title,ticket,status});return;}
+  if(window.GABS_ENV!=="live"){console.log("[staging] skipped confirmation email");return;}
   if(!window.emailjs||!email)return;
   window.emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
     to_name:name,to_email:email,company,title,ticket_ref:ticket,
     status:status==="approved"?"Confirmed ✓":"Pending review",
     app_url:APP_URL,event_dates:"23–25 November 2026",event_venue:"Accra, Ghana",
-  }).catch(e=>console.warn("Email failed:",e));
+  }).catch(e=>console.warn("Email failed:",e&&e.code));
 }
 
 // ── Calendar ───────────────────────────────────────────────────────────────
@@ -1087,7 +1087,7 @@ function showEditProfile(){
       status.textContent="✓ Photo updated";
     }catch(err){
       status.textContent="Upload failed. Try again.";
-      console.error(err);
+      console.error("Photo upload failed:",err&&err.code);
     }
   });
 
@@ -1106,7 +1106,7 @@ function showEditProfile(){
       const status=document.getElementById("ep-photo-status");
       if(status)status.textContent="Photo removed";
     }catch(err){
-      console.error("Remove photo error:",err);
+      console.error("Remove photo error:",err&&err.code);
     }
   });
 
@@ -1940,7 +1940,7 @@ async function getParticipantSlots(participantId){
     if(!snap.empty){
       return snap.docs[0].data().bookedSlots||[];
     }
-  }catch(e){console.warn("Could not fetch participant slots:",e);}
+  }catch(e){console.warn("Could not fetch participant slots:",e&&e.code);}
   return[];
 }
 
