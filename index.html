@@ -443,6 +443,11 @@ async function prepareProfilePhoto(file){
     if(objURL)URL.revokeObjectURL(objURL);
   }
 }
+// Participant type "Other" stores the typed text (trimmed, max 40 chars) instead of the word "Other"
+function ptypeValue(selected,otherText){
+  const other=String(otherText||"").trim().slice(0,40);
+  return selected==="Other"&&other?other:(selected||"");
+}
 function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
 
 function buildCountryPicker(inputId,wrapperId,initialValue){
@@ -777,6 +782,9 @@ function bindProfileBar(){
 
 function showEditProfile(){
   const ov=makeOv(true);
+  const epPtypeCustom=!!me.ptype&&!PARTICIPANT_TYPES.includes(me.ptype);
+  const epPtypeSel=epPtypeCustom?"Other":(me.ptype||"");
+  const epPtypeOther=epPtypeCustom?me.ptype:"";
   ov.innerHTML=`<div class="sheet pop" style="max-width:440px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div class="sheet-title">Edit Profile</div>
@@ -807,8 +815,9 @@ function showEditProfile(){
     <div class="form-label">Participant Type *</div>
     <select class="form-inp" id="ep-ptype">
       <option value="">-- Select --</option>
-      ${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}"${me.ptype===t?" selected":""}>${esc(t)}</option>`).join("")}
+      ${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}"${epPtypeSel===t?" selected":""}>${esc(t)}</option>`).join("")}
     </select>
+    <input class="form-inp" id="ep-ptype-other" maxlength="40" placeholder="Please specify your participant type" value="${esc(epPtypeOther)}" style="display:${epPtypeSel==="Other"?"block":"none"};margin-top:8px"/>
     <div class="form-label">Company Website <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
     <input class="form-inp" id="ep-website" type="url" value="${esc(me.website||"")}" placeholder="e.g. https://www.company.com"/>
     <div class="form-label">Job Title</div>
@@ -869,6 +878,10 @@ function showEditProfile(){
 
   document.getElementById("ep-sector")?.addEventListener("change",e=>{
     const otherInp=document.getElementById("ep-sector-other");
+    if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+  });
+  document.getElementById("ep-ptype")?.addEventListener("change",e=>{
+    const otherInp=document.getElementById("ep-ptype-other");
     if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
   });
   buildCountryPicker("ep-country-btn","ep-country-wrap",me.country||"");
@@ -942,7 +955,7 @@ function showEditProfile(){
 
   document.getElementById("ep-save").onclick=async()=>{
     const salutation=document.getElementById("ep-salutation")?.value||"";
-    const ptype=document.getElementById("ep-ptype")?.value||"";
+    const ptype=ptypeValue(document.getElementById("ep-ptype")?.value,document.getElementById("ep-ptype-other")?.value);
     const website=document.getElementById("ep-website")?.value.trim()||"";
     const title=document.getElementById("ep-title").value.trim();
     const epSectorRaw=document.getElementById("ep-sector").value;
@@ -2052,6 +2065,7 @@ function showEntry(opts){
       <select class="form-inp" id="c-salutation"><option value="">-- Select --</option>${SALUTATIONS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
       <div class="form-label">Participant Type *</div>
       <select class="form-inp" id="c-ptype"><option value="">-- Select --</option>${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select>
+      <input class="form-inp" id="c-ptype-other" maxlength="40" placeholder="Please specify your participant type" style="display:none;margin-top:8px"/>
       <div class="form-label">Full name *</div>
       <input class="form-inp" id="c-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
       <div class="form-label">Company *</div>
@@ -2154,6 +2168,10 @@ function showEntry(opts){
       const otherInp=document.getElementById("c-sector-other");
       if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
     });
+    document.getElementById("c-ptype")?.addEventListener("change",e=>{
+      const otherInp=document.getElementById("c-ptype-other");
+      if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+    });
     buildCountryPicker("c-country-btn","c-country-wrap","");
 
     const cPhotoWrap=document.getElementById("c-photo-wrap");
@@ -2185,7 +2203,7 @@ function showEntry(opts){
 
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
       const salutation=document.getElementById("c-salutation")?.value||"";
-      const ptype=document.getElementById("c-ptype")?.value||"";
+      const ptype=ptypeValue(document.getElementById("c-ptype")?.value,document.getElementById("c-ptype-other")?.value);
       const name=document.getElementById("c-name")?.value.trim();
       const company=document.getElementById("c-company")?.value.trim();
       const website=document.getElementById("c-website")?.value.trim()||"";
