@@ -13,6 +13,7 @@ const { isBlocked, recordFailure } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
 const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
+const { validateResetInput, chunk, RESET_COLLECTIONS } = require("./lib/reset");
 const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
 
 const REGION = "europe-west1";
@@ -156,6 +157,57 @@ exports.adminUploadTickets = onCall({ region: REGION }, async (request) => {
   }
 
   return { added, alreadyExisted, invalid };
+});
+
+/**
+ * Admin-only callable: wipe event data. Recursively deletes
+ * participants (incl. private contact records), threads (incl.
+ * messages), aiUsage and rate. Ticket documents are NEVER deleted;
+ * with unlinkTickets === true their uid is reset to null and
+ * claimedAt removed so every ticket can be claimed again. Logs counts
+ * only — never names or refs.
+ */
+exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
+  if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+  const opts = validateResetInput(request.data);
+  if (!opts) {
+    throw new HttpsError("invalid-argument", 'confirm must be "RESET".');
+  }
+
+  const counts = {};
+  for (const name of RESET_COLLECTIONS) {
+    const coll = db.collection(name);
+    // Thread docs usually don't exist (only their messages do), so count
+    // by listDocuments, which includes such parent paths.
+    counts[name] =
+      name === "threads"
+        ? (await coll.listDocuments()).length
+        : (await coll.count().get()).data().count;
+    await db.recursiveDelete(coll);
+  }
+
+  let ticketsUnlinked = 0;
+  if (opts.unlinkTickets) {
+    const ticketsSnap = await db.collection("tickets").select().get();
+    for (const docs of chunk(ticketsSnap.docs)) {
+      const batch = db.batch();
+      docs.forEach((d) => batch.update(d.ref, { uid: null, claimedAt: admin.firestore.FieldValue.delete() }));
+      await batch.commit();
+      ticketsUnlinked += docs.length;
+    }
+  }
+
+  const result = {
+    participants: counts.participants,
+    threads: counts.threads,
+    aiUsage: counts.aiUsage,
+    rate: counts.rate,
+    ticketsUnlinked,
+  };
+  logger.info("adminReset: done", result);
+  return result;
 });
 
 /**
