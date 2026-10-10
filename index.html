@@ -89,6 +89,9 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .entry-input{width:100%;padding:16px 18px;border:1.5px solid var(--border);border-radius:14px;font-size:16px;color:var(--text);background:#F9FAFB;font-weight:500;transition:all .2s;letter-spacing:.04em}
 .entry-input:focus{border-color:var(--navy);background:var(--white);box-shadow:0 0 0 3px rgba(27,58,107,.08)}
 .entry-input::placeholder{color:#9CA3AF;letter-spacing:.02em}
+.ticket-row{display:flex;gap:8px;align-items:stretch}
+.ticket-prefix{flex-shrink:0;display:flex;align-items:center;padding:0 12px;border-radius:14px;background:#EEF2F7;border:1.5px solid var(--border);color:var(--navy);font-size:15px;font-weight:700;letter-spacing:.04em;white-space:nowrap;user-select:none;-webkit-user-select:none}
+.ticket-row .entry-input{flex:1;min-width:0}
 .entry-hint{text-align:center;color:var(--muted);font-size:13px;margin-top:16px}
 .btn-gold{width:100%;padding:17px;border-radius:14px;background:var(--gold);color:var(--white);font-size:16px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px}
 .btn-gold:active{opacity:.85;transform:scale(.98)}
@@ -2003,6 +2006,8 @@ function showAI(){
 }
 
 // ── Entry screen ──────────────────────────────────────────────────────────
+const TICKET_PREFIX="GABS2026-T-";
+const normalizeTicketInput=v=>String(v||"").trim().replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-").toUpperCase();
 function showEntry(opts){
   const el=document.createElement("div");
   el.id="entry";
@@ -2029,10 +2034,13 @@ function showEntry(opts){
   function renderStage(){
     if(stage==="enter")return`
       <div class="entry-label">Ticket Reference</div>
-      <input class="entry-input" id="t-input" placeholder="GABS2026-T-XXXXXX" value="${esc(ticketInput)}" autocomplete="off"/>
+      <div class="ticket-row">
+        <span class="ticket-prefix" aria-hidden="true">${TICKET_PREFIX}</span>
+        <input class="entry-input" id="t-input" placeholder="XXXXXX" value="${esc(ticketInput)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="40" aria-label="Ticket reference after ${TICKET_PREFIX}"/>
+      </div>
       <div id="t-err"></div>
       <button class="btn-gold" id="t-go">Continue →</button>
-      <div class="entry-hint">Your reference is on your confirmation email.</div>`;
+      <div class="entry-hint">Your reference is on your confirmation email.<br/>Search your inbox for GABS2026-T</div>`;
 
     if(stage==="checking")return`<div style="text-align:center;padding:60px 0"><div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">Checking ticket…</div></div>`;
 
@@ -2103,7 +2111,12 @@ function showEntry(opts){
     if(stage==="enter"){
       const inp=document.getElementById("t-input");
       const goBtn=document.getElementById("t-go");
-      if(inp){inp.oninput=e=>{ticketInput=e.target.value.toUpperCase();};inp.addEventListener("keydown",e=>{if(e.key==="Enter")checkTicket();});setTimeout(()=>inp.focus(),150);}
+      if(inp){inp.oninput=e=>{
+        // A pasted full reference: drop the prefix that is already shown in the chip
+        const n=normalizeTicketInput(inp.value);
+        if(n.startsWith(TICKET_PREFIX))inp.value=n.slice(TICKET_PREFIX.length);
+        ticketInput=inp.value.toUpperCase();
+      };inp.addEventListener("keydown",e=>{if(e.key==="Enter")checkTicket();});setTimeout(()=>inp.focus(),150);}
       goBtn?.addEventListener("click",checkTicket);
     }
     else if(stage==="invalid"){document.getElementById("i-back")?.addEventListener("click",()=>{stage="enter";ticketInput="";render();});}
@@ -2111,7 +2124,9 @@ function showEntry(opts){
   }
 
   async function checkTicket(){
-    const val=(document.getElementById("t-input")?.value||"").trim().replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-").toUpperCase();
+    const typed=normalizeTicketInput(document.getElementById("t-input")?.value);
+    // Full references (incl. test refs like GABS-2026-TEST-001) are used as is; otherwise add the prefix
+    const val=!typed?"":typed.startsWith("GABS")?typed:TICKET_PREFIX+typed;
     if(!val){const err=document.getElementById("t-err");if(err)err.innerHTML=`<div class="err-msg" style="margin-top:10px">Please enter your ticket reference.</div>`;return;}
     stage="checking";render();
     if(!window._fb||!window._fn||!window._auth){
