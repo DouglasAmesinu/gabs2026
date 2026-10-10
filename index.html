@@ -152,6 +152,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 
 /* ── Participant Card ── */
 .p-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05);animation:fadeUp .22s ease both;cursor:pointer}
+.lists-settled .p-card{animation:none}
 .p-card:active{opacity:.92;transform:scale(.99)}
 .p-card-top{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px}
 .av{border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;color:var(--white);font-weight:700;font-size:14px;flex-shrink:0}
@@ -393,6 +394,7 @@ let inboxStarted=false;
 let inboxListenedIds=new Set();
 let pendingRegs=[];
 let participantsUnsub=null;
+let participantsLoaded=false; // true once a snapshot from the server (not cache) has arrived
 let discSearch="",discSectors=[],discCountry="";
 let myMeetings=[];
 let schedDay=0;
@@ -413,7 +415,7 @@ const safeWebsiteURL=u=>{
 
 function avHTML(av,sz=42,photoURL=null){
   const fs=Math.round(sz*.36);
-  if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
+  if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(photoURL)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(av)}</div>`;
 }
 // Profile photos: decode, shrink to max 800px on the longest side, re-encode as JPEG
@@ -450,6 +452,39 @@ async function prepareProfilePhoto(file){
 function ptypeValue(selected,otherText){
   const other=String(otherText||"").trim().slice(0,40);
   return selected==="Other"&&other?other:(selected||"");
+}
+// Re-render guard: skip the DOM write when the signature of what would be shown is unchanged,
+// and keep the scroll position when it does change.
+const renderSigs=new WeakMap();
+function patchHTML(el,sig,build){
+  if(!el||renderSigs.get(el)===sig)return false;
+  const sc=document.getElementById("tab-content");
+  const scTop=sc?sc.scrollTop:0,elTop=el.scrollTop;
+  el.innerHTML=typeof build==="function"?build():build;
+  renderSigs.set(el,sig);
+  if(sc)sc.scrollTop=scTop;
+  if(el!==sc)el.scrollTop=elTop;
+  return true;
+}
+function setTabHTML(html){return patchHTML(document.getElementById("tab-content"),html,html);}
+// Snapshot-driven re-renders are batched: many listeners firing together cause one render
+let uiRefreshTimer=null;
+function queueUIRefresh(){
+  if(uiRefreshTimer)clearTimeout(uiRefreshTimer);
+  uiRefreshTimer=setTimeout(()=>{uiRefreshTimer=null;refreshLists();},200);
+}
+function refreshLists(){
+  refreshDisc();
+  if(currentTab==="messages"&&!activeThreadId){if(setTabHTML(renderInbox()))bindInboxRows();}
+  else if(currentTab==="schedule"){if(setTabHTML(renderSchedule()))bindSchedule();}
+  const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
+  updateMsgBadge();
+}
+let listsSettled=false;
+function settleListAnimations(){
+  if(listsSettled||!document.querySelector(".p-card"))return;
+  listsSettled=true;
+  setTimeout(()=>document.body.classList.add("lists-settled"),400);
 }
 function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
 
@@ -584,7 +619,7 @@ function loadMyMeetings(){
     myMeetings=list;
   }).finally(()=>{
     meetBusy=false;
-    if(currentTab==="schedule"){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}}
+    if(currentTab==="schedule"){if(setTabHTML(renderSchedule()))bindSchedule();}
     if(meetAgain){meetAgain=false;loadMyMeetings();}
   });
 }
@@ -685,6 +720,7 @@ function startParticipantListener(){
 }
 function stopParticipantListener(){
   participantsStarted=false;
+  participantsLoaded=false;
   if(participantsRetryTimer){clearTimeout(participantsRetryTimer);participantsRetryTimer=null;}
   if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
   if(pendingUnsub){pendingUnsub();pendingUnsub=null;}
@@ -692,8 +728,9 @@ function stopParticipantListener(){
 function subscribeParticipants(){
   const fb=window._fb;
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
-  participantsUnsub=fb.onSnapshot(q,snap=>{
+  participantsUnsub=fb.onSnapshot(q,{includeMetadataChanges:true},snap=>{
     participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(!snap.metadata.fromCache)participantsLoaded=true;
     if(me){
       const mine=participants.find(x=>x.id===me.id);
       if(mine){
@@ -703,11 +740,8 @@ function subscribeParticipants(){
         localStorage.setItem("gabs_me",JSON.stringify(me));
       }
     }
-    refreshDisc();
-    if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
-    const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
     if(me)startInbox();
-    updateMsgBadge();
+    queueUIRefresh();
   },err=>{
     console.warn("participants listener error:",err&&err.code);
     if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
@@ -720,12 +754,14 @@ function subscribeParticipants(){
 // ── App shell ──────────────────────────────────────────────────────────────
 function renderApp(){
   const app=document.getElementById("app");
+  const tabHTML=renderTab();
   app.innerHTML=`
     ${renderBottomNav()}
     <div class="app-body">
-      <div class="app-scroll" id="tab-content">${renderTab()}</div>
+      <div class="app-scroll" id="tab-content">${tabHTML}</div>
     </div>
     ${renderProfileBar()}`;
+  const tc=document.getElementById("tab-content");if(tc)renderSigs.set(tc,tabHTML);
   bindBottomNav();
   bindTab();
   bindProfileBar();
@@ -797,7 +833,7 @@ function showEditProfile(){
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div id="ep-avatar-preview" style="width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative">
         ${me.photoURL
-          ? `<img src="${me.photoURL}" style="width:100%;height:100%;object-fit:cover"/>`
+          ? `<img src="${esc(me.photoURL)}" width="80" height="80" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover"/>`
           : `<span style="color:#fff;font-size:28px;font-weight:700">${initials(me.name||"?")}</span>`}
         <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>
       </div>
@@ -912,7 +948,7 @@ function showEditProfile(){
       await st.uploadBytes(storageRef,blob,{contentType:"image/jpeg"});
       const url=withCacheBust(await st.getDownloadURL(storageRef));
       const preview=document.getElementById("ep-avatar-preview");
-      if(preview)preview.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover"/><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
+      if(preview)preview.innerHTML=`<img src="${esc(url)}" width="80" height="80" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover"/><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
       me.photoURL=url;
       localStorage.setItem("gabs_me",JSON.stringify(me));
       if(window._fb&&me.id){
@@ -1071,6 +1107,7 @@ function pCardHTML(p){
 }
 
 function discSubText(){
+  if(!participantsLoaded)return"Loading participants…";
   const hasFilters=discSectors.length>0||discCountry||discSearch;
   const filteredCount=filtered().length;
   const totalCount=participants.length;
@@ -1110,12 +1147,7 @@ function renderDiscover(){
       </select>
     </div>
     <button class="match-btn" id="ai-btn" style="margin:0 16px 12px;width:calc(100% - 32px)">✦ Find your best match</button>
-    <div id="cards-list" class="cards-list">
-      ${participants.length===0
-        ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`
-        :list.map(p=>pCardHTML(p)).join("")
-      }
-    </div>
+    <div id="cards-list" class="cards-list">${discCardsHTML(list)}</div>
   </div>`;
 }
 
@@ -1150,18 +1182,31 @@ function bindDiscover(){
     };
   }
   bindCards();
+  renderSigs.set(document.getElementById("cards-list"),discSig(filtered()));
+  settleListAnimations();
+}
+
+function discSig(list){
+  if(!participantsLoaded)return"loading";
+  if(!participants.length)return"none";
+  return JSON.stringify([me?.id||"",list.map(p=>[p.id,p.salutation,p.name,p.title,p.company,p.sector,p.country,p.ptype,p.interests,p.bio,p.phone,p.linkedin,p.website,p.photoURL,p.av])]);
+}
+function discCardsHTML(list){
+  if(!participantsLoaded)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div class="spin" style="margin:0 auto;border-color:rgba(27,58,107,.12);border-top-color:${GOLD}"></div><div style="font-size:14px;margin-top:14px">Loading participants…</div></div>`;
+  if(!participants.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`;
+  if(!list.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`;
+  return list.map(p=>pCardHTML(p)).join("");
 }
 
 function refreshDisc(){
   const wrap=document.getElementById("cards-list");
   if(!wrap)return;
   const list=filtered();
-  wrap.innerHTML=list.length===0
-    ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`
-    :list.map(p=>pCardHTML(p)).join("");
   const sub=document.querySelector(".page-sub");
   if(sub)sub.textContent=discSubText();
-  bindCards();
+  if(wrap.querySelector(".p-card"))document.body.classList.add("lists-settled");
+  if(patchHTML(wrap,discSig(list),()=>discCardsHTML(list)))bindCards();
+  settleListAnimations();
 }
 
 function showParticipantProfile(p){
@@ -1359,14 +1404,11 @@ function startInbox(){
         const rec={id:ch.doc.id,threadId,otherParticipant:p,meeting:dd.meeting,fromId:dd.fromId,resp:dd.resp||null,ts:dd.ts};
         if(idx>-1)myMeetings[idx]=rec;else myMeetings.push(rec);
       });
-      clearTimeout(window._schedT);
-      window._schedT=setTimeout(()=>{if(currentTab==="schedule"){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}}},150);
       const wasFirst=notifFirst;notifFirst=false;
       if(!wasFirst){snap.docChanges().forEach(ch=>{if(ch.type!=="added")return;const dd=ch.doc.data();if(dd.fromId===me.id)return;notifyIncoming(p,dd);});}
       if(snap.empty){delete inboxData[p.id];}
       else{const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(activeThreadId!==p.id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
-      updateMsgBadge();
-      if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
+      queueUIRefresh();
     },err=>{
       console.warn("inbox listener error:",err&&err.code);
       if(u){u();u=null;}
@@ -1384,8 +1426,10 @@ function updateMsgBadge(){
   // Exclude the currently open thread from unread count
   const count=Object.keys(inboxData).filter(id=>id!==activeThreadId&&!readThreadIds.has(id)).length;
   document.querySelectorAll(".nav-item[data-tab='messages']").forEach(nav=>{
-    nav.querySelector(".nav-badge")?.remove();
-    if(count>0){const b=document.createElement("div");b.className="nav-badge";b.textContent=count;nav.appendChild(b);}
+    let b=nav.querySelector(".nav-badge");
+    if(count<=0){b?.remove();return;}
+    if(!b){b=document.createElement("div");b.className="nav-badge";nav.appendChild(b);}
+    if(b.textContent!==String(count))b.textContent=count;
   });
 }
 
@@ -1454,23 +1498,28 @@ function renderMsgs(){
 
 function scrollBottom(){const el=document.getElementById("msgs");if(el)el.scrollTop=el.scrollHeight;}
 
+let threadRenderTimer=null;
 function initThread(p){
   if(!me||!window._fb)return;
   if(threadUnsub){threadUnsub();threadUnsub=null;}
   const fb=window._fb;
   const tid2=tid(me.id,p.id);
   const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
+  clearTimeout(threadRenderTimer);
   threadUnsub=fb.onSnapshot(q,snap=>{
     threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
-    const msgs=document.getElementById("msgs");
-    if(msgs){msgs.innerHTML=renderMsgs();scrollBottom();bindRespBtns(p);}
-    requestAnimationFrame(()=>scrollBottom());
+    clearTimeout(threadRenderTimer);
+    threadRenderTimer=setTimeout(()=>{
+      const msgs=document.getElementById("msgs");
+      const html=renderMsgs();
+      if(msgs&&patchHTML(msgs,html,html)){scrollBottom();bindRespBtns(p);requestAnimationFrame(()=>scrollBottom());}
+    },200);
   });
   setTimeout(scrollBottom,100);
 }
 
 function bindCompose(p){
-  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}updateMsgBadge();});
+  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";clearTimeout(threadRenderTimer);if(setTabHTML(renderInbox()))bindInboxRows();updateMsgBadge();});
   document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
   const inp=document.getElementById("cinp");
   const sbt=document.getElementById("sbtn");
@@ -1624,7 +1673,7 @@ function renderSchedule(){
 
 function bindSchedule(){
   document.querySelectorAll(".day-tab[data-di]").forEach(tab=>{
-    tab.onclick=()=>{schedDay=parseInt(tab.dataset.di);const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}};
+    tab.onclick=()=>{schedDay=parseInt(tab.dataset.di);if(setTabHTML(renderSchedule()))bindSchedule();};
   });
 }
 
@@ -2210,7 +2259,7 @@ function showEntry(opts){
       pendingPhotoBlob=blob;
       const reader=new FileReader();
       reader.onload=ev=>{
-        if(cPhotoWrap)cPhotoWrap.innerHTML=`<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.45);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:4px 0;letter-spacing:.05em">CHANGE</div>`;
+        if(cPhotoWrap)cPhotoWrap.innerHTML=`<img src="${ev.target.result}" width="84" height="84" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.45);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:4px 0;letter-spacing:.05em">CHANGE</div>`;
       };
       reader.readAsDataURL(blob);
       if(cPhotoStatus)cPhotoStatus.textContent="✓ Photo selected — will upload on registration";
@@ -2570,7 +2619,10 @@ function showQR(){
 }
 
 // ── Boot ────────────────────────────────────────────────────────────────────
+let bootStarted=false;
 async function boot(){
+  if(bootStarted)return; // fb-ready can fire boot() from more than one path
+  bootStarted=true;
   document.getElementById("app").style.display="flex";
   if(window.location.hash==="#admin"){
     window.location.hash="";
