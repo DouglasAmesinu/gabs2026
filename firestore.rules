@@ -31,15 +31,24 @@ service cloud.firestore {
       }
     }
 
+    // Collection-group reads (inbox / meetings listeners): only messages you are part of
+    match /{path=**}/messages/{mid} {
+      allow read: if isAdmin() || (isDelegate() && request.auth.uid in resource.data.participants);
+    }
+
     match /threads/{tid} {
       allow read, write: if isAdmin();
       match /messages/{mid} {
         allow read: if inThread(tid) || isAdmin();
         allow create: if inThread(tid)
           && request.resource.data.fromId == request.auth.uid
-          && request.resource.data.keys().hasOnly(['text','fromId','fromName','fromAvatar','ts','meeting'])
+          && request.resource.data.keys().hasOnly(['text','fromId','fromName','fromAvatar','ts','meeting','participants','hasMeeting'])
           && request.resource.data.text is string
-          && request.resource.data.text.size() <= 2000;
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.participants is list
+          && request.resource.data.participants.size() == 2
+          && tid == request.resource.data.participants[0] + '__' + request.resource.data.participants[1]
+          && request.resource.data.hasMeeting == ('meeting' in request.resource.data);
         allow update: if inThread(tid)
           && resource.data.fromId != request.auth.uid
           && resource.data.get('meeting', null) != null
