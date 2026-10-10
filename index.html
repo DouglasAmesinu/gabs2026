@@ -16,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{initializeFirestore,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{initializeFirestore,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,collectionGroup,limit}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -45,7 +45,7 @@ const auth=getAuth(app);
 const functions=getFunctions(app,"europe-west1");
 window._auth={auth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged};
 window._fn={httpsCallable:(n,o)=>httpsCallable(functions,n,o)};
-window._fb={db,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp};
+window._fb={db,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,collectionGroup,limit};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -389,9 +389,9 @@ let inboxData={};
 let readThreadIds=new Set();
 try{const s=localStorage.getItem("gabs_read");if(s)readThreadIds=new Set(JSON.parse(s));}catch(e){}
 let threadUnsub=null;
-let inboxUnsubs=[];
-let inboxStarted=false;
-let inboxListenedIds=new Set();
+let msgListenersStarted=false,msgListenerStops=[];
+let inboxRaw={};       // otherId -> newest {text,ts,fromId}, from buildInbox
+let meetingRecords=[]; // from applyMeetingChange; otherParticipant is linked in linkMeetings
 let pendingRegs=[];
 let participantsUnsub=null;
 let participantsLoaded=false; // true once a snapshot from the server (not cache) has arrived
@@ -653,36 +653,6 @@ function sendConfirmationEmail({name,email,company,title,ticket,status}){
   }).catch(e=>console.warn("Email failed:",e));
 }
 
-// ── Meetings ───────────────────────────────────────────────────────────────
-let meetBusy=false,meetAgain=false;
-function loadMyMeetings(){
-  if(!me||!window._fb)return;
-  if(meetBusy){meetAgain=true;return;}
-  meetBusy=true;
-  const fb=window._fb;
-  const others=participants.filter(p=>p.id!==me.id);
-  Promise.all(others.map(p=>{
-    const threadId=tid(me.id,p.id);
-    const q=fb.query(fb.collection(fb.db,"threads",threadId,"messages"),fb.orderBy("ts","asc"));
-    return fb.getDocs(q).then(snap=>{
-      const out=[];
-      snap.docs.forEach(doc=>{
-        const data=doc.data();
-        if(data.meeting)out.push({id:doc.id,threadId,otherParticipant:p,meeting:data.meeting,fromId:data.fromId,resp:data.resp||null,ts:data.ts});
-      });
-      return out;
-    }).catch(()=>[]);
-  })).then(parts=>{
-    const seen=new Set(),list=[];
-    parts.flat().forEach(m=>{const k=m.threadId+"|"+m.id;if(!seen.has(k)){seen.add(k);list.push(m);}});
-    myMeetings=list;
-  }).finally(()=>{
-    meetBusy=false;
-    if(currentTab==="schedule"){if(setTabHTML(renderSchedule()))bindSchedule();}
-    if(meetAgain){meetAgain=false;loadMyMeetings();}
-  });
-}
-
 // ── Calendar ───────────────────────────────────────────────────────────────
 function generateGoogleCalURL(meeting,fromName,toName){
   const date=meeting.day||"20261124";
@@ -810,7 +780,7 @@ function subscribeParticipants(){
         localStorage.setItem("gabs_me",JSON.stringify(me));
       }
     }
-    if(me)startInbox();
+    linkInbox();linkMeetings();
     queueUIRefresh();
   },err=>{
     console.warn("participants listener error:",err&&err.code);
@@ -836,8 +806,6 @@ function renderApp(){
   bindBottomNav();
   bindTab();
   bindProfileBar();
-  if(currentTab==="schedule")loadMyMeetings();
-  if(!inboxStarted&&me)startInbox();
   if(!privateEmailLoaded&&me&&window._fb){
     privateEmailLoaded=true;
     const fbs=window._fb;
@@ -1053,13 +1021,12 @@ function showEditProfile(){
 
   document.getElementById("ep-logout").onclick=async()=>{
     ov.remove();
+    stopMessageListeners();
     if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
     me=null;localStorage.removeItem("gabs_me");
-    inboxStarted=false;inboxListenedIds=new Set();
-    inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};readThreadIds=new Set();
+    readThreadIds=new Set();
     stopParticipantListener();participants=[];
     localStorage.removeItem("gabs_read");
-    myMeetings=[];
     showEntry();
   };
 
@@ -1457,42 +1424,85 @@ function showNotifBanner(){
   notifTimer=setTimeout(hideNotifBanner,4000);
 }
 
-function startInbox(){
-  if(!me||!window._fb)return;
-  inboxStarted=true;
-  const fb=window._fb;
-  participants.filter(p=>p.id!==me.id&&!inboxListenedIds.has(p.id)).forEach(p=>{
-    inboxListenedIds.add(p.id);
-    const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
-    let notifFirst=true,retries=0,retryTimer=null,stopped=false,u=null;
-    const subscribe=()=>{
-    notifFirst=true;
-    u=fb.onSnapshot(q,snap=>{
-      snap.docChanges().forEach(ch=>{
-        const dd=ch.doc.data();
-        if(!dd.meeting)return;
-        const threadId=tid(me.id,p.id);
-        const idx=myMeetings.findIndex(x=>x.threadId===threadId&&x.id===ch.doc.id);
-        if(ch.type==="removed"){if(idx>-1)myMeetings.splice(idx,1);return;}
-        const rec={id:ch.doc.id,threadId,otherParticipant:p,meeting:dd.meeting,fromId:dd.fromId,resp:dd.resp||null,ts:dd.ts};
-        if(idx>-1)myMeetings[idx]=rec;else myMeetings.push(rec);
-      });
-      const wasFirst=notifFirst;notifFirst=false;
-      if(!wasFirst){snap.docChanges().forEach(ch=>{if(ch.type!=="added")return;const dd=ch.doc.data();if(dd.fromId===me.id)return;notifyIncoming(p,dd);});}
-      if(snap.empty){delete inboxData[p.id];}
-      else{const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(activeThreadId!==p.id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
-      queueUIRefresh();
-    },err=>{
-      console.warn("inbox listener error:",err&&err.code);
-      if(u){u();u=null;}
+// Two collection-group listeners over every thread's messages (inbox + meetings)
+// instead of one listener per participant. Started once per delegate session.
+function listenWithRetry(label,q,onSnap){
+  let retries=0,timer=null,stopped=false,unsub=null;
+  const subscribe=()=>{
+    let first=true;
+    unsub=window._fb.onSnapshot(q,snap=>{const wasFirst=first;first=false;onSnap(snap,wasFirst);},err=>{
+      console.warn(label+" listener error:",err&&err.code);
+      if(unsub){unsub();unsub=null;}
       if(stopped||retries>=LISTENER_MAX_RETRIES)return;
       retries++;
-      retryTimer=setTimeout(()=>{retryTimer=null;if(!stopped)subscribe();},LISTENER_RETRY_MS);
+      timer=setTimeout(()=>{timer=null;if(!stopped)subscribe();},LISTENER_RETRY_MS);
     });
-    };
-    subscribe();
-    inboxUnsubs.push(()=>{stopped=true;if(retryTimer)clearTimeout(retryTimer);if(u){u();u=null;}});
-  });
+  };
+  subscribe();
+  return()=>{stopped=true;if(timer)clearTimeout(timer);if(unsub){unsub();unsub=null;}};
+}
+
+function startMessageListeners(){
+  if(msgListenersStarted||!me||!window._fb)return;
+  msgListenersStarted=true;
+  const fb=window._fb,myId=me.id;
+  const msgs=fb.collectionGroup(fb.db,"messages");
+  const inboxQ=fb.query(msgs,fb.where("participants","array-contains",myId),fb.orderBy("ts","desc"),fb.limit(400));
+  const meetQ=fb.query(msgs,fb.where("participants","array-contains",myId),fb.where("hasMeeting","==",true),fb.orderBy("ts","desc"),fb.limit(200));
+
+  msgListenerStops.push(listenWithRetry("inbox",inboxQ,(snap,first)=>{
+    // The first snapshot is history: never raise a banner for it
+    if(!first){
+      snap.docChanges().forEach(ch=>{
+        if(ch.type!=="added")return;
+        const dd=ch.doc.data();
+        if(dd.fromId===myId)return;
+        const p=participants.find(x=>x.id===otherParticipantId(dd.participants,myId));
+        if(p)notifyIncoming(p,dd);
+      });
+    }
+    const next=buildInbox(snap.docs.map(d=>d.data()),myId);
+    let readChanged=false;
+    Object.keys(next).forEach(id=>{
+      const prev=inboxRaw[id],d=next[id];
+      if(activeThreadId!==id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds&&readThreadIds.delete(id))readChanged=true;
+    });
+    if(readChanged)saveReadIds();
+    inboxRaw=next;
+    linkInbox();
+    queueUIRefresh();
+  }));
+
+  msgListenerStops.push(listenWithRetry("meetings",meetQ,(snap,first)=>{
+    // A (re)subscription's first snapshot lists everything: start from scratch
+    let list=first?[]:meetingRecords;
+    snap.docChanges().forEach(ch=>{
+      list=applyMeetingChange(list,{type:ch.type,id:ch.doc.id,threadId:ch.doc.ref.parent.parent.id,data:ch.doc.data()},myId);
+    });
+    meetingRecords=list;
+    linkMeetings();
+    queueUIRefresh();
+  }));
+}
+
+function stopMessageListeners(){
+  msgListenerStops.forEach(stop=>stop());
+  msgListenerStops=[];
+  msgListenersStarted=false;
+  inboxRaw={};inboxData={};
+  meetingRecords=[];myMeetings=[];
+}
+
+// Resolve other participants' profiles; called again whenever the participants list changes
+function linkInbox(){
+  const byId=new Map(participants.map(p=>[p.id,p]));
+  const out={};
+  Object.keys(inboxRaw).forEach(id=>{const p=byId.get(id);if(p)out[id]={p,...inboxRaw[id]};});
+  inboxData=out;
+}
+function linkMeetings(){
+  const byId=new Map(participants.map(p=>[p.id,p]));
+  myMeetings=meetingRecords.filter(r=>byId.has(r.otherId)).map(r=>({...r,otherParticipant:byId.get(r.otherId)}));
 }
 
 function updateMsgBadge(){
@@ -2269,7 +2279,7 @@ function showEntry(opts){
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
         el.style.opacity="0";el.style.transition="opacity .3s";
-        setTimeout(()=>{el.remove();renderApp();startInbox();},300);
+        setTimeout(()=>{el.remove();renderApp();startMessageListeners();},300);
       }else{
         pendingUid=uid;
         stage="claim";render();
@@ -2393,8 +2403,8 @@ function showEntry(opts){
         if(btn)btn.textContent="✓ Confirmed";
         setTimeout(()=>{
           const entryEl=document.getElementById("entry");
-          if(entryEl){entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>{entryEl.remove();renderApp();startInbox();},350);}
-          else{renderApp();startInbox();}
+          if(entryEl){entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>{entryEl.remove();renderApp();startMessageListeners();},350);}
+          else{renderApp();startMessageListeners();}
         },photoFailed?3500:900);
       }catch(e){
         if(fb2)fb2.innerHTML=`<div class="err-msg">Submission failed. Please try again.</div>`;
@@ -2692,7 +2702,7 @@ async function boot(){
     if(!snap.empty){
       me={id:delegateUid,...snap.docs[0].data()};
       localStorage.setItem("gabs_me",JSON.stringify(me));
-      renderApp();startInbox();return;
+      renderApp();startMessageListeners();return;
     }
   }
   me=null;localStorage.removeItem("gabs_me");
