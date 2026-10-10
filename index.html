@@ -484,6 +484,15 @@ function clip(s,max){
   const cps=Array.from(str);
   return cps.length<=n?str:cps.slice(0,n).join("");
 }
+
+// One quoted CSV cell. A value a spreadsheet would read as a formula (starting,
+// after leading whitespace, with = + - @, or starting with a tab or CR) gets a
+// leading single quote.
+function csvCell(v){
+  let s=String(v||"");
+  if(/^[\t\r]/.test(s)||/^[=+\-@]/.test(s.trimStart()))s="'"+s;
+  return `"${s.replace(/"/g,'""')}"`;
+}
 // END safe-helpers
 
 
@@ -2691,7 +2700,7 @@ function showAdminPanel(){
       const approved=approvedList();
       const emails=await fetchPrivateEmails(approved.map(p=>p.id));
       const rows=[["name","company","sector","country","title","email","status","source"],...approved.map(p=>[p.name,p.company,p.sector,p.country,p.title,emails[p.id]||"",p.status||"approved",p.source||"csv"])];
-      const csv=rows.map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+      const csv=rows.map(r=>r.map(csvCell).join(",")).join("\n");
       const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`GABS2026_participants_${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
     };
     document.getElementById("a-qr").onclick=showQR;

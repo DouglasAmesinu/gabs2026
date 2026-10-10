@@ -15,10 +15,10 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, csvCell };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, csvCell } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -149,4 +149,29 @@ test("clip handles null, undefined, non-strings and odd limits", () => {
   assert.equal(clip("abcdef", 2.7), "ab");
   assert.equal(clip("abc", undefined), "abc", "no limit given keeps the whole string");
   assert.equal(clip(SCRIPT_BREAK, 9), "</script>", "clip does not escape; esc still has to run");
+});
+
+test("csvCell prefixes formula-like values with a single quote", () => {
+  assert.equal(csvCell("=1+1"), `"'=1+1"`);
+  assert.equal(csvCell("+cmd"), `"'+cmd"`);
+  assert.equal(csvCell("-2"), `"'-2"`);
+  assert.equal(csvCell("@SUM(A1)"), `"'@SUM(A1)"`);
+  assert.equal(csvCell("\t=x"), `"'\t=x"`);
+  assert.equal(csvCell("\rx"), `"'\rx"`);
+  assert.equal(csvCell("  =HYPERLINK(\"x\")"), `"'  =HYPERLINK(""x"")"`, "leading spaces don't hide a formula");
+});
+
+test("csvCell leaves normal text alone and keeps the existing quoting", () => {
+  assert.equal(csvCell("Hans Mueller"), `"Hans Mueller"`);
+  assert.equal(csvCell("a=b"), `"a=b"`, "only a leading sign counts");
+  assert.equal(csvCell("Müller 🇬🇭"), `"Müller 🇬🇭"`);
+  assert.equal(csvCell('Say "hi"'), `"Say ""hi"""`);
+  assert.equal(csvCell("Berlin, Germany"), `"Berlin, Germany"`);
+  assert.equal(csvCell('"=1",x'), `"""=1"",x"`, "a quote first is not a formula");
+});
+
+test("csvCell turns null and undefined into an empty cell", () => {
+  assert.equal(csvCell(null), `""`);
+  assert.equal(csvCell(undefined), `""`);
+  assert.equal(csvCell(""), `""`);
 });
