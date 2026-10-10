@@ -413,6 +413,34 @@ function avHTML(av,sz=42,photoURL=null){
   if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(av)}</div>`;
 }
+// Profile photos: decode, shrink to max 800px on the longest side, re-encode as JPEG
+const PHOTO_MAX_BYTES=30*1024*1024;
+const PHOTO_UNSUPPORTED_MSG="This photo format isn't supported. Please choose a JPEG or PNG.";
+async function prepareProfilePhoto(file){
+  let src=null,objURL=null;
+  try{
+    if(window.createImageBitmap){try{src=await createImageBitmap(file);}catch(e){src=null;}}
+    if(!src){
+      objURL=URL.createObjectURL(file);
+      src=await new Promise((res,rej)=>{const img=new Image();img.onload=()=>res(img);img.onerror=()=>rej(new Error("decode failed"));img.src=objURL;});
+    }
+    const w=src.naturalWidth||src.width,h=src.naturalHeight||src.height;
+    if(!w||!h)throw new Error("decode failed");
+    const scale=Math.min(1,800/Math.max(w,h));
+    const cw=Math.max(1,Math.round(w*scale)),ch=Math.max(1,Math.round(h*scale));
+    const canvas=document.createElement("canvas");
+    canvas.width=cw;canvas.height=ch;
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,cw,ch);
+    ctx.drawImage(src,0,0,cw,ch);
+    const blob=await new Promise(res=>canvas.toBlob(res,"image/jpeg",0.85));
+    if(!blob)throw new Error("encode failed");
+    return blob;
+  }finally{
+    if(src&&typeof src.close==="function")src.close();
+    if(objURL)URL.revokeObjectURL(objURL);
+  }
+}
 function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
 
 function buildCountryPicker(inputId,wrapperId,initialValue){
@@ -828,16 +856,20 @@ function showEditProfile(){
   document.getElementById("ep-photo-input")?.addEventListener("change",async(e)=>{
     const file=e.target.files[0];
     if(!file)return;
-    if(file.size>5*1024*1024){
-      document.getElementById("ep-photo-status").textContent="Photo must be under 5MB";
+    if(file.size>PHOTO_MAX_BYTES){
+      document.getElementById("ep-photo-status").textContent="Photo must be under 30MB";
       return;
     }
     const status=document.getElementById("ep-photo-status");
+    status.textContent="Preparing photo…";
+    let blob;
+    try{blob=await prepareProfilePhoto(file);}
+    catch(err){status.textContent=PHOTO_UNSUPPORTED_MSG;e.target.value="";return;}
     status.textContent="Uploading…";
     try{
       const st=window._storage;
       const storageRef=st.ref(st.storage,`photos/${me.id}`);
-      await st.uploadBytes(storageRef,file);
+      await st.uploadBytes(storageRef,blob,{contentType:"image/jpeg"});
       const url=await st.getDownloadURL(storageRef);
       const preview=document.getElementById("ep-avatar-preview");
       if(preview)preview.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover"/><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
@@ -2091,23 +2123,27 @@ function showEntry(opts){
     const cPhotoWrap=document.getElementById("c-photo-wrap");
     const cPhotoInput=document.getElementById("c-photo-input");
     const cPhotoStatus=document.getElementById("c-photo-status");
-    let pendingPhotoFile=null;
+    let pendingPhotoBlob=null;
 
     cPhotoWrap?.addEventListener("click",()=>cPhotoInput?.click());
 
-    cPhotoInput?.addEventListener("change",(e)=>{
+    cPhotoInput?.addEventListener("change",async(e)=>{
       const file=e.target.files[0];
       if(!file)return;
-      if(file.size>5*1024*1024){
-        if(cPhotoStatus)cPhotoStatus.textContent="Photo must be under 5MB";
+      if(file.size>PHOTO_MAX_BYTES){
+        if(cPhotoStatus)cPhotoStatus.textContent="Photo must be under 30MB";
         return;
       }
-      pendingPhotoFile=file;
+      if(cPhotoStatus)cPhotoStatus.textContent="Preparing photo…";
+      let blob;
+      try{blob=await prepareProfilePhoto(file);}
+      catch(err){pendingPhotoBlob=null;e.target.value="";if(cPhotoStatus)cPhotoStatus.textContent=PHOTO_UNSUPPORTED_MSG;return;}
+      pendingPhotoBlob=blob;
       const reader=new FileReader();
       reader.onload=ev=>{
         if(cPhotoWrap)cPhotoWrap.innerHTML=`<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.45);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:4px 0;letter-spacing:.05em">CHANGE</div>`;
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
       if(cPhotoStatus)cPhotoStatus.textContent="✓ Photo selected — will upload on registration";
     });
 
@@ -2144,27 +2180,30 @@ function showEntry(opts){
         }
         me={id:pendingUid,salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
         localStorage.setItem("gabs_me",JSON.stringify(me));
-        if(pendingPhotoFile&&window._storage){
+        let photoFailed=false;
+        if(pendingPhotoBlob&&window._storage){
           try{
             const st=window._storage;
             const storageRef=st.ref(st.storage,`photos/${pendingUid}`);
-            await st.uploadBytes(storageRef,pendingPhotoFile);
+            await st.uploadBytes(storageRef,pendingPhotoBlob,{contentType:"image/jpeg"});
             const url=await st.getDownloadURL(storageRef);
             await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",pendingUid),{photoURL:url});
             me.photoURL=url;
             localStorage.setItem("gabs_me",JSON.stringify(me));
           }catch(photoErr){
-            console.warn("Photo upload failed during registration:",photoErr);
+            photoFailed=true;
+            console.warn("Photo upload failed during registration:",photoErr&&photoErr.code);
           }
         }
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
-        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`;
+        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`
+          +(photoFailed?`<div class="err-msg">Photo couldn't be uploaded. You can add it later from Edit Profile.</div>`:"");
         if(btn)btn.textContent="✓ Confirmed";
         setTimeout(()=>{
           const entryEl=document.getElementById("entry");
           if(entryEl){entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>{entryEl.remove();renderApp();startInbox();},350);}
           else{renderApp();startInbox();}
-        },900);
+        },photoFailed?3500:900);
       }catch(e){
         if(fb2)fb2.innerHTML=`<div class="err-msg">Submission failed. Please try again.</div>`;
         if(btn){btn.disabled=false;btn.textContent="Confirm & Enter App →";}
