@@ -89,6 +89,9 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .entry-input{width:100%;padding:16px 18px;border:1.5px solid var(--border);border-radius:14px;font-size:16px;color:var(--text);background:#F9FAFB;font-weight:500;transition:all .2s;letter-spacing:.04em}
 .entry-input:focus{border-color:var(--navy);background:var(--white);box-shadow:0 0 0 3px rgba(27,58,107,.08)}
 .entry-input::placeholder{color:#9CA3AF;letter-spacing:.02em}
+.ticket-row{display:flex;gap:8px;align-items:stretch}
+.ticket-prefix{flex-shrink:0;display:flex;align-items:center;padding:0 12px;border-radius:14px;background:#EEF2F7;border:1.5px solid var(--border);color:var(--navy);font-size:15px;font-weight:700;letter-spacing:.04em;white-space:nowrap;user-select:none;-webkit-user-select:none}
+.ticket-row .entry-input{flex:1;min-width:0}
 .entry-hint{text-align:center;color:var(--muted);font-size:13px;margin-top:16px}
 .btn-gold{width:100%;padding:17px;border-radius:14px;background:var(--gold);color:var(--white);font-size:16px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:opacity .15s,transform .1s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px}
 .btn-gold:active{opacity:.85;transform:scale(.98)}
@@ -149,6 +152,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 
 /* ── Participant Card ── */
 .p-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05);animation:fadeUp .22s ease both;cursor:pointer}
+.lists-settled .p-card{animation:none}
 .p-card:active{opacity:.92;transform:scale(.99)}
 .p-card-top{display:flex;gap:13px;align-items:flex-start;margin-bottom:12px}
 .av{border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;color:var(--white);font-weight:700;font-size:14px;flex-shrink:0}
@@ -390,6 +394,7 @@ let inboxStarted=false;
 let inboxListenedIds=new Set();
 let pendingRegs=[];
 let participantsUnsub=null;
+let participantsLoaded=false; // true once a snapshot from the server (not cache) has arrived
 let discSearch="",discSectors=[],discCountry="";
 let myMeetings=[];
 let schedDay=0;
@@ -410,8 +415,76 @@ const safeWebsiteURL=u=>{
 
 function avHTML(av,sz=42,photoURL=null){
   const fs=Math.round(sz*.36);
-  if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
+  if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(photoURL)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(av)}</div>`;
+}
+// Profile photos: decode, shrink to max 800px on the longest side, re-encode as JPEG
+const PHOTO_MAX_BYTES=30*1024*1024;
+const PHOTO_UNSUPPORTED_MSG="This photo format isn't supported. Please choose a JPEG or PNG.";
+// Same storage path is reused on every upload, so add a version param to defeat browser/CDN caches
+const withCacheBust=url=>url+(url.includes("?")?"&":"?")+"v="+Date.now();
+async function prepareProfilePhoto(file){
+  let src=null,objURL=null;
+  try{
+    if(window.createImageBitmap){try{src=await createImageBitmap(file);}catch(e){src=null;}}
+    if(!src){
+      objURL=URL.createObjectURL(file);
+      src=await new Promise((res,rej)=>{const img=new Image();img.onload=()=>res(img);img.onerror=()=>rej(new Error("decode failed"));img.src=objURL;});
+    }
+    const w=src.naturalWidth||src.width,h=src.naturalHeight||src.height;
+    if(!w||!h)throw new Error("decode failed");
+    const scale=Math.min(1,800/Math.max(w,h));
+    const cw=Math.max(1,Math.round(w*scale)),ch=Math.max(1,Math.round(h*scale));
+    const canvas=document.createElement("canvas");
+    canvas.width=cw;canvas.height=ch;
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,cw,ch);
+    ctx.drawImage(src,0,0,cw,ch);
+    const blob=await new Promise(res=>canvas.toBlob(res,"image/jpeg",0.85));
+    if(!blob)throw new Error("encode failed");
+    return blob;
+  }finally{
+    if(src&&typeof src.close==="function")src.close();
+    if(objURL)URL.revokeObjectURL(objURL);
+  }
+}
+// Participant type "Other" stores the typed text (trimmed, max 40 chars) instead of the word "Other"
+function ptypeValue(selected,otherText){
+  const other=String(otherText||"").trim().slice(0,40);
+  return selected==="Other"&&other?other:(selected||"");
+}
+// Re-render guard: skip the DOM write when the signature of what would be shown is unchanged,
+// and keep the scroll position when it does change.
+const renderSigs=new WeakMap();
+function patchHTML(el,sig,build){
+  if(!el||renderSigs.get(el)===sig)return false;
+  const sc=document.getElementById("tab-content");
+  const scTop=sc?sc.scrollTop:0,elTop=el.scrollTop;
+  el.innerHTML=typeof build==="function"?build():build;
+  renderSigs.set(el,sig);
+  if(sc)sc.scrollTop=scTop;
+  if(el!==sc)el.scrollTop=elTop;
+  return true;
+}
+function setTabHTML(html){return patchHTML(document.getElementById("tab-content"),html,html);}
+// Snapshot-driven re-renders are batched: many listeners firing together cause one render
+let uiRefreshTimer=null;
+function queueUIRefresh(){
+  if(uiRefreshTimer)clearTimeout(uiRefreshTimer);
+  uiRefreshTimer=setTimeout(()=>{uiRefreshTimer=null;refreshLists();},200);
+}
+function refreshLists(){
+  refreshDisc();
+  if(currentTab==="messages"&&!activeThreadId){if(setTabHTML(renderInbox()))bindInboxRows();}
+  else if(currentTab==="schedule"){if(setTabHTML(renderSchedule()))bindSchedule();}
+  const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
+  updateMsgBadge();
+}
+let listsSettled=false;
+function settleListAnimations(){
+  if(listsSettled||!document.querySelector(".p-card"))return;
+  listsSettled=true;
+  setTimeout(()=>document.body.classList.add("lists-settled"),400);
 }
 function makeOv(center=false){const el=document.createElement("div");el.className="ov"+(center?" ctr":"");return el;}
 
@@ -546,7 +619,7 @@ function loadMyMeetings(){
     myMeetings=list;
   }).finally(()=>{
     meetBusy=false;
-    if(currentTab==="schedule"){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}}
+    if(currentTab==="schedule"){if(setTabHTML(renderSchedule()))bindSchedule();}
     if(meetAgain){meetAgain=false;loadMyMeetings();}
   });
 }
@@ -632,12 +705,32 @@ function downloadMeetingICS(id){
 }
 
 // ── Firestore listeners ────────────────────────────────────────────────────
+// Participant reads require a delegate token, so this must only start after sign-in
+// (signInWithCustomToken in checkTicket, or a confirmed delegate session in boot).
+const LISTENER_MAX_RETRIES=3,LISTENER_RETRY_MS=3000;
+let participantsStarted=false,participantsRetries=0,participantsRetryTimer=null,pendingUnsub=null;
 function startParticipantListener(){
-  if(!window._fb)return;
+  if(participantsStarted||!window._fb)return;
+  participantsStarted=true;
+  participantsRetries=0;
+  subscribeParticipants();
+  const fb=window._fb;
+  const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
+  pendingUnsub=fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));},err=>console.warn("pending listener error:",err&&err.code));
+}
+function stopParticipantListener(){
+  participantsStarted=false;
+  participantsLoaded=false;
+  if(participantsRetryTimer){clearTimeout(participantsRetryTimer);participantsRetryTimer=null;}
+  if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
+  if(pendingUnsub){pendingUnsub();pendingUnsub=null;}
+}
+function subscribeParticipants(){
   const fb=window._fb;
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
-  participantsUnsub=fb.onSnapshot(q,snap=>{
+  participantsUnsub=fb.onSnapshot(q,{includeMetadataChanges:true},snap=>{
     participants=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(!snap.metadata.fromCache)participantsLoaded=true;
     if(me){
       const mine=participants.find(x=>x.id===me.id);
       if(mine){
@@ -647,25 +740,28 @@ function startParticipantListener(){
         localStorage.setItem("gabs_me",JSON.stringify(me));
       }
     }
-    refreshDisc();
-    if(currentTab==="messages"&&!activeThreadId){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}}
-    const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
     if(me)startInbox();
-    updateMsgBadge();
+    queueUIRefresh();
+  },err=>{
+    console.warn("participants listener error:",err&&err.code);
+    if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
+    if(!participantsStarted||participantsRetries>=LISTENER_MAX_RETRIES)return;
+    participantsRetries++;
+    participantsRetryTimer=setTimeout(()=>{participantsRetryTimer=null;if(participantsStarted)subscribeParticipants();},LISTENER_RETRY_MS);
   });
-  const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
-  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));});
 }
 
 // ── App shell ──────────────────────────────────────────────────────────────
 function renderApp(){
   const app=document.getElementById("app");
+  const tabHTML=renderTab();
   app.innerHTML=`
     ${renderBottomNav()}
     <div class="app-body">
-      <div class="app-scroll" id="tab-content">${renderTab()}</div>
+      <div class="app-scroll" id="tab-content">${tabHTML}</div>
     </div>
     ${renderProfileBar()}`;
+  const tc=document.getElementById("tab-content");if(tc)renderSigs.set(tc,tabHTML);
   bindBottomNav();
   bindTab();
   bindProfileBar();
@@ -725,6 +821,9 @@ function bindProfileBar(){
 
 function showEditProfile(){
   const ov=makeOv(true);
+  const epPtypeCustom=!!me.ptype&&!PARTICIPANT_TYPES.includes(me.ptype);
+  const epPtypeSel=epPtypeCustom?"Other":(me.ptype||"");
+  const epPtypeOther=epPtypeCustom?me.ptype:"";
   ov.innerHTML=`<div class="sheet pop" style="max-width:440px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div class="sheet-title">Edit Profile</div>
@@ -734,7 +833,7 @@ function showEditProfile(){
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div id="ep-avatar-preview" style="width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative">
         ${me.photoURL
-          ? `<img src="${me.photoURL}" style="width:100%;height:100%;object-fit:cover"/>`
+          ? `<img src="${esc(me.photoURL)}" width="80" height="80" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover"/>`
           : `<span style="color:#fff;font-size:28px;font-weight:700">${initials(me.name||"?")}</span>`}
         <div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>
       </div>
@@ -755,8 +854,9 @@ function showEditProfile(){
     <div class="form-label">Participant Type *</div>
     <select class="form-inp" id="ep-ptype">
       <option value="">-- Select --</option>
-      ${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}"${me.ptype===t?" selected":""}>${esc(t)}</option>`).join("")}
+      ${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}"${epPtypeSel===t?" selected":""}>${esc(t)}</option>`).join("")}
     </select>
+    <input class="form-inp" id="ep-ptype-other" maxlength="40" placeholder="Please specify your participant type" value="${esc(epPtypeOther)}" style="display:${epPtypeSel==="Other"?"block":"none"};margin-top:8px"/>
     <div class="form-label">Company Website <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
     <input class="form-inp" id="ep-website" type="url" value="${esc(me.website||"")}" placeholder="e.g. https://www.company.com"/>
     <div class="form-label">Job Title</div>
@@ -819,6 +919,10 @@ function showEditProfile(){
     const otherInp=document.getElementById("ep-sector-other");
     if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
   });
+  document.getElementById("ep-ptype")?.addEventListener("change",e=>{
+    const otherInp=document.getElementById("ep-ptype-other");
+    if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+  });
   buildCountryPicker("ep-country-btn","ep-country-wrap",me.country||"");
 
   document.getElementById("ep-avatar-preview")?.addEventListener("click",()=>{
@@ -828,19 +932,23 @@ function showEditProfile(){
   document.getElementById("ep-photo-input")?.addEventListener("change",async(e)=>{
     const file=e.target.files[0];
     if(!file)return;
-    if(file.size>5*1024*1024){
-      document.getElementById("ep-photo-status").textContent="Photo must be under 5MB";
+    if(file.size>PHOTO_MAX_BYTES){
+      document.getElementById("ep-photo-status").textContent="Photo must be under 30MB";
       return;
     }
     const status=document.getElementById("ep-photo-status");
+    status.textContent="Preparing photo…";
+    let blob;
+    try{blob=await prepareProfilePhoto(file);}
+    catch(err){status.textContent=PHOTO_UNSUPPORTED_MSG;e.target.value="";return;}
     status.textContent="Uploading…";
     try{
       const st=window._storage;
       const storageRef=st.ref(st.storage,`photos/${me.id}`);
-      await st.uploadBytes(storageRef,file);
-      const url=await st.getDownloadURL(storageRef);
+      await st.uploadBytes(storageRef,blob,{contentType:"image/jpeg"});
+      const url=withCacheBust(await st.getDownloadURL(storageRef));
       const preview=document.getElementById("ep-avatar-preview");
-      if(preview)preview.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover"/><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
+      if(preview)preview.innerHTML=`<img src="${esc(url)}" width="80" height="80" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover"/><div style="position:absolute;bottom:0;width:100%;background:rgba(0,0,0,.4);color:#fff;font-size:10px;text-align:center;padding:3px 0">CHANGE</div>`;
       me.photoURL=url;
       localStorage.setItem("gabs_me",JSON.stringify(me));
       if(window._fb&&me.id){
@@ -878,6 +986,7 @@ function showEditProfile(){
     me=null;localStorage.removeItem("gabs_me");
     inboxStarted=false;inboxListenedIds=new Set();
     inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};readThreadIds=new Set();
+    stopParticipantListener();participants=[];
     localStorage.removeItem("gabs_read");
     myMeetings=[];
     showEntry();
@@ -885,7 +994,7 @@ function showEditProfile(){
 
   document.getElementById("ep-save").onclick=async()=>{
     const salutation=document.getElementById("ep-salutation")?.value||"";
-    const ptype=document.getElementById("ep-ptype")?.value||"";
+    const ptype=ptypeValue(document.getElementById("ep-ptype")?.value,document.getElementById("ep-ptype-other")?.value);
     const website=document.getElementById("ep-website")?.value.trim()||"";
     const title=document.getElementById("ep-title").value.trim();
     const epSectorRaw=document.getElementById("ep-sector").value;
@@ -998,6 +1107,7 @@ function pCardHTML(p){
 }
 
 function discSubText(){
+  if(!participantsLoaded)return"Loading participants…";
   const hasFilters=discSectors.length>0||discCountry||discSearch;
   const filteredCount=filtered().length;
   const totalCount=participants.length;
@@ -1037,12 +1147,7 @@ function renderDiscover(){
       </select>
     </div>
     <button class="match-btn" id="ai-btn" style="margin:0 16px 12px;width:calc(100% - 32px)">✦ Find your best match</button>
-    <div id="cards-list" class="cards-list">
-      ${participants.length===0
-        ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`
-        :list.map(p=>pCardHTML(p)).join("")
-      }
-    </div>
+    <div id="cards-list" class="cards-list">${discCardsHTML(list)}</div>
   </div>`;
 }
 
@@ -1077,18 +1182,31 @@ function bindDiscover(){
     };
   }
   bindCards();
+  renderSigs.set(document.getElementById("cards-list"),discSig(filtered()));
+  settleListAnimations();
+}
+
+function discSig(list){
+  if(!participantsLoaded)return"loading";
+  if(!participants.length)return"none";
+  return JSON.stringify([me?.id||"",list.map(p=>[p.id,p.salutation,p.name,p.title,p.company,p.sector,p.country,p.ptype,p.interests,p.bio,p.phone,p.linkedin,p.website,p.photoURL,p.av])]);
+}
+function discCardsHTML(list){
+  if(!participantsLoaded)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div class="spin" style="margin:0 auto;border-color:rgba(27,58,107,.12);border-top-color:${GOLD}"></div><div style="font-size:14px;margin-top:14px">Loading participants…</div></div>`;
+  if(!participants.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`;
+  if(!list.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`;
+  return list.map(p=>pCardHTML(p)).join("");
 }
 
 function refreshDisc(){
   const wrap=document.getElementById("cards-list");
   if(!wrap)return;
   const list=filtered();
-  wrap.innerHTML=list.length===0
-    ?`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`
-    :list.map(p=>pCardHTML(p)).join("");
   const sub=document.querySelector(".page-sub");
   if(sub)sub.textContent=discSubText();
-  bindCards();
+  if(wrap.querySelector(".p-card"))document.body.classList.add("lists-settled");
+  if(patchHTML(wrap,discSig(list),()=>discCardsHTML(list)))bindCards();
+  settleListAnimations();
 }
 
 function showParticipantProfile(p){
@@ -1273,8 +1391,10 @@ function startInbox(){
   participants.filter(p=>p.id!==me.id&&!inboxListenedIds.has(p.id)).forEach(p=>{
     inboxListenedIds.add(p.id);
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
-    let notifFirst=true;
-    const u=fb.onSnapshot(q,snap=>{
+    let notifFirst=true,retries=0,retryTimer=null,stopped=false,u=null;
+    const subscribe=()=>{
+    notifFirst=true;
+    u=fb.onSnapshot(q,snap=>{
       snap.docChanges().forEach(ch=>{
         const dd=ch.doc.data();
         if(!dd.meeting)return;
@@ -1284,16 +1404,21 @@ function startInbox(){
         const rec={id:ch.doc.id,threadId,otherParticipant:p,meeting:dd.meeting,fromId:dd.fromId,resp:dd.resp||null,ts:dd.ts};
         if(idx>-1)myMeetings[idx]=rec;else myMeetings.push(rec);
       });
-      clearTimeout(window._schedT);
-      window._schedT=setTimeout(()=>{if(currentTab==="schedule"){const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}}},150);
       const wasFirst=notifFirst;notifFirst=false;
       if(!wasFirst){snap.docChanges().forEach(ch=>{if(ch.type!=="added")return;const dd=ch.doc.data();if(dd.fromId===me.id)return;notifyIncoming(p,dd);});}
       if(snap.empty){delete inboxData[p.id];}
       else{const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(activeThreadId!==p.id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
-      updateMsgBadge();
-      if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
+      queueUIRefresh();
+    },err=>{
+      console.warn("inbox listener error:",err&&err.code);
+      if(u){u();u=null;}
+      if(stopped||retries>=LISTENER_MAX_RETRIES)return;
+      retries++;
+      retryTimer=setTimeout(()=>{retryTimer=null;if(!stopped)subscribe();},LISTENER_RETRY_MS);
     });
-    inboxUnsubs.push(u);
+    };
+    subscribe();
+    inboxUnsubs.push(()=>{stopped=true;if(retryTimer)clearTimeout(retryTimer);if(u){u();u=null;}});
   });
 }
 
@@ -1301,8 +1426,10 @@ function updateMsgBadge(){
   // Exclude the currently open thread from unread count
   const count=Object.keys(inboxData).filter(id=>id!==activeThreadId&&!readThreadIds.has(id)).length;
   document.querySelectorAll(".nav-item[data-tab='messages']").forEach(nav=>{
-    nav.querySelector(".nav-badge")?.remove();
-    if(count>0){const b=document.createElement("div");b.className="nav-badge";b.textContent=count;nav.appendChild(b);}
+    let b=nav.querySelector(".nav-badge");
+    if(count<=0){b?.remove();return;}
+    if(!b){b=document.createElement("div");b.className="nav-badge";nav.appendChild(b);}
+    if(b.textContent!==String(count))b.textContent=count;
   });
 }
 
@@ -1371,23 +1498,28 @@ function renderMsgs(){
 
 function scrollBottom(){const el=document.getElementById("msgs");if(el)el.scrollTop=el.scrollHeight;}
 
+let threadRenderTimer=null;
 function initThread(p){
   if(!me||!window._fb)return;
   if(threadUnsub){threadUnsub();threadUnsub=null;}
   const fb=window._fb;
   const tid2=tid(me.id,p.id);
   const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
+  clearTimeout(threadRenderTimer);
   threadUnsub=fb.onSnapshot(q,snap=>{
     threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
-    const msgs=document.getElementById("msgs");
-    if(msgs){msgs.innerHTML=renderMsgs();scrollBottom();bindRespBtns(p);}
-    requestAnimationFrame(()=>scrollBottom());
+    clearTimeout(threadRenderTimer);
+    threadRenderTimer=setTimeout(()=>{
+      const msgs=document.getElementById("msgs");
+      const html=renderMsgs();
+      if(msgs&&patchHTML(msgs,html,html)){scrollBottom();bindRespBtns(p);requestAnimationFrame(()=>scrollBottom());}
+    },200);
   });
   setTimeout(scrollBottom,100);
 }
 
 function bindCompose(p){
-  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderInbox();bindInboxRows();}updateMsgBadge();});
+  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";clearTimeout(threadRenderTimer);if(setTabHTML(renderInbox()))bindInboxRows();updateMsgBadge();});
   document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
   const inp=document.getElementById("cinp");
   const sbt=document.getElementById("sbtn");
@@ -1541,7 +1673,7 @@ function renderSchedule(){
 
 function bindSchedule(){
   document.querySelectorAll(".day-tab[data-di]").forEach(tab=>{
-    tab.onclick=()=>{schedDay=parseInt(tab.dataset.di);const tc=document.getElementById("tab-content");if(tc){tc.innerHTML=renderSchedule();bindSchedule();}};
+    tab.onclick=()=>{schedDay=parseInt(tab.dataset.di);if(setTabHTML(renderSchedule()))bindSchedule();};
   });
 }
 
@@ -1923,6 +2055,8 @@ function showAI(){
 }
 
 // ── Entry screen ──────────────────────────────────────────────────────────
+const TICKET_PREFIX="GABS2026-T-";
+const normalizeTicketInput=v=>String(v||"").trim().replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-").toUpperCase();
 function showEntry(opts){
   const el=document.createElement("div");
   el.id="entry";
@@ -1949,10 +2083,13 @@ function showEntry(opts){
   function renderStage(){
     if(stage==="enter")return`
       <div class="entry-label">Ticket Reference</div>
-      <input class="entry-input" id="t-input" placeholder="GABS2026-T-XXXXXX" value="${esc(ticketInput)}" autocomplete="off"/>
+      <div class="ticket-row">
+        <span class="ticket-prefix" aria-hidden="true">${TICKET_PREFIX}</span>
+        <input class="entry-input" id="t-input" placeholder="XXXXXX" value="${esc(ticketInput)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="40" aria-label="Ticket reference after ${TICKET_PREFIX}"/>
+      </div>
       <div id="t-err"></div>
       <button class="btn-gold" id="t-go">Continue →</button>
-      <div class="entry-hint">Your reference is on your confirmation email.</div>`;
+      <div class="entry-hint">Your reference is on your confirmation email.<br/>Search your inbox for GABS2026-T</div>`;
 
     if(stage==="checking")return`<div style="text-align:center;padding:60px 0"><div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">Checking ticket…</div></div>`;
 
@@ -1985,6 +2122,7 @@ function showEntry(opts){
       <select class="form-inp" id="c-salutation"><option value="">-- Select --</option>${SALUTATIONS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
       <div class="form-label">Participant Type *</div>
       <select class="form-inp" id="c-ptype"><option value="">-- Select --</option>${PARTICIPANT_TYPES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select>
+      <input class="form-inp" id="c-ptype-other" maxlength="40" placeholder="Please specify your participant type" style="display:none;margin-top:8px"/>
       <div class="form-label">Full name *</div>
       <input class="form-inp" id="c-name" placeholder="e.g. Hans Mueller" autocomplete="name"/>
       <div class="form-label">Company *</div>
@@ -2022,7 +2160,12 @@ function showEntry(opts){
     if(stage==="enter"){
       const inp=document.getElementById("t-input");
       const goBtn=document.getElementById("t-go");
-      if(inp){inp.oninput=e=>{ticketInput=e.target.value.toUpperCase();};inp.addEventListener("keydown",e=>{if(e.key==="Enter")checkTicket();});setTimeout(()=>inp.focus(),150);}
+      if(inp){inp.oninput=e=>{
+        // A pasted full reference: drop the prefix that is already shown in the chip
+        const n=normalizeTicketInput(inp.value);
+        if(n.startsWith(TICKET_PREFIX))inp.value=n.slice(TICKET_PREFIX.length);
+        ticketInput=inp.value.toUpperCase();
+      };inp.addEventListener("keydown",e=>{if(e.key==="Enter")checkTicket();});setTimeout(()=>inp.focus(),150);}
       goBtn?.addEventListener("click",checkTicket);
     }
     else if(stage==="invalid"){document.getElementById("i-back")?.addEventListener("click",()=>{stage="enter";ticketInput="";render();});}
@@ -2030,7 +2173,9 @@ function showEntry(opts){
   }
 
   async function checkTicket(){
-    const val=(document.getElementById("t-input")?.value||"").trim().replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-").toUpperCase();
+    const typed=normalizeTicketInput(document.getElementById("t-input")?.value);
+    // Full references (incl. test refs like GABS-2026-TEST-001) are used as is; otherwise add the prefix
+    const val=!typed?"":typed.startsWith("GABS")?typed:TICKET_PREFIX+typed;
     if(!val){const err=document.getElementById("t-err");if(err)err.innerHTML=`<div class="err-msg" style="margin-top:10px">Please enter your ticket reference.</div>`;return;}
     stage="checking";render();
     if(!window._fb||!window._fn||!window._auth){
@@ -2041,6 +2186,7 @@ function showEntry(opts){
       const result=await window._fn.httpsCallable("signInWithTicket")({ref:val});
       const A=window._auth;
       await A.signInWithCustomToken(A.auth,result.data.token);
+      startParticipantListener();
       const uid=result.data.uid;
       const fbs=window._fb;
       const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",uid)));
@@ -2086,34 +2232,42 @@ function showEntry(opts){
       const otherInp=document.getElementById("c-sector-other");
       if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
     });
+    document.getElementById("c-ptype")?.addEventListener("change",e=>{
+      const otherInp=document.getElementById("c-ptype-other");
+      if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
+    });
     buildCountryPicker("c-country-btn","c-country-wrap","");
 
     const cPhotoWrap=document.getElementById("c-photo-wrap");
     const cPhotoInput=document.getElementById("c-photo-input");
     const cPhotoStatus=document.getElementById("c-photo-status");
-    let pendingPhotoFile=null;
+    let pendingPhotoBlob=null;
 
     cPhotoWrap?.addEventListener("click",()=>cPhotoInput?.click());
 
-    cPhotoInput?.addEventListener("change",(e)=>{
+    cPhotoInput?.addEventListener("change",async(e)=>{
       const file=e.target.files[0];
       if(!file)return;
-      if(file.size>5*1024*1024){
-        if(cPhotoStatus)cPhotoStatus.textContent="Photo must be under 5MB";
+      if(file.size>PHOTO_MAX_BYTES){
+        if(cPhotoStatus)cPhotoStatus.textContent="Photo must be under 30MB";
         return;
       }
-      pendingPhotoFile=file;
+      if(cPhotoStatus)cPhotoStatus.textContent="Preparing photo…";
+      let blob;
+      try{blob=await prepareProfilePhoto(file);}
+      catch(err){pendingPhotoBlob=null;e.target.value="";if(cPhotoStatus)cPhotoStatus.textContent=PHOTO_UNSUPPORTED_MSG;return;}
+      pendingPhotoBlob=blob;
       const reader=new FileReader();
       reader.onload=ev=>{
-        if(cPhotoWrap)cPhotoWrap.innerHTML=`<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.45);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:4px 0;letter-spacing:.05em">CHANGE</div>`;
+        if(cPhotoWrap)cPhotoWrap.innerHTML=`<img src="${ev.target.result}" width="84" height="84" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.45);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:4px 0;letter-spacing:.05em">CHANGE</div>`;
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
       if(cPhotoStatus)cPhotoStatus.textContent="✓ Photo selected — will upload on registration";
     });
 
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
       const salutation=document.getElementById("c-salutation")?.value||"";
-      const ptype=document.getElementById("c-ptype")?.value||"";
+      const ptype=ptypeValue(document.getElementById("c-ptype")?.value,document.getElementById("c-ptype-other")?.value);
       const name=document.getElementById("c-name")?.value.trim();
       const company=document.getElementById("c-company")?.value.trim();
       const website=document.getElementById("c-website")?.value.trim()||"";
@@ -2144,27 +2298,30 @@ function showEntry(opts){
         }
         me={id:pendingUid,salutation,ptype,name,company,website,title,sector,country,email,linkedin,interests,bio,av:initials(name),status:"approved"};
         localStorage.setItem("gabs_me",JSON.stringify(me));
-        if(pendingPhotoFile&&window._storage){
+        let photoFailed=false;
+        if(pendingPhotoBlob&&window._storage){
           try{
             const st=window._storage;
             const storageRef=st.ref(st.storage,`photos/${pendingUid}`);
-            await st.uploadBytes(storageRef,pendingPhotoFile);
-            const url=await st.getDownloadURL(storageRef);
+            await st.uploadBytes(storageRef,pendingPhotoBlob,{contentType:"image/jpeg"});
+            const url=withCacheBust(await st.getDownloadURL(storageRef));
             await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",pendingUid),{photoURL:url});
             me.photoURL=url;
             localStorage.setItem("gabs_me",JSON.stringify(me));
           }catch(photoErr){
-            console.warn("Photo upload failed during registration:",photoErr);
+            photoFailed=true;
+            console.warn("Photo upload failed during registration:",photoErr&&photoErr.code);
           }
         }
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
-        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`;
+        if(fb2)fb2.innerHTML=`<div class="ok-msg">✓ Welcome to GABS 2026, ${esc(name)}! Taking you to the app…</div>`
+          +(photoFailed?`<div class="err-msg">Photo couldn't be uploaded. You can add it later from Edit Profile.</div>`:"");
         if(btn)btn.textContent="✓ Confirmed";
         setTimeout(()=>{
           const entryEl=document.getElementById("entry");
           if(entryEl){entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>{entryEl.remove();renderApp();startInbox();},350);}
           else{renderApp();startInbox();}
-        },900);
+        },photoFailed?3500:900);
       }catch(e){
         if(fb2)fb2.innerHTML=`<div class="err-msg">Submission failed. Please try again.</div>`;
         if(btn){btn.disabled=false;btn.textContent="Confirm & Enter App →";}
@@ -2462,15 +2619,16 @@ function showQR(){
 }
 
 // ── Boot ────────────────────────────────────────────────────────────────────
+let bootStarted=false;
 async function boot(){
+  if(bootStarted)return; // fb-ready can fire boot() from more than one path
+  bootStarted=true;
   document.getElementById("app").style.display="flex";
   if(window.location.hash==="#admin"){
     window.location.hash="";
-    if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
     document.getElementById("loader").classList.add("gone");
     showAdmin();return;
   }
-  if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
 
   const A=window._auth;
   const user=A?await new Promise(resolve=>{const u=A.onAuthStateChanged(A.auth,usr=>{u();resolve(usr);});}):null;
@@ -2490,6 +2648,7 @@ async function boot(){
     showEntry();return;
   }
 
+  startParticipantListener();
   if(window._fb){
     const fbs=window._fb;
     const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",delegateUid)));
