@@ -9,10 +9,11 @@ const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
 const { normalizeRef, isValidRef } = require("./lib/ticketRef");
-const { applyRateLimit } = require("./lib/rateLimit");
+const { isBlocked, recordFailure } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
 const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
+const { validateResetInput, chunk, RESET_COLLECTIONS } = require("./lib/reset");
 const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
 
 const REGION = "europe-west1";
@@ -38,31 +39,37 @@ const BATCH_SIZE = 400;
 /**
  * Public callable: exchange a ticket reference for a custom auth
  * token. Rate-limited per client IP (hashed, never stored in the
- * clear). Never logs the ref or any issued token.
+ * clear), counting FAILED attempts only, so delegates sharing a venue
+ * IP are never locked out by successful sign-ins. Never logs the ref,
+ * the IP or any issued token.
  */
 exports.signInWithTicket = onCall({ region: REGION }, async (request) => {
-  const ref = normalizeRef(request.data && request.data.ref);
-  if (!isValidRef(ref)) {
-    throw new HttpsError("invalid-argument", "Invalid ticket reference.");
-  }
-
   const ip = getClientIp(request.rawRequest);
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex");
   const rateRef = db.collection("rate").doc(ipHash);
 
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(rateRef);
-    const existing = snap.exists ? snap.data() : null;
-    const decision = applyRateLimit(existing, Date.now());
-    if (!decision.allowed) {
-      throw new HttpsError("resource-exhausted", "Too many attempts. Please try again later.");
-    }
-    tx.set(rateRef, { count: decision.count, windowStart: decision.windowStart }, { merge: true });
-  });
+  const rateSnap = await rateRef.get();
+  if (isBlocked(rateSnap.exists ? rateSnap.data() : null, Date.now())) {
+    throw new HttpsError("resource-exhausted", "Too many attempts. Please try again later.");
+  }
+
+  const countFailure = () =>
+    db.runTransaction(async (tx) => {
+      const snap = await tx.get(rateRef);
+      const next = recordFailure(snap.exists ? snap.data() : null, Date.now());
+      tx.set(rateRef, next, { merge: true });
+    });
+
+  const ref = normalizeRef(request.data && request.data.ref);
+  if (!isValidRef(ref)) {
+    await countFailure();
+    throw new HttpsError("invalid-argument", "Invalid ticket reference.");
+  }
 
   const ticketRef = db.collection("tickets").doc(ref);
   const ticketSnap = await ticketRef.get();
   if (!ticketSnap.exists) {
+    await countFailure();
     throw new HttpsError("not-found", "Ticket not found");
   }
 
@@ -150,6 +157,57 @@ exports.adminUploadTickets = onCall({ region: REGION }, async (request) => {
   }
 
   return { added, alreadyExisted, invalid };
+});
+
+/**
+ * Admin-only callable: wipe event data. Recursively deletes
+ * participants (incl. private contact records), threads (incl.
+ * messages), aiUsage and rate. Ticket documents are NEVER deleted;
+ * with unlinkTickets === true their uid is reset to null and
+ * claimedAt removed so every ticket can be claimed again. Logs counts
+ * only — never names or refs.
+ */
+exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
+  if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+  const opts = validateResetInput(request.data);
+  if (!opts) {
+    throw new HttpsError("invalid-argument", 'confirm must be "RESET".');
+  }
+
+  const counts = {};
+  for (const name of RESET_COLLECTIONS) {
+    const coll = db.collection(name);
+    // Thread docs usually don't exist (only their messages do), so count
+    // by listDocuments, which includes such parent paths.
+    counts[name] =
+      name === "threads"
+        ? (await coll.listDocuments()).length
+        : (await coll.count().get()).data().count;
+    await db.recursiveDelete(coll);
+  }
+
+  let ticketsUnlinked = 0;
+  if (opts.unlinkTickets) {
+    const ticketsSnap = await db.collection("tickets").select().get();
+    for (const docs of chunk(ticketsSnap.docs)) {
+      const batch = db.batch();
+      docs.forEach((d) => batch.update(d.ref, { uid: null, claimedAt: admin.firestore.FieldValue.delete() }));
+      await batch.commit();
+      ticketsUnlinked += docs.length;
+    }
+  }
+
+  const result = {
+    participants: counts.participants,
+    threads: counts.threads,
+    aiUsage: counts.aiUsage,
+    rate: counts.rate,
+    ticketsUnlinked,
+  };
+  logger.info("adminReset: done", result);
+  return result;
 });
 
 /**
