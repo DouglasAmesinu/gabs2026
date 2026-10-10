@@ -395,6 +395,7 @@ let inboxListenedIds=new Set();
 let pendingRegs=[];
 let participantsUnsub=null;
 let participantsLoaded=false; // true once a snapshot from the server (not cache) has arrived
+let participantsFailed=false; // true once the listener has used up its retries
 let discSearch="",discSectors=[],discCountry="";
 let myMeetings=[];
 let schedDay=0;
@@ -718,9 +719,20 @@ function startParticipantListener(){
   const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
   pendingUnsub=fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));},err=>console.warn("pending listener error:",err&&err.code));
 }
+// Discover's "Tap to retry": start over with a fresh retry allowance
+function retryParticipantListener(){
+  participantsFailed=false;
+  if(!participantsStarted){startParticipantListener();refreshDisc();return;}
+  participantsRetries=0;
+  if(participantsRetryTimer){clearTimeout(participantsRetryTimer);participantsRetryTimer=null;}
+  if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
+  subscribeParticipants();
+  refreshDisc();
+}
 function stopParticipantListener(){
   participantsStarted=false;
   participantsLoaded=false;
+  participantsFailed=false;
   if(participantsRetryTimer){clearTimeout(participantsRetryTimer);participantsRetryTimer=null;}
   if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
   if(pendingUnsub){pendingUnsub();pendingUnsub=null;}
@@ -745,7 +757,8 @@ function subscribeParticipants(){
   },err=>{
     console.warn("participants listener error:",err&&err.code);
     if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
-    if(!participantsStarted||participantsRetries>=LISTENER_MAX_RETRIES)return;
+    if(!participantsStarted)return;
+    if(participantsRetries>=LISTENER_MAX_RETRIES){participantsFailed=true;refreshDisc();return;}
     participantsRetries++;
     participantsRetryTimer=setTimeout(()=>{participantsRetryTimer=null;if(participantsStarted)subscribeParticipants();},LISTENER_RETRY_MS);
   });
@@ -1107,7 +1120,7 @@ function pCardHTML(p){
 }
 
 function discSubText(){
-  if(!participantsLoaded)return"Loading participants…";
+  if(!participantsLoaded)return participantsFailed?"Couldn't load participants":"Loading participants…";
   const hasFilters=discSectors.length>0||discCountry||discSearch;
   const filteredCount=filtered().length;
   const totalCount=participants.length;
@@ -1187,11 +1200,12 @@ function bindDiscover(){
 }
 
 function discSig(list){
-  if(!participantsLoaded)return"loading";
+  if(!participantsLoaded)return participantsFailed?"failed":"loading";
   if(!participants.length)return"none";
   return JSON.stringify([me?.id||"",list.map(p=>[p.id,p.salutation,p.name,p.title,p.company,p.sector,p.country,p.ptype,p.interests,p.bio,p.phone,p.linkedin,p.website,p.photoURL,p.av])]);
 }
 function discCardsHTML(list){
+  if(!participantsLoaded&&participantsFailed)return`<div id="disc-retry" role="button" tabindex="0" style="text-align:center;padding:60px 20px;color:var(--muted);cursor:pointer;touch-action:manipulation"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-size:15px;font-weight:700;color:var(--text)">Couldn't load participants. Tap to retry.</div></div>`;
   if(!participantsLoaded)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div class="spin" style="margin:0 auto;border-color:rgba(27,58,107,.12);border-top-color:${GOLD}"></div><div style="font-size:14px;margin-top:14px">Loading participants…</div></div>`;
   if(!participants.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`;
   if(!list.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`;
@@ -1267,6 +1281,7 @@ function showParticipantProfile(p){
 }
 
 function bindCards(){
+  document.getElementById("disc-retry")?.addEventListener("click",retryParticipantListener);
   document.querySelectorAll(".p-msg").forEach(b=>{
     b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)openThread(p);};
   });
