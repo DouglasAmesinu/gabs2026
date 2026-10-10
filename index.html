@@ -662,8 +662,26 @@ function downloadMeetingICS(id){
 }
 
 // ── Firestore listeners ────────────────────────────────────────────────────
+// Participant reads require a delegate token, so this must only start after sign-in
+// (signInWithCustomToken in checkTicket, or a confirmed delegate session in boot).
+const LISTENER_MAX_RETRIES=3,LISTENER_RETRY_MS=3000;
+let participantsStarted=false,participantsRetries=0,participantsRetryTimer=null,pendingUnsub=null;
 function startParticipantListener(){
-  if(!window._fb)return;
+  if(participantsStarted||!window._fb)return;
+  participantsStarted=true;
+  participantsRetries=0;
+  subscribeParticipants();
+  const fb=window._fb;
+  const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
+  pendingUnsub=fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));},err=>console.warn("pending listener error:",err&&err.code));
+}
+function stopParticipantListener(){
+  participantsStarted=false;
+  if(participantsRetryTimer){clearTimeout(participantsRetryTimer);participantsRetryTimer=null;}
+  if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
+  if(pendingUnsub){pendingUnsub();pendingUnsub=null;}
+}
+function subscribeParticipants(){
   const fb=window._fb;
   const q=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","approved"));
   participantsUnsub=fb.onSnapshot(q,snap=>{
@@ -682,9 +700,13 @@ function startParticipantListener(){
     const pl=document.getElementById("picker-list");if(pl){pl.innerHTML=renderPickerList();bindPickerItems();}
     if(me)startInbox();
     updateMsgBadge();
+  },err=>{
+    console.warn("participants listener error:",err&&err.code);
+    if(participantsUnsub){participantsUnsub();participantsUnsub=null;}
+    if(!participantsStarted||participantsRetries>=LISTENER_MAX_RETRIES)return;
+    participantsRetries++;
+    participantsRetryTimer=setTimeout(()=>{participantsRetryTimer=null;if(participantsStarted)subscribeParticipants();},LISTENER_RETRY_MS);
   });
-  const q2=fb.query(fb.collection(fb.db,"participants"),fb.where("status","==","pending"));
-  fb.onSnapshot(q2,snap=>{pendingRegs=snap.docs.map(d=>({id:d.id,...d.data()}));});
 }
 
 // ── App shell ──────────────────────────────────────────────────────────────
@@ -912,6 +934,7 @@ function showEditProfile(){
     me=null;localStorage.removeItem("gabs_me");
     inboxStarted=false;inboxListenedIds=new Set();
     inboxUnsubs.forEach(u=>u());inboxUnsubs=[];inboxData={};readThreadIds=new Set();
+    stopParticipantListener();participants=[];
     localStorage.removeItem("gabs_read");
     myMeetings=[];
     showEntry();
@@ -1307,8 +1330,10 @@ function startInbox(){
   participants.filter(p=>p.id!==me.id&&!inboxListenedIds.has(p.id)).forEach(p=>{
     inboxListenedIds.add(p.id);
     const q=fb.query(fb.collection(fb.db,"threads",tid(me.id,p.id),"messages"),fb.orderBy("ts","desc"));
-    let notifFirst=true;
-    const u=fb.onSnapshot(q,snap=>{
+    let notifFirst=true,retries=0,retryTimer=null,stopped=false,u=null;
+    const subscribe=()=>{
+    notifFirst=true;
+    u=fb.onSnapshot(q,snap=>{
       snap.docChanges().forEach(ch=>{
         const dd=ch.doc.data();
         if(!dd.meeting)return;
@@ -1326,8 +1351,16 @@ function startInbox(){
       else{const d=snap.docs[0].data();const prev=inboxData[p.id];inboxData[p.id]={p,text:d.text,ts:d.ts};if(activeThreadId!==p.id&&prev&&d.ts&&prev.ts&&d.ts.seconds!==prev.ts.seconds){readThreadIds.delete(p.id);saveReadIds();}}
       updateMsgBadge();
       if(currentTab==="messages"&&!activeThreadId){document.getElementById("tab-content").innerHTML=renderInbox();bindInboxRows();}
+    },err=>{
+      console.warn("inbox listener error:",err&&err.code);
+      if(u){u();u=null;}
+      if(stopped||retries>=LISTENER_MAX_RETRIES)return;
+      retries++;
+      retryTimer=setTimeout(()=>{retryTimer=null;if(!stopped)subscribe();},LISTENER_RETRY_MS);
     });
-    inboxUnsubs.push(u);
+    };
+    subscribe();
+    inboxUnsubs.push(()=>{stopped=true;if(retryTimer)clearTimeout(retryTimer);if(u){u();u=null;}});
   });
 }
 
@@ -2075,6 +2108,7 @@ function showEntry(opts){
       const result=await window._fn.httpsCallable("signInWithTicket")({ref:val});
       const A=window._auth;
       await A.signInWithCustomToken(A.auth,result.data.token);
+      startParticipantListener();
       const uid=result.data.uid;
       const fbs=window._fb;
       const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",uid)));
@@ -2507,11 +2541,9 @@ async function boot(){
   document.getElementById("app").style.display="flex";
   if(window.location.hash==="#admin"){
     window.location.hash="";
-    if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
     document.getElementById("loader").classList.add("gone");
     showAdmin();return;
   }
-  if(window._fb){startParticipantListener();await new Promise(r=>setTimeout(r,600));}
 
   const A=window._auth;
   const user=A?await new Promise(resolve=>{const u=A.onAuthStateChanged(A.auth,usr=>{u();resolve(usr);});}):null;
@@ -2531,6 +2563,7 @@ async function boot(){
     showEntry();return;
   }
 
+  startParticipantListener();
   if(window._fb){
     const fbs=window._fb;
     const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"participants"),fbs.where("__name__","==",delegateUid)));
