@@ -43,7 +43,7 @@ const BATCH_SIZE = 400;
  * IP are never locked out by successful sign-ins. Never logs the ref,
  * the IP or any issued token.
  */
-exports.signInWithTicket = onCall({ region: REGION }, async (request) => {
+exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10 }, async (request) => {
   const ip = getClientIp(request.rawRequest);
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex");
   const rateRef = db.collection("rate").doc(ipHash);
@@ -108,7 +108,7 @@ exports.signInWithTicket = onCall({ region: REGION }, async (request) => {
  * ({uid: null}) for a batch of references. Never overwrites an
  * existing ticket doc.
  */
-exports.adminUploadTickets = onCall({ region: REGION }, async (request) => {
+exports.adminUploadTickets = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
   if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
     throw new HttpsError("permission-denied", "Admin only.");
   }
@@ -167,7 +167,7 @@ exports.adminUploadTickets = onCall({ region: REGION }, async (request) => {
  * claimedAt removed so every ticket can be claimed again. Logs counts
  * only — never names or refs.
  */
-exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
+exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512MiB", maxInstances: 1 }, async (request) => {
   if (!request.auth || request.auth.uid !== ADMIN_UID.value()) {
     throw new HttpsError("permission-denied", "Admin only.");
   }
@@ -407,7 +407,7 @@ exports.aiMatch = onCall(
  * ever recorded server-side (the client no longer writes it).
  */
 exports.syncBookedSlots = onDocumentUpdated(
-  { document: "threads/{tid}/messages/{mid}", region: REGION },
+  { document: "threads/{tid}/messages/{mid}", region: REGION, maxInstances: 10 },
   async (event) => {
     const before = event.data.before.data();
     const after = event.data.after.data();
