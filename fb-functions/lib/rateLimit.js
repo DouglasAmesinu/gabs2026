@@ -1,36 +1,49 @@
 "use strict";
 
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const LIMIT = 30; // attempts per window
+const LIMIT = 100; // failed attempts per window
 
 /**
- * Pure decision function for a fixed-window rate limiter. Does not
- * touch Firestore or any I/O — the caller is responsible for reading
- * `existing` from (and writing the result back into) the rate-limit
- * document inside a transaction.
- *
+ * True when `existing` is a usable record whose window is still open.
  * @param {{count:number, windowStart:number}|null|undefined} existing
- *   Current state, or null/undefined if no document exists yet.
- * @param {number} now Current time in ms (e.g. Date.now()).
- * @returns {{allowed:boolean, count:number, windowStart:number}}
- *   The state to persist. When `allowed` is false, `count` and
- *   `windowStart` are unchanged from `existing` (nothing should be
- *   written, or it may be written back as-is — it's a no-op either way).
+ * @param {number} now
  */
-function applyRateLimit(existing, now) {
-  const windowExpired =
-    !existing ||
-    typeof existing.windowStart !== "number" ||
-    typeof existing.count !== "number" ||
-    now - existing.windowStart >= WINDOW_MS;
-
-  if (windowExpired) {
-    return { allowed: true, count: 1, windowStart: now };
-  }
-  if (existing.count < LIMIT) {
-    return { allowed: true, count: existing.count + 1, windowStart: existing.windowStart };
-  }
-  return { allowed: false, count: existing.count, windowStart: existing.windowStart };
+function windowActive(existing, now) {
+  return (
+    !!existing &&
+    typeof existing.windowStart === "number" &&
+    typeof existing.count === "number" &&
+    now - existing.windowStart < WINDOW_MS
+  );
 }
 
-module.exports = { applyRateLimit, WINDOW_MS, LIMIT };
+/**
+ * Pure check for a fixed-window limiter that only counts FAILED
+ * sign-in attempts. Call it before doing any work; successful sign-ins
+ * never write to the rate document, so they never consume the allowance.
+ *
+ * @param {{count:number, windowStart:number}|null|undefined} existing
+ *   Current state of the rate document, or null/undefined if none.
+ * @param {number} now Current time in ms (e.g. Date.now()).
+ * @returns {boolean} true when the caller must be refused.
+ */
+function isBlocked(existing, now) {
+  return windowActive(existing, now) && existing.count >= LIMIT;
+}
+
+/**
+ * Pure state transition for one failed attempt. The caller reads
+ * `existing` and writes the result back inside a transaction.
+ *
+ * @param {{count:number, windowStart:number}|null|undefined} existing
+ * @param {number} now
+ * @returns {{count:number, windowStart:number}} the state to persist.
+ */
+function recordFailure(existing, now) {
+  if (!windowActive(existing, now)) {
+    return { count: 1, windowStart: now };
+  }
+  return { count: existing.count + 1, windowStart: existing.windowStart };
+}
+
+module.exports = { isBlocked, recordFailure, WINDOW_MS, LIMIT };

@@ -9,7 +9,7 @@ const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
 const { normalizeRef, isValidRef } = require("./lib/ticketRef");
-const { applyRateLimit } = require("./lib/rateLimit");
+const { isBlocked, recordFailure } = require("./lib/rateLimit");
 const { getClientIp } = require("./lib/clientIp");
 const { buildSlot, splitThreadId } = require("./lib/slots");
 const { planMigration } = require("./lib/migrate");
@@ -38,31 +38,37 @@ const BATCH_SIZE = 400;
 /**
  * Public callable: exchange a ticket reference for a custom auth
  * token. Rate-limited per client IP (hashed, never stored in the
- * clear). Never logs the ref or any issued token.
+ * clear), counting FAILED attempts only, so delegates sharing a venue
+ * IP are never locked out by successful sign-ins. Never logs the ref,
+ * the IP or any issued token.
  */
 exports.signInWithTicket = onCall({ region: REGION }, async (request) => {
-  const ref = normalizeRef(request.data && request.data.ref);
-  if (!isValidRef(ref)) {
-    throw new HttpsError("invalid-argument", "Invalid ticket reference.");
-  }
-
   const ip = getClientIp(request.rawRequest);
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex");
   const rateRef = db.collection("rate").doc(ipHash);
 
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(rateRef);
-    const existing = snap.exists ? snap.data() : null;
-    const decision = applyRateLimit(existing, Date.now());
-    if (!decision.allowed) {
-      throw new HttpsError("resource-exhausted", "Too many attempts. Please try again later.");
-    }
-    tx.set(rateRef, { count: decision.count, windowStart: decision.windowStart }, { merge: true });
-  });
+  const rateSnap = await rateRef.get();
+  if (isBlocked(rateSnap.exists ? rateSnap.data() : null, Date.now())) {
+    throw new HttpsError("resource-exhausted", "Too many attempts. Please try again later.");
+  }
+
+  const countFailure = () =>
+    db.runTransaction(async (tx) => {
+      const snap = await tx.get(rateRef);
+      const next = recordFailure(snap.exists ? snap.data() : null, Date.now());
+      tx.set(rateRef, next, { merge: true });
+    });
+
+  const ref = normalizeRef(request.data && request.data.ref);
+  if (!isValidRef(ref)) {
+    await countFailure();
+    throw new HttpsError("invalid-argument", "Invalid ticket reference.");
+  }
 
   const ticketRef = db.collection("tickets").doc(ref);
   const ticketSnap = await ticketRef.get();
   if (!ticketSnap.exists) {
+    await countFailure();
     throw new HttpsError("not-found", "Ticket not found");
   }
 
