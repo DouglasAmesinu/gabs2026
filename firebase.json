@@ -1,1 +1,1 @@
-{"functions":[{"source":"fb-functions","codebase":"default"}],"firestore":{"rules":"firestore.rules"},"storage":{"rules":"storage.rules"}}
+{"functions":[{"source":"fb-functions","codebase":"default"}],"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"storage":{"rules":"storage.rules"}}
