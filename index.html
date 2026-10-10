@@ -414,6 +414,64 @@ const safeWebsiteURL=u=>{
   return /^https?:\/\//i.test(withScheme)?withScheme:null;
 };
 
+// BEGIN inbox-helpers
+// Pure functions (no DOM, no Firestore, no globals). Unit-tested from
+// fb-functions/test/inboxHelpers.test.js, which evaluates this block.
+
+// Sorted pair of participant ids, the same order tid() joins with "__".
+function threadParticipants(a,b){
+  return [a,b].sort();
+}
+
+// The other participant of a two-person message, or null when the
+// message has no valid participants list or does not involve myId.
+function otherParticipantId(participants,myId){
+  if(!Array.isArray(participants)||participants.length!==2||!participants.includes(myId))return null;
+  return participants[0]===myId?participants[1]:participants[0];
+}
+
+// Sortable value of a Firestore Timestamp-like {seconds,nanoseconds}.
+// A missing ts is a local write still waiting for its server timestamp,
+// i.e. the newest message.
+function tsValue(ts){
+  if(!ts||typeof ts.seconds!=="number")return Infinity;
+  return ts.seconds*1e9+(ts.nanoseconds||0);
+}
+
+// messages: message documents' data. Returns {otherId:{text,ts,fromId}}
+// holding the newest message exchanged with each other participant.
+function buildInbox(messages,myId){
+  const out={};
+  (messages||[]).forEach(m=>{
+    if(!m)return;
+    const other=otherParticipantId(m.participants,myId);
+    if(!other)return;
+    const prev=out[other];
+    if(prev&&tsValue(prev.ts)>=tsValue(m.ts))return;
+    out[other]={text:m.text,ts:m.ts||null,fromId:m.fromId};
+  });
+  return out;
+}
+
+// change: {type:"added"|"modified"|"removed", id, threadId, data}.
+// Returns a new list of meeting records {id,threadId,otherId,meeting,
+// fromId,resp,ts}; a record is keyed by threadId+id, so repeating the
+// same change never creates duplicates.
+function applyMeetingChange(list,change,myId){
+  const key=change.threadId+"|"+change.id;
+  const idx=list.findIndex(r=>r.threadId+"|"+r.id===key);
+  const d=change.data||{};
+  const otherId=otherParticipantId(d.participants,myId);
+  if(change.type==="removed"||!d.meeting||!otherId){
+    return idx>-1?list.filter((_,i)=>i!==idx):list;
+  }
+  const rec={id:change.id,threadId:change.threadId,otherId,meeting:d.meeting,fromId:d.fromId,resp:d.resp||null,ts:d.ts||null};
+  const out=list.slice();
+  if(idx>-1)out[idx]=rec;else out.push(rec);
+  return out;
+}
+// END inbox-helpers
+
 function avHTML(av,sz=42,photoURL=null){
   const fs=Math.round(sz*.36);
   if(photoURL)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(photoURL)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
@@ -1594,7 +1652,7 @@ async function doSend(p,textOverride,meeting){
   if(sbt)sbt.className="send-btn off";
   const fb=window._fb;const tid2=tid(me.id,p.id);
   // participants: same sorted pair as tid(), so collection-group queries can find the thread from either side
-  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av||initials(me.name),ts:fb.serverTimestamp(),participants:[me.id,p.id].sort(),hasMeeting:!!meeting};
+  const payload={text,fromId:me.id,fromName:me.name,fromAvatar:me.av||initials(me.name),ts:fb.serverTimestamp(),participants:threadParticipants(me.id,p.id),hasMeeting:!!meeting};
   if(meeting)payload.meeting=meeting;
   await fb.addDoc(fb.collection(fb.db,"threads",tid2,"messages"),payload);
 }
