@@ -2374,6 +2374,9 @@ function showEntry(opts){
       }else if(code.endsWith("resource-exhausted")){
         invalidTitle="Please slow down";
         invalidMsg="Too many attempts. Please wait a few minutes and try again.";
+      }else if(code.endsWith("permission-denied")){
+        invalidTitle="Ticket not active";
+        invalidMsg="This ticket is not active. Please contact support.";
       }else{
         invalidTitle="Connection problem";
         invalidMsg="Connection problem. Please try again.";
@@ -2623,6 +2626,20 @@ function showAdminPanel(){
       <button class="btn-outline" id="a-rst" style="color:var(--red);border-color:#FECACA">Reset all data</button>
       <button class="btn-outline" id="a-rst-unlink" style="color:var(--red);border-color:#FECACA">Reset all data and unlink tickets</button>
       <div style="font-size:11px;color:var(--muted);text-align:center">Columns: name, company, sector, country, title, email</div>
+      <div class="form-label" style="margin-top:10px">Unblock a ticket</div>
+      <div style="display:flex;gap:8px">
+        <input class="form-inp" id="a-unblock-ref" placeholder="GABS2026-T-XXXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="60" style="flex:1;min-width:0"/>
+        <button class="btn-outline btn-sm" id="a-unblock">Unblock</button>
+      </div>
+      <div id="a-unblock-fb"></div>
+      <div class="form-label" style="margin-top:10px">Participants (${approvedList().length})</div>
+      <div id="a-parts-list">${approvedList().slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""))).map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name||"(no name)")}</div>
+          <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.company||"")}</div>
+        </div>
+        ${safeId(p.id)?`<button class="btn-outline btn-sm" data-block-uid="${safeId(p.id)}" style="color:var(--red);border-color:#FECACA;flex-shrink:0">Block</button>`:""}
+      </div>`).join("")}</div>
     </div>
     <input type="file" id="a-csv" accept=".csv" style="display:none"/>
     <input type="file" id="tickets-file" accept=".csv,.txt" style="display:none"/>`;
@@ -2725,6 +2742,42 @@ function showAdminPanel(){
     }
     document.getElementById("a-rst").onclick=()=>runReset(false);
     document.getElementById("a-rst-unlink").onclick=()=>runReset(true);
+    // Block buttons: one delegated listener on the panel body
+    body.onclick=async e=>{
+      const btn=e.target.closest&&e.target.closest("[data-block-uid]");
+      if(!btn)return;
+      const uid=safeId(btn.dataset.blockUid);
+      if(!uid)return;
+      if(!confirm("Block this delegate? This signs them out, deletes their profile, photo and conversations, and disables their ticket until you unblock it."))return;
+      if(!window._fn){const fb2=document.getElementById("a-fb");if(fb2)fb2.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+      btn.disabled=true;btn.textContent="Blocking…";
+      let msg;
+      try{
+        const res=await window._fn.httpsCallable("adminBlockDelegate")({uid});
+        const r=res.data||{};
+        msg=`<div class="ok-msg">✓ Blocked: ${esc(r.ticketsBlocked)} ticket(s) disabled, ${esc(r.profileDeleted)} profile deleted, ${esc(r.messagesDeleted)} messages deleted, ${esc(r.authDeleted)} sign-in account deleted</div>`;
+      }catch(err){
+        msg=`<div class="err-msg">Block failed: ${esc(err.code||"unknown error")}</div>`;
+      }
+      await reloadAndRerender();
+      const fb3=document.getElementById("a-fb");if(fb3)fb3.innerHTML=msg;
+    };
+    document.getElementById("a-unblock").onclick=async()=>{
+      const inp=document.getElementById("a-unblock-ref");
+      const out=document.getElementById("a-unblock-fb");
+      const typed=normalizeTicketInput(inp&&inp.value);
+      if(!typed){if(out)out.innerHTML=`<div class="err-msg">Enter a ticket reference.</div>`;return;}
+      if(!window._fn){if(out)out.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+      const ref=typed.startsWith("GABS")?typed:TICKET_PREFIX+typed;
+      if(out)out.innerHTML=`<div class="ok-msg">⏳ Unblocking…</div>`;
+      try{
+        await window._fn.httpsCallable("adminUnblockTicket")({ref});
+        if(out)out.innerHTML=`<div class="ok-msg">✓ Ticket unblocked. It can be claimed again as a new delegate.</div>`;
+        if(inp)inp.value="";
+      }catch(err){
+        if(out)out.innerHTML=`<div class="err-msg">Unblock failed: ${esc(err.code||"unknown error")}</div>`;
+      }
+    };
   }
   document.body.appendChild(ov);
   ov.innerHTML=`<div class="sheet" style="padding:40px 0;text-align:center;color:var(--muted)">Loading…</div>`;
