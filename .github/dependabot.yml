@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/fb-functions"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      all:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "firebase-admin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "firebase-functions"
+        update-types: ["version-update:semver-major"]
