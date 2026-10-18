@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const { defineString, defineSecret } = require("firebase-functions/params");
+const { defineString, defineSecret, defineInt } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
@@ -16,6 +16,7 @@ const { planMigration } = require("./lib/migrate");
 const { validateResetInput, chunk, RESET_COLLECTIONS } = require("./lib/reset");
 const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
 const { requireAdmin } = require("./lib/adminAuth");
+const { pickProfile } = require("./lib/profile");
 const {
   validateBlockInput,
   validateUnblockInput,
@@ -40,6 +41,8 @@ const ADMIN_UID = defineString("ADMIN_UID");
 // Secret already exists in the live project under this name.
 const ANTHROPIC_KEY = defineSecret("ANTHROPIC_KEY");
 const AI_MODEL = defineString("AI_MODEL", { default: "claude-haiku-4-5-20251001" });
+// Warm instances for signInWithTicket (e.g. 1 during the summit days); 0 costs nothing when idle.
+const SIGNIN_MIN_INSTANCES = defineInt("SIGNIN_MIN_INSTANCES", { default: 0 });
 const AI_GLOBAL_DAILY_LIMIT = 1500;
 
 const MAX_REFS_PER_CALL = 2000;
@@ -50,14 +53,21 @@ const BATCH_SIZE = 400;
  * token. Rate-limited per client IP (hashed, never stored in the
  * clear), counting FAILED attempts only, so delegates sharing a venue
  * IP are never locked out by successful sign-ins. Never logs the ref,
- * the IP or any issued token.
+ * the IP or any issued token. Returns the participant's profile (or
+ * null) so the client can enter the app without a further read.
  */
-exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10 }, async (request) => {
+exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10, minInstances: SIGNIN_MIN_INSTANCES }, async (request) => {
   const ip = getClientIp(request.rawRequest);
   const ipHash = crypto.createHash("sha256").update(ip).digest("hex");
   const rateRef = db.collection("rate").doc(ipHash);
 
-  const rateSnap = await rateRef.get();
+  // The rate and ticket documents are independent: read them together.
+  // The checks below still run in the original order.
+  const ref = normalizeRef(request.data && request.data.ref);
+  const refValid = isValidRef(ref);
+  const ticketRef = refValid ? db.collection("tickets").doc(ref) : null;
+  const [rateSnap, ticketSnap] = await Promise.all([rateRef.get(), ticketRef ? ticketRef.get() : null]);
+
   if (isBlocked(rateSnap.exists ? rateSnap.data() : null, Date.now())) {
     throw new HttpsError("resource-exhausted", "Too many attempts. Please try again later.");
   }
@@ -69,14 +79,11 @@ exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10 }, async (r
       tx.set(rateRef, next, { merge: true });
     });
 
-  const ref = normalizeRef(request.data && request.data.ref);
-  if (!isValidRef(ref)) {
+  if (!refValid) {
     await countFailure();
     throw new HttpsError("invalid-argument", "Invalid ticket reference.");
   }
 
-  const ticketRef = db.collection("tickets").doc(ref);
-  const ticketSnap = await ticketRef.get();
   if (!ticketSnap.exists) {
     await countFailure();
     throw new HttpsError("not-found", "Ticket not found");
@@ -112,8 +119,13 @@ exports.signInWithTicket = onCall({ region: REGION, maxInstances: 10 }, async (r
     isNew = false;
   }
 
-  const token = await admin.auth().createCustomToken(uid, { delegate: true });
-  return { token, uid, isNew };
+  // A freshly claimed ticket has no participant document yet
+  const [token, participantSnap] = await Promise.all([
+    admin.auth().createCustomToken(uid, { delegate: true }),
+    isNew ? null : db.collection("participants").doc(uid).get(),
+  ]);
+  const profile = participantSnap && participantSnap.exists ? pickProfile(participantSnap.data()) : null;
+  return { token, uid, isNew, profile };
 });
 
 /**
