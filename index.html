@@ -299,6 +299,12 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 
 /* Utility */
 .mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt20{margin-top:20px}
+.consent-row{display:flex;align-items:flex-start;gap:12px;min-height:44px;padding:10px 0;margin-top:16px;cursor:pointer;font-size:13px;line-height:1.5;color:var(--text)}
+.consent-row input[type=checkbox]{-webkit-appearance:checkbox;appearance:auto;flex-shrink:0;width:22px;height:22px;margin-top:1px;accent-color:var(--gold);cursor:pointer}
+.consent-row a,.privacy-link{color:var(--navy);font-weight:600;text-decoration:underline}
+.btn-gold[aria-disabled="true"]{background:#9CA3AF;opacity:1;cursor:not-allowed;pointer-events:auto}
+.consent-hint{text-align:center;color:var(--muted);font-size:12px;margin-top:8px}
+.privacy-link-wrap{text-align:center;font-size:12px;margin-top:14px}
 .gap10{gap:10px}
 </style>
 </head>
@@ -1012,6 +1018,7 @@ function showEditProfile(){
       <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
       <button class="btn-navy" id="ep-save" style="color:#fff">Save changes</button>
     </div>
+    <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
   </div>`;
   document.body.appendChild(ov);
 
@@ -2255,7 +2262,8 @@ function showEntry(opts){
       </div>
       <div id="t-err"></div>
       <button class="btn-gold" id="t-go">Continue →</button>
-      <div class="entry-hint">Your reference is on your confirmation email.<br/>Search your inbox for GABS2026-T</div>`;
+      <div class="entry-hint">Your reference is on your confirmation email.<br/>Search your inbox for GABS2026-T</div>
+      <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>`;
 
     if(stage==="checking")return`<div style="text-align:center;padding:60px 0"><div class="spin" style="margin:0 auto;border-top-color:${GOLD}"></div><div style="color:var(--muted);margin-top:14px;font-size:13px">Checking ticket…</div></div>`;
 
@@ -2318,7 +2326,12 @@ function showEntry(opts){
       <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
       <div id="c-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">0 / 200</div>
       <div id="c-feedback"></div>
-      <button class="btn-gold mt16" id="c-submit">Confirm & Enter App →</button>
+      <label class="consent-row">
+        <input type="checkbox" id="c-consent" data-consent="privacy"/>
+        <span>I have read the <a href="/privacy.html" target="_blank" rel="noopener noreferrer">GABS Connect Privacy Notice</a> and <a href="https://ghana.ahk.de/en/privacy-policy" target="_blank" rel="noopener noreferrer">AHK Ghana's Privacy Policy</a>, and I understand that my profile is visible to other participants.</span>
+      </label>
+      <button class="btn-gold mt12" id="c-submit" disabled aria-disabled="true">Confirm & Enter App →</button>
+      <div class="consent-hint" id="c-consent-hint">Please tick the box to continue.</div>
       <button class="btn-outline mt12" id="c-back">Back</button>`;
   }
 
@@ -2434,7 +2447,21 @@ function showEntry(opts){
       if(cPhotoStatus)cPhotoStatus.textContent="✓ Photo selected — will upload on registration";
     });
 
+    // Privacy consent gates the submit button; it is not saved anywhere
+    const consentBox=document.querySelector("[data-consent]");
+    let submitting=false;
+    function syncConsent(){
+      const btn=document.getElementById("c-submit");
+      const hint=document.getElementById("c-consent-hint");
+      const ok=!!consentBox?.checked;
+      if(btn&&!submitting){btn.disabled=!ok;btn.setAttribute("aria-disabled",String(!ok));}
+      if(hint)hint.style.display=ok?"none":"block";
+    }
+    consentBox?.addEventListener("change",syncConsent);
+    syncConsent();
+
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
+      if(!consentBox?.checked||submitting){syncConsent();return;}
       const salutation=document.getElementById("c-salutation")?.value||"";
       const ptype=ptypeValue(document.getElementById("c-ptype")?.value,document.getElementById("c-ptype-other")?.value);
       const name=document.getElementById("c-name")?.value.trim();
@@ -2456,6 +2483,7 @@ function showEntry(opts){
       const btn=document.getElementById("c-submit");
       try{
         const fbs=window._fb;
+        submitting=true;
         if(btn){btn.disabled=true;btn.textContent="Submitting…";}
         await fbs.setDoc(fbs.doc(fbs.db,"participants",pendingUid),{
           salutation,ptype,name,company,website,title,sector,country,linkedin,interests,bio,
@@ -2493,7 +2521,9 @@ function showEntry(opts){
         },photoFailed?3500:900);
       }catch(e){
         if(fb2)fb2.innerHTML=`<div class="err-msg">Submission failed. Please try again.</div>`;
-        if(btn){btn.disabled=false;btn.textContent="Confirm & Enter App →";}
+        submitting=false;
+        if(btn)btn.textContent="Confirm & Enter App →";
+        syncConsent();
       }
     });
   }
