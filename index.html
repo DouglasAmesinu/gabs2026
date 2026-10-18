@@ -235,11 +235,11 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .sched-sessions{padding:0 16px;display:flex;flex-direction:column;gap:8px;padding-bottom:20px}
 .sesh-card{border-radius:14px;padding:14px 16px;margin-bottom:0}
 .sesh-card.light{background:var(--white);border:1px solid var(--border)}
-.sesh-card.dark{background:var(--navy);border:1px solid var(--navy)}
+.sesh-card.dark{background:#2F66A8;border:1px solid #2F66A8}
 .sesh-card.dark .sesh-title{color:#fff}
-.sesh-card.dark .sesh-time{color:rgba(255,255,255,.55)}
-.sesh-card.dark .sesh-loc{color:rgba(255,255,255,.45)}
-.sesh-card.dark .sesh-badge{opacity:.9}
+.sesh-card.dark .sesh-time{color:rgba(255,255,255,.9)}
+.sesh-card.dark .sesh-loc{color:rgba(255,255,255,.9)}
+.sesh-card.dark .sesh-badge{opacity:1}
 .sesh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
 .sesh-time{font-size:12px;font-weight:700;color:var(--muted)}
 .sesh-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;flex-shrink:0}
@@ -1828,9 +1828,9 @@ function renderSchedule(){
       ${day.sessions.map((s,si)=>{
         const col=SC[s.type]||{bg:"#F3F4F6",c:"#374151",dot:"#9CA3AF"};
         const isDark=si%2===1;
-        const badgeBg=isDark?"rgba(255,255,255,.15)":col.bg;
-        const badgeC=isDark?"rgba(255,255,255,.85)":col.c;
-        const dotC=isDark?"rgba(255,255,255,.7)":(typeColors[s.type]||"#9CA3AF");
+        const badgeBg=isDark?"rgba(0,0,0,.2)":col.bg;
+        const badgeC=isDark?"#fff":col.c;
+        const dotC=typeColors[s.type]||"#9CA3AF";
         return`<div class="sesh-card ${isDark?"dark":"light"}">
           <div class="sesh-top">
             <span class="sesh-time">${esc(s.time)}</span>
