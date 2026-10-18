@@ -192,6 +192,10 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .thread-hdr{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--white)}
 .t-back{font-size:24px;color:var(--navy);cursor:pointer;touch-action:manipulation;padding:0 8px 0 0;line-height:1;flex-shrink:0}
 .t-info{flex:1;min-width:0}
+.pv-btn{display:flex;align-items:center;min-width:44px;min-height:44px;border-radius:12px;cursor:pointer;touch-action:manipulation}
+.pv-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.t-who{flex:1;min-width:0;gap:12px}
+.toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%);z-index:700;background:var(--text);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);pointer-events:none}
 .t-name{font-size:15px;font-weight:700;color:var(--text)}
 .t-company{font-size:12px;color:var(--muted)}
 .t-meet-btn{background:var(--light);border:1px solid var(--border);border-radius:10px;padding:7px 13px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;flex-shrink:0;touch-action:manipulation;display:flex;align-items:center;gap:5px}
@@ -810,8 +814,29 @@ function downloadMeetingICS(id){
   const m=myMeetings.find(x=>x.id===id);
   if(m&&m.meeting)generateICS(m.meeting,me.name,m.otherParticipant.name);
 }
-// Schedule's My Meetings calendar buttons: one delegated listener, URLs built at click time
+function showToast(msg){
+  document.querySelector(".toast")?.remove();
+  const t=document.createElement("div");
+  t.className="toast";t.setAttribute("role","status");t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+// Inbox avatars and the chat header: open the participant's profile on top of the current view
+function openProfileFrom(el){
+  const id=safeId(el.dataset.profileId);
+  const p=id&&participants.find(x=>x.id===id);
+  if(p)showParticipantProfile(p);else showToast("Profile not available.");
+}
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Enter"&&e.key!==" ")return;
+  const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
+  if(!el)return;
+  e.preventDefault();openProfileFrom(el);
+});
+// Schedule's My Meetings calendar buttons and profile targets: one delegated listener, URLs built at click time
 document.addEventListener("click",e=>{
+  const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
+  if(pv){openProfileFrom(pv);return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
   if(!btn||!me)return;
   const m=myMeetings.find(x=>x.id===btn.dataset.id);
@@ -1340,6 +1365,8 @@ function refreshDisc(){
 
 function showParticipantProfile(p){
   const self=me&&p.id===me.id;
+  // Opened from this person's open chat: Message just closes the sheet, Meet behaves like the chat's button
+  const inChat=currentTab==="messages"&&activeThreadId===p.id;
   const hasContact=p.website||p.linkedin;
   const ov=makeOv(false);
   ov.innerHTML=`<div class="sheet" style="padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">
@@ -1390,8 +1417,8 @@ function showParticipantProfile(p){
   if(self){
     document.getElementById("pp-edit").onclick=()=>{ov.remove();showEditProfile();};
   } else {
-    document.getElementById("pp-msg").onclick=()=>{ov.remove();openThread(p);};
-    document.getElementById("pp-meet").onclick=()=>{ov.remove();showMeeting(p);};
+    document.getElementById("pp-msg").onclick=()=>{ov.remove();if(!inChat)openThread(p);};
+    document.getElementById("pp-meet").onclick=()=>{ov.remove();showMeeting(p,inChat);};
   }
 }
 
@@ -1441,7 +1468,7 @@ function renderInbox(){
       const unread=!readThreadIds.has(p.id);
       return`
       <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${safeId(p.id)}" style="background:${unread?"#fff":"#F8FAFC"}">
-        <div style="position:relative;flex-shrink:0">
+        <div class="pv-btn" style="position:relative;flex-shrink:0" data-profile-id="${safeId(p.id)}" role="button" tabindex="0" aria-label="View profile of ${esc(p.name)}">
           ${avHTML(p.av||initials(p.name||"?"),44,p.photoURL||null)}
           ${unread?`<div style="position:absolute;top:0;right:0;width:11px;height:11px;border-radius:50%;background:var(--gold);border:2px solid #fff"></div>`:""}
         </div>
@@ -1460,7 +1487,7 @@ function renderInbox(){
 }
 
 function bindInboxRows(){
-  document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=()=>{const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
+  document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=e=>{if(e.target.closest("[data-profile-id]"))return;const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
 }
 
 let notifBuf={},notifTimer=null,notifEl=null;
@@ -1613,10 +1640,12 @@ function renderThread(){
   return`<div class="thread-wrap">
     <div class="thread-hdr">
       <span class="t-back" id="t-back">←</span>
-      ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
-      <div class="t-info">
-        <div class="t-name">${esc(p.name)}</div>
-        <div class="t-company">${esc(p.title||"")} · ${esc(p.company||"")}</div>
+      <div class="pv-btn t-who" data-profile-id="${safeId(p.id)}" role="button" tabindex="0" aria-label="View profile of ${esc(p.name)}">
+        ${avHTML(p.av||initials(p.name||"?"),38,p.photoURL)}
+        <div class="t-info">
+          <div class="t-name">${esc(p.name)}</div>
+          <div class="t-company">${esc(p.title||"")} · ${esc(p.company||"")}</div>
+        </div>
       </div>
       <button class="t-meet-btn" id="t-meet">📅 Meet</button>
     </div>
