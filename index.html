@@ -329,7 +329,7 @@ const MEETING_DAYS=[
   {label:"Tue 24 Nov 2026 — Day One",date:"20261124"},
   {label:"Wed 25 Nov 2026 — Day Two",date:"20261125"},
 ];
-const VENUES=["Cabana Ground Floor","Cabana 1st Floor","Garden","Ghana2Germany Village","Other (specify)"];
+const VENUES=["Cabana Ground Floor","Cabana First Floor","Garden","TeamGermany Lounge","Other (specify)"];
 const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
@@ -696,13 +696,30 @@ function buildCountryPicker(inputId,wrapperId,initialValue){
 function saveSlots(){try{localStorage.setItem("gabs_slots",JSON.stringify(bookedSlots));}catch(e){}}
 function timeToMins(t){const[h,m]=t.split(":").map(Number);return h*60+m;}
 function minsToTime(m){return`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;}
+// BEGIN slot-helpers
+// Pure functions (no DOM, no globals). Unit-tested from
+// fb-functions/test/slotHelpers.test.js, which evaluates this block.
+
+// Meetings must end by this time on every day
+const MAX_MEETING_END="16:30";
+// Every candidate start time: 08:00 to 17:30 every 30 minutes (filter with slotAllowed)
 function allSlots(){const s=[];for(let h=8;h<18;h++){s.push(`${String(h).padStart(2,"0")}:00`);s.push(`${String(h).padStart(2,"0")}:30`);}return s;}
+// True when a meeting starting at startHHMM and lasting durMin minutes ends at or before MAX_MEETING_END
+function slotAllowed(startHHMM,durMin){
+  const m=/^(\d{1,2}):(\d{2})$/.exec(String(startHHMM==null?"":startHHMM));
+  const dur=Number(durMin);
+  if(!m||!Number.isInteger(dur)||dur<=0)return false;
+  const [eh,em]=MAX_MEETING_END.split(":").map(Number);
+  return Number(m[1])*60+Number(m[2])+dur<=eh*60+em;
+}
+// END slot-helpers
 function bookSlot(myId,theirId,day,start,dur){
   const end=minsToTime(timeToMins(start)+dur);
   [myId,theirId].forEach(id=>{if(!bookedSlots[id+day])bookedSlots[id+day]=[];bookedSlots[id+day].push({start,end});});
   saveSlots();
 }
 function isBlocked(pid,day,start,dur){
+  if(!slotAllowed(start,dur))return true;
   return(bookedSlots[pid+day]||[]).some(s=>{const bs=timeToMins(s.start),be=timeToMins(s.end),ns=timeToMins(start),ne=ns+dur;return ns<be&&ne>bs;});
 }
 
@@ -2009,6 +2026,7 @@ async function showMeeting(p,fromThread=false){
   const myFirestoreSlots=me.bookedSlots||[];
 
   function isSlotBlocked(day,start,dur){
+    if(!slotAllowed(start,dur))return true;
     const ns=timeToMins(start);
     const ne=ns+dur;
     const allBooked=[...myFirestoreSlots,...theirSlots,...(bookedSlots[me.id+day]||[]).map(s=>({day,start:s.start,end:s.end}))];
@@ -2025,7 +2043,8 @@ async function showMeeting(p,fromThread=false){
       document.getElementById("msheet").innerHTML=`<div style="text-align:center;padding:40px 0"><div style="font-size:52px">✅</div><div style="font-size:16px;font-weight:800;color:var(--text);margin-top:14px">Request sent!</div></div>`;
       setTimeout(()=>ov.remove(),1700);return;
     }
-    const slots=allSlots();
+    // Only starts that end by MAX_MEETING_END with the chosen duration
+    const slots=allSlots().filter(s=>slotAllowed(s,state.dur||30));
     const slotOpts=slots.map(s=>{const blocked=state.day&&isSlotBlocked(state.day,s,state.dur||30);return`<option value="${esc(s)}"${state.start===s?" selected":""}${blocked?" disabled":""}>${esc(s)}${blocked?" (unavailable)":""}</option>`;});
     document.getElementById("msheet").innerHTML=`
       <div style="display:flex;gap:13px;align-items:center;margin-bottom:18px">
@@ -2063,7 +2082,13 @@ async function showMeeting(p,fromThread=false){
     const check=()=>{if(sendEl){const ok=dayEl.value&&startEl.value&&getVenue();sendEl.disabled=!ok;sendEl.style.opacity=ok?"1":".4";}};
     dayEl.onchange=()=>{state.day=dayEl.value;state.start="";render();};
     startEl.onchange=()=>{state.start=startEl.value;state.dur=parseInt(durEl.value)||30;render();};
-    durEl.onchange=()=>{state.dur=parseInt(durEl.value)||30;state.start=startEl.value;render();};
+    durEl.onchange=()=>{
+      state.dur=parseInt(durEl.value)||30;
+      state.start=startEl.value;
+      // A start that no longer fits (too late, or now overlapping a booking) is cleared
+      if(state.start&&(!slotAllowed(state.start,state.dur)||(state.day&&isSlotBlocked(state.day,state.start,state.dur))))state.start="";
+      render();
+    };
     venueSelect?.addEventListener("change",()=>{
       const val=venueSelect.value;
       if(val==="Other (specify)"){
@@ -2083,7 +2108,7 @@ async function showMeeting(p,fromThread=false){
       const loc=venueVal==="Other (specify)"
         ?document.getElementById("m-loc")?.value.trim()
         :venueVal;
-      if(!day||!start||!loc)return;
+      if(!day||!start||!loc||!slotAllowed(start,dur))return;
       const dayLabel=MEETING_DAYS.find(d=>d.date===day)?.label||day;
       bookSlot(me.id,p.id,day,start,dur);
       const text=note||"Meeting proposed ✓";
