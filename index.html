@@ -261,6 +261,18 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .sheet.pop{border-radius:20px;animation:popIn .22s ease}
 .sheet-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px}
 .sheet-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
+/* Announcements: plain text, line breaks kept with pre-line */
+.ann-card{margin:0 16px 12px;background:var(--white);border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:14px;padding:12px 14px;position:relative}
+.ann-eyebrow{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin-bottom:4px}
+.ann-title{font-size:14px;font-weight:800;color:var(--text);overflow-wrap:anywhere}
+.ann-card .ann-title{margin-right:28px}
+.ann-body{font-size:13px;color:var(--text);line-height:1.45;margin-top:4px;white-space:pre-line;overflow-wrap:anywhere}
+.ann-card .ann-body{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+.ann-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--muted)}
+.ann-link{background:none;border:none;padding:4px 0;font:inherit;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer}
+.ann-x{position:absolute;top:4px;right:4px;width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:8px}
+.ann-item{padding:14px 0;border-bottom:1px solid var(--border)}
+.ann-item:last-child{border-bottom:none}
 .form-label{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:14px}
 .form-label:first-of-type{margin-top:0}
 .form-inp{width:100%;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;color:var(--text);background:#F9FAFB;transition:border-color .2s}
@@ -872,6 +884,8 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("click",e=>{
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(pv){openProfileFrom(pv);return;}
+  const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
+  if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
   if(!btn||!me)return;
   const m=myMeetings.find(x=>x.id===btn.dataset.id);
@@ -1176,6 +1190,7 @@ function showEditProfile(){
     me=null;localStorage.removeItem("gabs_me");
     readThreadIds=new Set();
     stopParticipantListener();participants=[];
+    stopAnnouncementListener();
     localStorage.removeItem("gabs_read");
     showEntry();
   };
@@ -1319,6 +1334,7 @@ function renderDiscover(){
       <div class="page-title">Discover</div>
       <div class="page-sub">${discSubText()}</div>
     </div>
+    <div id="ann-wrap">${annCardHTML()}</div>
     <div class="search-wrap">
       <div class="search-box">
         <span class="search-icon">🔍</span>
@@ -1526,6 +1542,7 @@ function bindInboxRows(){
 }
 
 let notifBuf={},notifTimer=null,notifEl=null;
+let notifAnn=null; // an announcement shown in the banner instead of messages
 function notifText(){
   const ids=Object.keys(notifBuf),bs=ids.map(i=>notifBuf[i]);
   const total=bs.reduce((n,b)=>n+b.count,0),people=bs.length;
@@ -1549,12 +1566,18 @@ function notifyIncoming(p,d){
   b.count++;
   if(d.meeting)b.meeting=true;
   b.text=d.meeting?"":String(d.text||"");
+  notifAnn=null;
+  showNotifBanner();
+}
+// One banner at a time: a new announcement replaces whatever the banner shows
+function showAnnouncementBanner(a){
+  notifBuf={};notifAnn=a;
   showNotifBanner();
 }
 function hideNotifBanner(){
   if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}
   if(notifEl){notifEl.remove();notifEl=null;}
-  notifBuf={};
+  notifBuf={};notifAnn=null;
 }
 function showNotifBanner(){
   const first=!notifEl;
@@ -1562,6 +1585,7 @@ function showNotifBanner(){
     notifEl=document.createElement("div");
     notifEl.style.cssText="position:fixed;left:10px;right:10px;top:calc(8px + env(safe-area-inset-top,0px));z-index:450;background:#1B3A6B;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;border-left:4px solid #C49A2A;max-width:480px;margin:0 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     notifEl.onclick=()=>{
+      if(notifAnn){hideNotifBanner();showAnnouncementsSheet();return;}
       const bs=Object.values(notifBuf);
       const target=bs.length===1?bs[0].p:null;
       hideNotifBanner();
@@ -1571,7 +1595,7 @@ function showNotifBanner(){
     document.body.appendChild(notifEl);
     try{if(navigator.vibrate)navigator.vibrate(60);}catch(e){}
   }
-  notifEl.textContent=notifText();
+  notifEl.textContent=notifAnn?"📢 "+notifAnn.title:notifText();
   if(notifTimer)clearTimeout(notifTimer);
   notifTimer=setTimeout(hideNotifBanner,4000);
 }
@@ -1597,6 +1621,7 @@ function listenWithRetry(label,q,onSnap){
 function startMessageListeners(){
   if(msgListenersStarted||!me||!window._fb)return;
   msgListenersStarted=true;
+  startAnnouncementListener();
   const fb=window._fb,myId=me.id;
   const msgs=fb.collectionGroup(fb.db,"messages");
   const inboxQ=fb.query(msgs,fb.where("participants","array-contains",myId),fb.orderBy("ts","desc"),fb.limit(400));
@@ -1643,6 +1668,104 @@ function stopMessageListeners(){
   msgListenersStarted=false;
   inboxRaw={};inboxData={};
   meetingRecords=[];myMeetings=[];
+}
+
+// ── Announcements ──────────────────────────────────────────────────────────
+// One listener per participant session (started from startMessageListeners, stopped on sign-out).
+// Text is shown with esc() only: no HTML, no links.
+const ANN_DISMISSED_KEY="gabs_ann_dismissed",ANN_DISMISSED_MAX=50;
+let announcements=[];
+let annStarted=false,annStop=null,annTimer=null;
+let annDismissed=[];
+try{const s=JSON.parse(localStorage.getItem(ANN_DISMISSED_KEY)||"[]");if(Array.isArray(s))annDismissed=s.filter(x=>safeId(x)).slice(-ANN_DISMISSED_MAX);}catch(e){}
+function normAnnouncement(id,d){
+  const ms=t=>t&&typeof t.toMillis==="function"?t.toMillis():null;
+  return{id:safeId(id),title:clip(typeof d.title==="string"?d.title:"",60),body:clip(typeof d.body==="string"?d.body:"",300),
+    pinned:d.pinned===true,createdMs:ms(d.createdAt)||Date.now(),expiresMs:ms(d.expiresAt)};
+}
+const annIsActive=(a,now)=>!!(a.id&&a.title)&&(a.expiresMs===null||a.expiresMs>now);
+// Active now (no expiry, or expiry still ahead): pinned first, then newest
+function activeAnnouncements(){
+  const now=Date.now();
+  return announcements.filter(a=>annIsActive(a,now)).sort((a,b)=>(b.pinned-a.pinned)||(b.createdMs-a.createdMs));
+}
+const fmtAnnTime=ms=>new Date(ms).toLocaleString([],{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+function annCardHTML(){
+  const a=activeAnnouncements().find(x=>!annDismissed.includes(x.id));
+  if(!a)return"";
+  return`<div class="ann-card" role="region" aria-label="Announcement">
+    <button class="ann-x" data-ann-dismiss="${esc(a.id)}" aria-label="Dismiss announcement">✕</button>
+    <div class="ann-eyebrow">📢 Announcement</div>
+    <div class="ann-title">${esc(a.title)}</div>
+    ${a.body?`<div class="ann-body">${esc(a.body)}</div>`:""}
+    <div class="ann-meta"><span>${esc(fmtAnnTime(a.createdMs))}</span><button class="ann-link" data-ann-all="1">See all</button></div>
+  </div>`;
+}
+function annListHTML(){
+  const list=activeAnnouncements();
+  if(!list.length)return`<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:14px">No announcements right now.</div>`;
+  return list.map(a=>`<div class="ann-item">
+    ${a.pinned?`<div class="ann-eyebrow">📌 Pinned</div>`:""}
+    <div class="ann-title">${esc(a.title)}</div>
+    ${a.body?`<div class="ann-body">${esc(a.body)}</div>`:""}
+    <div class="ann-meta"><span>${esc(fmtAnnTime(a.createdMs))}</span></div>
+  </div>`).join("");
+}
+// Called on every snapshot, every 60 seconds and after a dismiss, so expired ones drop out
+function refreshAnnouncements(){
+  const card=annCardHTML();
+  patchHTML(document.getElementById("ann-wrap"),card,card);
+  const list=document.getElementById("ann-list");
+  if(list){const h=annListHTML();patchHTML(list,h,h);}
+}
+function dismissAnnouncement(rawId){
+  const id=safeId(rawId);if(!id)return;
+  annDismissed=annDismissed.filter(x=>x!==id).concat(id).slice(-ANN_DISMISSED_MAX);
+  try{localStorage.setItem(ANN_DISMISSED_KEY,JSON.stringify(annDismissed));}catch(e){}
+  refreshAnnouncements();
+}
+// On top of whatever is open; closing removes only this overlay
+function showAnnouncementsSheet(){
+  document.getElementById("ann-sheet")?.remove();
+  const ov=makeOv(false);ov.id="ann-sheet";
+  ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ann-sheet-title" style="padding-bottom:calc(22px + var(--safe-b))">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="sheet-title" id="ann-sheet-title" style="margin:0">📢 Announcements</div>
+      <button class="btn-outline btn-sm" id="ann-close">Close</button>
+    </div>
+    <div id="ann-list">${annListHTML()}</div>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById("ann-close").onclick=()=>ov.remove();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+function startAnnouncementListener(){
+  if(annStarted||!me||!window._fb)return;
+  annStarted=true;
+  const fb=window._fb;
+  const q=fb.query(fb.collection(fb.db,"announcements"),fb.orderBy("createdAt","desc"),fb.limit(20));
+  annStop=listenWithRetry("announcements",q,(snap,first)=>{
+    const prevNewest=announcements.reduce((m,a)=>Math.max(m,a.createdMs),0);
+    announcements=snap.docs.map(d=>normAnnouncement(d.id,d.data()));
+    // The first snapshot is history; later, only a genuinely newer addition raises the banner
+    // (a deletion can pull an older one into the window of 20)
+    if(!first){
+      const now=Date.now();
+      const fresh=snap.docChanges().filter(ch=>ch.type==="added").map(ch=>normAnnouncement(ch.doc.id,ch.doc.data()))
+        .filter(a=>annIsActive(a,now)&&a.createdMs>prevNewest);
+      if(fresh.length)showAnnouncementBanner(fresh[0]);
+    }
+    refreshAnnouncements();
+  });
+  annTimer=setInterval(refreshAnnouncements,60000);
+}
+function stopAnnouncementListener(){
+  annStarted=false;
+  if(annStop){annStop();annStop=null;}
+  if(annTimer){clearInterval(annTimer);annTimer=null;}
+  announcements=[];
+  if(notifAnn)hideNotifBanner();
+  document.getElementById("ann-sheet")?.remove();
 }
 
 // Resolve other participants' profiles; called again whenever the participants list changes
