@@ -759,8 +759,9 @@ exports.sendTestPush = onCall(PUSH_OPTS, async (request) => {
 /**
  * Firestore trigger: alert the recipient of a new chat message or
  * meeting request on their registered devices. Skips messages older
- * than 2 minutes (late or retried events), muted recipients and repeat
- * alerts from the same sender within a minute (shouldSend).
+ * than 2 minutes (late or retried events), muted recipients, a repeat
+ * alert from the same sender within 10 seconds, and more than 10 alerts
+ * from one sender in 10 minutes (shouldSend).
  */
 exports.notifyNewMessage = onDocumentCreated(
   { document: "threads/{tid}/messages/{mid}", region: REGION, maxInstances: 10 },

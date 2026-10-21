@@ -84,59 +84,139 @@ test("removeToken removes only that token", () => {
   assert.deepEqual(removeToken(null, A), []);
 });
 
+const SEC = 1000, MIN = 60 * SEC;
+
 test("shouldSend: first alert from a sender is sent and stamped", () => {
   const r = shouldSend({ muted: false, lastSent: {}, senderId: "u1", nowMs: 1000 });
-  assert.deepEqual(r, { send: true, nextLastSent: { u1: 1000 } });
+  assert.deepEqual(r, { send: true, nextLastSent: { u1: [1000] } });
   assert.equal(shouldSend({ senderId: "u1", nowMs: 1 }).send, true, "missing muted and lastSent are fine");
 });
 
-test("shouldSend: never when muted", () => {
-  const r = shouldSend({ muted: true, lastSent: { u2: 5 }, senderId: "u1", nowMs: 1e9 });
-  assert.deepEqual(r, { send: false, nextLastSent: { u2: 5 } });
+test("shouldSend: two messages 5 seconds apart give one alert", () => {
+  const t0 = 10 * MIN;
+  const first = shouldSend({ lastSent: {}, senderId: "u1", nowMs: t0 });
+  const second = shouldSend({ lastSent: first.nextLastSent, senderId: "u1", nowMs: t0 + 5 * SEC });
+  assert.equal(first.send, true);
+  assert.equal(second.send, false);
+  assert.deepEqual(second.nextLastSent, { u1: [t0] });
 });
 
-test("shouldSend: same sender inside the gap is suppressed, other senders are not", () => {
-  const lastSent = { u1: 100000 };
-  assert.equal(shouldSend({ lastSent, senderId: "u1", nowMs: 100000 + 59999 }).send, false);
-  assert.deepEqual(shouldSend({ lastSent, senderId: "u1", nowMs: 100000 + 59999 }).nextLastSent, { u1: 100000 });
-  assert.deepEqual(shouldSend({ lastSent, senderId: "u1", nowMs: 160000 }), { send: true, nextLastSent: { u1: 160000 } });
-  assert.equal(shouldSend({ lastSent, senderId: "u2", nowMs: 100001 }).send, true);
-  assert.equal(shouldSend({ lastSent, senderId: "u1", nowMs: 100500, minGapMs: 100 }).send, true);
+test("shouldSend: messages 11 seconds apart each alert", () => {
+  let lastSent = {};
+  const t0 = 10 * MIN;
+  for (let i = 0; i < 3; i++) {
+    const r = shouldSend({ lastSent, senderId: "u1", nowMs: t0 + i * 11 * SEC });
+    assert.equal(r.send, true, `message ${i + 1}`);
+    lastSent = r.nextLastSent;
+  }
+  assert.deepEqual(lastSent, { u1: [t0 + 22 * SEC, t0 + 11 * SEC, t0] });
+});
+
+test("shouldSend: a burst of 20 gives at most 10 alerts in the window", () => {
+  let lastSent = {};
+  let sent = 0;
+  const t0 = 10 * MIN;
+  for (let i = 0; i < 20; i++) {
+    const r = shouldSend({ lastSent, senderId: "u1", nowMs: t0 + i * 11 * SEC });
+    if (r.send) sent++;
+    lastSent = r.nextLastSent;
+  }
+  assert.equal(sent, 10);
+  assert.equal(lastSent.u1.length, 10);
+  // Once the oldest alert leaves the 10-minute window, the sender can alert again
+  assert.equal(shouldSend({ lastSent, senderId: "u1", nowMs: t0 + 10 * MIN }).send, true);
+  // A rapid burst (one per second) gives far fewer: the 10-second gap applies first
+  let rapid = {}, rapidSent = 0;
+  for (let i = 0; i < 20; i++) {
+    const r = shouldSend({ lastSent: rapid, senderId: "u2", nowMs: t0 + i * SEC });
+    if (r.send) rapidSent++;
+    rapid = r.nextLastSent;
+  }
+  assert.equal(rapidSent, 2);
+});
+
+test("shouldSend: other senders are counted separately", () => {
+  const t0 = 10 * MIN;
+  const lastSent = { u1: [t0] };
+  assert.equal(shouldSend({ lastSent, senderId: "u2", nowMs: t0 + SEC }).send, true);
+  assert.equal(shouldSend({ lastSent, senderId: "u1", nowMs: t0 + SEC, minGapMs: 500 }).send, true);
+});
+
+test("shouldSend: never when muted", () => {
+  const t0 = 10 * MIN;
+  const r = shouldSend({ muted: true, lastSent: { u2: [t0 - SEC] }, senderId: "u1", nowMs: t0 });
+  assert.deepEqual(r, { send: false, nextLastSent: { u2: [t0 - SEC] } });
+  for (let i = 0; i < 5; i++) assert.equal(shouldSend({ muted: true, senderId: "u" + i, nowMs: t0 + i * MIN }).send, false);
+});
+
+test("shouldSend prunes old entries", () => {
+  const now = 100 * MIN;
+  const lastSent = { old: [now - 11 * MIN], mixed: [now - 2 * MIN, now - 20 * MIN], fresh: [now - MIN] };
+  const r = shouldSend({ lastSent, senderId: "new", nowMs: now });
+  assert.deepEqual(r.nextLastSent, { new: [now], fresh: [now - MIN], mixed: [now - 2 * MIN] });
+  assert.equal(Object.prototype.hasOwnProperty.call(r.nextLastSent, "old"), false);
+});
+
+test("shouldSend accepts the old format (one number per sender) and converts it", () => {
+  const now = 100 * MIN;
+  const blocked = shouldSend({ lastSent: { u1: now - 5 * SEC, u2: now - 2 * MIN }, senderId: "u1", nowMs: now });
+  assert.equal(blocked.send, false);
+  assert.deepEqual(blocked.nextLastSent, { u1: [now - 5 * SEC], u2: [now - 2 * MIN] });
+  const ok = shouldSend({ lastSent: { u1: now - MIN, u3: now - 60 * MIN }, senderId: "u1", nowMs: now });
+  assert.equal(ok.send, true);
+  assert.deepEqual(ok.nextLastSent, { u1: [now, now - MIN] }, "the expired u3 is dropped");
 });
 
 test("shouldSend: a future stamp (clock skew) does not block alerts", () => {
+  assert.equal(shouldSend({ lastSent: { u1: [9e12] }, senderId: "u1", nowMs: 1000 }).send, true);
   assert.equal(shouldSend({ lastSent: { u1: 9e12 }, senderId: "u1", nowMs: 1000 }).send, true);
 });
 
-test("shouldSend keeps the 50 newest senders", () => {
+test("shouldSend keeps the 50 most recently alerted senders", () => {
+  const now = 100 * MIN;
   const lastSent = {};
-  for (let i = 0; i < 80; i++) lastSent["s" + i] = i;
-  const r = shouldSend({ lastSent, senderId: "new", nowMs: 1000 });
+  for (let i = 0; i < 80; i++) lastSent["s" + i] = [now - (80 - i) * SEC];
+  const r = shouldSend({ lastSent, senderId: "new", nowMs: now });
   assert.equal(r.send, true);
   const keys = Object.keys(r.nextLastSent);
   assert.equal(keys.length, 50);
   assert.ok(keys.includes("new"));
-  assert.ok(keys.includes("s79") && !keys.includes("s30"), "the oldest are dropped");
-  assert.equal(Object.keys(shouldSend({ muted: true, lastSent, senderId: "x", nowMs: 1 }).nextLastSent).length, 50);
+  assert.ok(keys.includes("s79") && !keys.includes("s30"), "the least recent are dropped");
+  assert.equal(Object.keys(shouldSend({ muted: true, lastSent, senderId: "x", nowMs: now }).nextLastSent).length, 50);
 });
 
 test("shouldSend refuses hostile input", () => {
+  const now = 100 * MIN;
   for (const senderId of ["", "a/b", "a".repeat(65), null, undefined, 42, {}, "<script>"]) {
-    assert.equal(shouldSend({ lastSent: {}, senderId, nowMs: 1 }).send, false, String(senderId));
+    assert.equal(shouldSend({ lastSent: {}, senderId, nowMs: now }).send, false, String(senderId));
   }
   assert.equal(shouldSend({ senderId: "u1", nowMs: NaN }).send, false);
   assert.equal(shouldSend({ senderId: "u1", nowMs: "1000" }).send, false);
   assert.equal(shouldSend().send, false);
-  const bad = shouldSend({ lastSent: { u1: "x", "a/b": 5, ok: 7, arr: [1] }, senderId: "u9", nowMs: 10 });
-  assert.deepEqual(bad.nextLastSent, { u9: 10, ok: 7 });
-  assert.deepEqual(shouldSend({ lastSent: [1, 2], senderId: "u9", nowMs: 10 }).nextLastSent, { u9: 10 });
+  const bad = shouldSend({
+    lastSent: { u1: "x", "a/b": [now - SEC], ok: [now - 7, "y", null], arr: [[1]], obj: { t: 1 }, n: null },
+    senderId: "u9",
+    nowMs: now,
+  });
+  assert.deepEqual(bad.nextLastSent, { u9: [now], ok: [now - 7] });
+  assert.deepEqual(shouldSend({ lastSent: [1, 2], senderId: "u9", nowMs: now }).nextLastSent, { u9: [now] });
+  assert.deepEqual(shouldSend({ lastSent: "x", senderId: "u9", nowMs: now }).nextLastSent, { u9: [now] });
+});
+
+test("shouldSend: a huge stored list is cut to the per-window maximum", () => {
+  const now = 100 * MIN;
+  const many = Array.from({ length: 5000 }, (_, i) => now - 20 * SEC - i);
+  const r = shouldSend({ lastSent: { u1: many }, senderId: "u1", nowMs: now });
+  assert.equal(r.send, false, "already 10 alerts inside the window");
+  assert.equal(r.nextLastSent.u1.length, 10);
 });
 
 test("shouldSend treats __proto__ as a plain key and never pollutes Object", () => {
-  const lastSent = JSON.parse('{"__proto__": 5, "constructor": 6}');
-  const r = shouldSend({ lastSent, senderId: "__proto__", nowMs: 10 });
-  assert.equal(r.send, false, "5 is less than a minute before 10");
-  const r2 = shouldSend({ lastSent: {}, senderId: "__proto__", nowMs: 100000 });
+  const now = 100 * MIN;
+  const lastSent = JSON.parse(`{"__proto__": [${now - 5000}], "constructor": [${now - 6000}]}`);
+  const r = shouldSend({ lastSent, senderId: "__proto__", nowMs: now });
+  assert.equal(r.send, false, "5 seconds is inside the gap");
+  const r2 = shouldSend({ lastSent: {}, senderId: "__proto__", nowMs: now });
   assert.equal(r2.send, true);
   assert.equal(Object.getPrototypeOf(r2.nextLastSent), Object.prototype);
   assert.equal(Object.prototype.hasOwnProperty.call(r2.nextLastSent, "__proto__"), true);

@@ -69,43 +69,58 @@ function removeToken(list, token) {
 }
 
 /**
- * The stored lastSent map ({senderId: ms}) with malformed entries
- * dropped, keeping the `max` newest.
+ * The stored lastSent map ({senderId: [alert ms, newest first]}) cleaned
+ * for use: malformed senders and timestamps dropped, the old format (one
+ * number per sender) converted to a one-item list, timestamps outside
+ * the window (older than windowMs, or in the future from clock skew)
+ * dropped, at most perSender stamps per sender, senders with nothing
+ * left removed, and only the `max` most recently alerted senders kept.
  * @param {*} lastSent
+ * @param {number} nowMs
+ * @param {number} windowMs
+ * @param {number} perSender
  * @param {number} [max]
- * @returns {Object<string, number>}
+ * @returns {Object<string, number[]>}
  */
-function pruneLastSent(lastSent, max = LAST_SENT_MAX) {
+function pruneLastSent(lastSent, nowMs, windowMs, perSender, max = LAST_SENT_MAX) {
   if (!lastSent || typeof lastSent !== "object" || Array.isArray(lastSent)) return {};
-  const entries = Object.entries(lastSent)
-    .filter(([k, v]) => SENDER_ID_RE.test(k) && Number.isFinite(v))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, max);
+  const timed = Number.isFinite(nowMs);
+  const entries = [];
+  for (const [k, v] of Object.entries(lastSent)) {
+    if (!SENDER_ID_RE.test(k)) continue;
+    const stamps = (Array.isArray(v) ? v : [v])
+      .filter((t) => Number.isFinite(t) && (!timed || (t <= nowMs && nowMs - t < windowMs)))
+      .sort((a, b) => b - a)
+      .slice(0, perSender);
+    if (stamps.length) entries.push([k, stamps]);
+  }
+  entries.sort((a, b) => b[1][0] - a[1][0]);
   // fromEntries defines own properties, so an id such as "__proto__" stays a plain key
-  return Object.fromEntries(entries);
+  return Object.fromEntries(entries.slice(0, max));
 }
 
 /**
- * Whether to alert the recipient about a message from senderId: never
- * when muted, and at most once per minGapMs per sender. nextLastSent is
- * what to store back (pruned to the 50 newest senders).
- * @param {{muted?:boolean, lastSent?:Object<string,number>, senderId:string, nowMs:number, minGapMs?:number}} p
- * @returns {{send:boolean, nextLastSent:Object<string,number>}}
+ * Whether to alert the recipient about a message from senderId. Never
+ * when muted; not when that sender was alerted less than minGapMs ago;
+ * not when that sender already has maxPerWindow alerts inside windowMs.
+ * nextLastSent is what to store back: stamps older than windowMs
+ * dropped, at most the 50 most recently alerted senders.
+ * @param {{muted?:boolean, lastSent?:Object<string,(number|number[])>, senderId:string, nowMs:number,
+ *   minGapMs?:number, maxPerWindow?:number, windowMs?:number}} p
+ * @returns {{send:boolean, nextLastSent:Object<string,number[]>}}
  */
-function shouldSend({ muted, lastSent, senderId, nowMs, minGapMs = 60000 } = {}) {
-  const prev = pruneLastSent(lastSent, Infinity);
-  const keep = () => pruneLastSent(prev);
-  if (muted === true || !SENDER_ID_RE.test(String(senderId)) || typeof senderId !== "string" || !Number.isFinite(nowMs)) {
+function shouldSend({ muted, lastSent, senderId, nowMs, minGapMs = 10000, maxPerWindow = 10, windowMs = 600000 } = {}) {
+  const prev = pruneLastSent(lastSent, nowMs, windowMs, maxPerWindow, Infinity);
+  const keep = () => pruneLastSent(prev, nowMs, windowMs, maxPerWindow);
+  if (muted === true || typeof senderId !== "string" || !SENDER_ID_RE.test(senderId) || !Number.isFinite(nowMs)) {
     return { send: false, nextLastSent: keep() };
   }
-  const last = Object.prototype.hasOwnProperty.call(prev, senderId) ? prev[senderId] : null;
-  // A stamp in the future (clock skew) does not suppress alerts
-  if (last !== null && last <= nowMs && nowMs - last < minGapMs) {
-    return { send: false, nextLastSent: keep() };
-  }
+  const stamps = Object.prototype.hasOwnProperty.call(prev, senderId) ? prev[senderId] : [];
+  if (stamps.length && nowMs - stamps[0] < minGapMs) return { send: false, nextLastSent: keep() };
+  if (stamps.length >= maxPerWindow) return { send: false, nextLastSent: keep() };
   const next = Object.entries(prev).filter(([k]) => k !== senderId);
-  next.push([senderId, nowMs]);
-  return { send: true, nextLastSent: pruneLastSent(Object.fromEntries(next)) };
+  next.push([senderId, [nowMs, ...stamps]]);
+  return { send: true, nextLastSent: pruneLastSent(Object.fromEntries(next), nowMs, windowMs, maxPerWindow) };
 }
 
 /**
