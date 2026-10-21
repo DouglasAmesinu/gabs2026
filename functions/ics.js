@@ -45,6 +45,12 @@ export async function onRequestGet({ request }) {
     `LOCATION:${esc(loc)}`,
     `DESCRIPTION:${esc(`B2B Meeting at GABS 2026`)}\\n${esc(`Date: ${label}`)}\\n${esc(`Time: ${start} (${dur} min)`)}\\n${esc(`Venue: ${loc}`)}\\nAll times GMT (Accra time)`,
     'STATUS:CONFIRMED',
+    // Reminder 15 minutes before the meeting
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:GABS 2026 meeting in 15 minutes',
+    'TRIGGER:-PT15M',
+    'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR',
   ];
