@@ -1887,7 +1887,7 @@ function iosGuideHTML(){
     <ol class="push-steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
     ${safari?"":`<div class="push-actions"><button class="btn-navy btn-sm" data-push="copy" style="color:#fff">Copy link</button></div>
     <input class="form-inp" data-copy-box readonly value="${esc(location.origin)}" aria-label="Link to open in Safari" style="margin-top:8px" hidden/>`}
-    <div class="push-note">Then open GABS Connect from the new icon and sign in there. Message alerts only work from the icon. Needs iOS 16.4 or later; if you do not see Add to Home Screen, update iOS in Settings, General, Software Update.</div>`;
+    <div class="push-note">Then open GABS Connect from the new icon and sign in there. Message alerts only work from the icon. Needs iOS 16.4 or later.</div>`;
 }
 // Edit Profile's "How to get message alerts on iPhone": the same guide in a sheet
 function showIosGuideSheet(){
