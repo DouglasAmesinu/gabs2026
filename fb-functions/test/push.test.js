@@ -245,10 +245,12 @@ test("buildAlert builds message and meeting alerts", () => {
     tag: "msg-u_1-x",
     url: "/#chat=u_1-x",
     kind: "message",
+    renotify: "1",
   });
   const m = buildAlert({ kind: "meeting", senderName: "  Kofi\n", senderId: "abc" });
   assert.equal(m.body, "New meeting request from Kofi");
   assert.equal(m.kind, "meeting");
+  assert.equal(m.renotify, "1");
   assert.equal(buildAlert({ kind: "other", senderName: "", senderId: "abc" }).body, "New message from a participant");
   assert.equal(buildAlert({ kind: "other", senderId: "abc" }).kind, "message");
 });

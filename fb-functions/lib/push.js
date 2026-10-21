@@ -146,7 +146,9 @@ function cleanName(s) {
  * The data payload for one alert. kind "meeting" announces a meeting
  * request; anything else is a message.
  * @param {{kind?:string, senderName?:*, senderId:*}} p
- * @returns {{title:string, body:string, tag:string, url:string, kind:string}|null}
+ * renotify "1" tells the service worker that a replacement alert with
+ * the same tag should still sound.
+ * @returns {{title:string, body:string, tag:string, url:string, kind:string, renotify:string}|null}
  *   null when senderId is not a plain id
  */
 function buildAlert({ kind, senderName, senderId } = {}) {
@@ -159,6 +161,7 @@ function buildAlert({ kind, senderName, senderId } = {}) {
     tag: "msg-" + senderId,
     url: "/#chat=" + senderId,
     kind: k,
+    renotify: "1",
   };
 }
 
