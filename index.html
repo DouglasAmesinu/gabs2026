@@ -1824,12 +1824,12 @@ function startAnnouncementListener(){
 // window._push is null where push is unsupported; then only the iPhone/iPad Home Screen guide can show.
 // Never logs tokens. Notification.requestPermission() runs only from a tap on "Turn on" or the switch.
 const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, or the ms until which Not now hides the card
-const PUSH_TOKEN_KEY="gabs_push_token";     // the token last registered from this device
-const PUSH_CHECKED_KEY="gabs_push_checked"; // last token refresh (ms), at most once a day
+const PUSH_TOKEN_KEY="gabs_push_tok";       // the token last registered from this device
+const PUSH_TOKEN_AT_KEY="gabs_push_tok_at"; // when it was last registered (ms)
 const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the switch was turned off
 const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
 const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
-const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REFRESH_MS=24*60*60*1000;
+const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REREGISTER_MS=3*24*60*60*1000;
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
 const lsDel=k=>{try{localStorage.removeItem(k);}catch(e){}};
@@ -1961,7 +1961,7 @@ async function enablePush(helpId){
     if(!token)throw new Error("no token");
     await callFn("registerPushToken",{token,platform:pushPlatform()});
     await callFn("setPushMuted",{muted:false});
-    lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_CHECKED_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
+    lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
     setPushHelp(helpId,"");
     showToast("Message alerts are on.");
     return true;
@@ -2007,19 +2007,24 @@ async function handlePushAction(btn){
     }
   }finally{pushBusy=false;btn.disabled=false;}
 }
-// Every sign-in with permission already granted: refresh the token at most once a day
-// force: the service worker reported a new push subscription, so check now
-async function refreshPushToken(force){
-  if(!pushGranted()||!window._fn||!me)return;
-  if(force!==true&&Date.now()-(Number(lsGet(PUSH_CHECKED_KEY))||0)<PUSH_REFRESH_MS)return;
-  lsSet(PUSH_CHECKED_KEY,String(Date.now()));
-  try{
-    const token=await window._push.getToken();
-    if(token&&token!==lsGet(PUSH_TOKEN_KEY)){
+// Every app open with a participant session and permission granted (and after the service worker
+// reports a new subscription): get the token, and register it when it changed or was registered more
+// than 3 days ago. Fails quietly, with nothing in the console.
+let pushRefreshing=null;
+function refreshPushToken(){
+  if(!pushGranted()||!window._fn||!me)return Promise.resolve();
+  if(pushRefreshing)return pushRefreshing;
+  pushRefreshing=(async()=>{
+    try{
+      const token=await window._push.getToken();
+      if(!token)return;
+      const fresh=Date.now()-(Number(lsGet(PUSH_TOKEN_AT_KEY))||0)<PUSH_REREGISTER_MS;
+      if(token===lsGet(PUSH_TOKEN_KEY)&&fresh)return;
       await callFn("registerPushToken",{token,platform:pushPlatform()});
-      lsSet(PUSH_TOKEN_KEY,token);
-    }
-  }catch(e){console.warn("push refresh failed:",e&&e.code);}
+      lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));
+    }catch(e){}
+  })().finally(()=>{pushRefreshing=null;});
+  return pushRefreshing;
 }
 // Sign-out (while still signed in): unregister this device, delete the token, clear the local flags
 async function pushSignOut(){
@@ -2032,7 +2037,7 @@ async function pushSignOut(){
     // Never hold up sign-out for long on a bad connection
     await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
   }
-  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_CHECKED_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY].forEach(lsDel);
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY].forEach(lsDel);
 }
 function stopAnnouncementListener(){
   annStarted=false;
@@ -3548,7 +3553,7 @@ if("serviceWorker"in navigator){
   // Tapping an alert while the app is open: the service worker posts the alert's url
   navigator.serviceWorker.addEventListener("message",e=>{
     const d=e.data;
-    if(d&&d.type==="push-resubscribe"){if(me)refreshPushToken(true);return;}
+    if(d&&d.type==="push-resubscribe"){if(me)refreshPushToken();return;}
     if(!d||d.type!=="open-chat"||typeof d.url!=="string")return;
     let hash="";try{hash=new URL(d.url,location.origin).hash;}catch(err){}
     const id=parseChatHash(hash);
