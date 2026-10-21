@@ -1,6 +1,8 @@
-const CACHE_NAME='gabs2026-v13';
+const CACHE_NAME='gabs2026-v14';
+// App icon badge counter, kept in its own cache so it survives the worker being stopped and app updates
+const BADGE_CACHE='gabs-badge',BADGE_KEY='/__badge';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(['/','index.html','manifest.json']).catch(()=>{})));self.skipWaiting();});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME&&k!==BADGE_CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener('fetch',e=>{
   const url=e.request.url;
   if(!url.startsWith('http'))return;
@@ -18,6 +20,35 @@ self.addEventListener('fetch',e=>{
 const PUSH_ICON='/icon-192.png';
 // iPadOS reports a Mac user agent and a worker cannot see touch support, so Safari on a Mac counts too
 const isIOS=()=>{const ua=self.navigator.userAgent;return /iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&/Safari/.test(ua)&&!/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/.test(ua));};
+// ── App icon badge ───────────────────────────────────────────────────────────
+// An integer 0-99 (above 99 shows 99); anything else is 0
+const clampBadgeN=n=>Number.isInteger(n)?Math.min(99,Math.max(0,n)):0;
+async function readBadge(){
+  try{
+    const r=await (await caches.open(BADGE_CACHE)).match(BADGE_KEY);
+    if(!r)return 0;
+    const d=await r.json();
+    return clampBadgeN(d&&d.n);
+  }catch(err){return 0;}
+}
+async function writeBadge(n){
+  try{
+    await (await caches.open(BADGE_CACHE)).put(BADGE_KEY,new Response(JSON.stringify({n:clampBadgeN(n)}),{headers:{'Content-Type':'application/json'}}));
+  }catch(err){}
+}
+// The page sends its unread count ({type:"badge-set", n}) so this counter matches it
+self.addEventListener('message',e=>{
+  const d=e.data;
+  if(!d||d.type!=='badge-set')return;
+  const n=clampBadgeN(d.n);
+  e.waitUntil((async()=>{
+    await writeBadge(n);
+    try{
+      if(n>0){if('setAppBadge' in self.navigator)await self.navigator.setAppBadge(n);}
+      else if('clearAppBadge' in self.navigator)await self.navigator.clearAppBadge();
+    }catch(err){}
+  })());
+});
 // Only same-origin paths; anything else opens the app's start page
 const safePath=u=>typeof u==='string'&&u.startsWith('/')&&!u.startsWith('//')?u:'/';
 self.addEventListener('push',e=>{
@@ -34,6 +65,9 @@ self.addEventListener('push',e=>{
       if(wins.some(c=>c.focused&&c.visibilityState==='visible'))return;
     }
     await self.registration.showNotification(title,opts);
+    const n=Math.min(99,(await readBadge())+1);
+    await writeBadge(n);
+    try{if('setAppBadge' in self.navigator)await self.navigator.setAppBadge(n);}catch(err){}
   })());
 });
 self.addEventListener('notificationclick',e=>{
