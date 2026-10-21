@@ -1821,6 +1821,8 @@ const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, o
 const PUSH_TOKEN_KEY="gabs_push_token";     // the token last registered from this device
 const PUSH_CHECKED_KEY="gabs_push_checked"; // last token refresh (ms), at most once a day
 const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the switch was turned off
+const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
+const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
 const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REFRESH_MS=24*60*60*1000;
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
@@ -1839,7 +1841,8 @@ const pushIsOn=()=>pushGranted()&&lsGet(PUSH_MUTED_KEY)!=="1";
 function pushCardDue(){
   if(!me)return false;
   const mode=pushMode();
-  if(mode==="none"||(mode==="push"&&pushGranted()))return false;
+  if(mode==="guide")return Date.now()>(Number(lsGet(PUSH_GUIDE_KEY))||0);
+  if(mode==="none"||pushGranted())return false;
   const v=lsGet(PUSH_ASKED_KEY);
   if(!v)return true;
   if(v==="done")return false;
@@ -1849,9 +1852,8 @@ function pushCardHTML(){
   if(!pushCardDue())return"";
   if(pushMode()==="guide")return`<div class="push-card" role="region" aria-label="Message alerts">
     <div class="push-card-title">🔔 Get message alerts: add GABS Connect to your Home Screen</div>
-    <ol class="push-steps"><li>Tap the Share button</li><li>Choose Add to Home Screen</li><li>Open GABS Connect from the icon and sign in there</li></ol>
-    <div class="push-note">On iPhone and iPad, alerts only work from the icon.</div>
-    <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button></div>
+    ${iosGuideHTML()}
+    <div class="push-actions"><button class="btn-outline btn-sm" data-push="guide-later">Not now</button></div>
   </div>`;
   return`<div class="push-card" role="region" aria-label="Message alerts">
     <div class="push-card-title">🔔 Turn on message alerts?</div>
@@ -1859,6 +1861,41 @@ function pushCardHTML(){
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
     <div class="push-help" id="push-card-help" role="status"></div>
   </div>`;
+}
+// The Add to Home Screen steps for this iOS browser: Safari, Chrome/Edge, or anything else (open in Safari first)
+function iosBrowser(){
+  if(/CriOS|EdgiOS/.test(PUSH_UA))return"chromium";
+  if(/FxiOS|OPiOS|OPT\/|GSA\/|DuckDuckGo|Ddg\//.test(PUSH_UA)||!/Version\/[\d.]+.*Safari\//.test(PUSH_UA))return"other";
+  return"safari";
+}
+function iosGuideHTML(){
+  const b=iosBrowser();
+  const steps=b==="safari"?["Tap the Share button (a square with an arrow).","Scroll down and tap Add to Home Screen.","Tap Add."]
+    :b==="chromium"?["Tap the Share icon in the address bar at the top right.","Tap Add to Home Screen.","Tap Add."]:null;
+  return`${steps
+    ?`<ol class="push-steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>`
+    :`<div class="push-card-text">Open this page in Safari first: tap Copy link, open Safari, paste the link, then use Share, Add to Home Screen.</div>
+    <div class="push-actions"><button class="btn-navy btn-sm" data-push="copy" style="color:#fff">Copy link</button></div>`}
+    <div class="push-note">Then open GABS Connect from the new icon and sign in there. Message alerts only work from the icon. Needs iOS 16.4 or later; if you do not see Add to Home Screen, update iOS in Settings, General, Software Update.</div>`;
+}
+// Edit Profile's "How to get message alerts on iPhone": the same guide in a sheet
+function showIosGuideSheet(){
+  document.getElementById("ios-guide")?.remove();
+  const ov=makeOv(true);ov.id="ios-guide";
+  ov.innerHTML=`<div class="sheet pop" role="dialog" aria-modal="true" aria-labelledby="ios-guide-title" style="max-width:420px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="sheet-title" id="ios-guide-title" style="margin:0">Message alerts on iPhone</div>
+      <button class="btn-outline btn-sm" id="ios-guide-close">Close</button>
+    </div>
+    ${iosGuideHTML()}
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById("ios-guide-close").onclick=()=>ov.remove();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+async function copyAppLink(){
+  try{await navigator.clipboard.writeText(location.origin);showToast("Link copied. Paste it into Safari.");}
+  catch(e){showToast("Couldn't copy. Open "+location.host+" in Safari.");}
 }
 function refreshPushCard(){
   const h=pushCardHTML();
@@ -1868,7 +1905,8 @@ function pushSectionHTML(){
   const mode=pushMode();
   if(mode==="none")return"";
   if(mode==="guide")return`<div class="form-label">Message alerts</div>
-    <div class="push-note">On iPhone and iPad, alerts only work from the icon: tap Share, choose Add to Home Screen, then open GABS Connect from the icon and sign in there.</div>`;
+    <div class="push-note">On iPhone and iPad, message alerts only work from the Home Screen icon.</div>
+    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:10px">How to get message alerts on iPhone</button>`;
   const on=pushIsOn();
   return`<div class="form-label">Message alerts</div>
     <div class="push-row"><span id="push-switch-label">Alerts for new messages</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
@@ -1909,6 +1947,9 @@ let pushBusy=false;
 async function handlePushAction(btn){
   const act=btn.dataset.push;
   if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
+  if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
+  if(act==="guide"){showIosGuideSheet();return;}
+  if(act==="copy"){copyAppLink();return;}
   if(pushBusy||!me)return;
   pushBusy=true;btn.disabled=true;
   try{
@@ -1961,7 +2002,7 @@ async function pushSignOut(){
     // Never hold up sign-out for long on a bad connection
     await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
   }
-  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_CHECKED_KEY,PUSH_MUTED_KEY].forEach(lsDel);
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_CHECKED_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY].forEach(lsDel);
 }
 function stopAnnouncementListener(){
   annStarted=false;
