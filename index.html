@@ -2008,9 +2008,10 @@ async function handlePushAction(btn){
   }finally{pushBusy=false;btn.disabled=false;}
 }
 // Every sign-in with permission already granted: refresh the token at most once a day
-async function refreshPushToken(){
+// force: the service worker reported a new push subscription, so check now
+async function refreshPushToken(force){
   if(!pushGranted()||!window._fn||!me)return;
-  if(Date.now()-(Number(lsGet(PUSH_CHECKED_KEY))||0)<PUSH_REFRESH_MS)return;
+  if(force!==true&&Date.now()-(Number(lsGet(PUSH_CHECKED_KEY))||0)<PUSH_REFRESH_MS)return;
   lsSet(PUSH_CHECKED_KEY,String(Date.now()));
   try{
     const token=await window._push.getToken();
@@ -3547,6 +3548,7 @@ if("serviceWorker"in navigator){
   // Tapping an alert while the app is open: the service worker posts the alert's url
   navigator.serviceWorker.addEventListener("message",e=>{
     const d=e.data;
+    if(d&&d.type==="push-resubscribe"){if(me)refreshPushToken(true);return;}
     if(!d||d.type!=="open-chat"||typeof d.url!=="string")return;
     let hash="";try{hash=new URL(d.url,location.origin).hash;}catch(err){}
     const id=parseChatHash(hash);

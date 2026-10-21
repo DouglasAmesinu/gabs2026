@@ -1,4 +1,4 @@
-const CACHE_NAME='gabs2026-v14';
+const CACHE_NAME='gabs2026-v15';
 // App icon badge counter, kept in its own cache so it survives the worker being stopped and app updates
 const BADGE_CACHE='gabs-badge',BADGE_KEY='/__badge';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(['/','index.html','manifest.json']).catch(()=>{})));self.skipWaiting();});
@@ -51,23 +51,49 @@ self.addEventListener('message',e=>{
 });
 // Only same-origin paths; anything else opens the app's start page
 const safePath=u=>typeof u==='string'&&u.startsWith('/')&&!u.startsWith('//')?u:'/';
+// Shown whenever an alert's payload cannot be read or lacks its fields: a push must always show something
+const genericAlert=()=>({body:'You have a new message',tag:'gabs-generic',renotify:true,data:{url:'/'},icon:PUSH_ICON,badge:PUSH_ICON});
 self.addEventListener('push',e=>{
-  let p={};
-  try{p=e.data?e.data.json():{};}catch(err){p={};}
-  const d=(p&&typeof p.data==='object'&&p.data)||p||{};
-  const str=v=>typeof v==='string'?v:'';
-  const title=str(d.title)||'GABS Connect';
-  const opts={body:str(d.body),tag:str(d.tag)||undefined,data:{url:safePath(d.url)},icon:PUSH_ICON,badge:PUSH_ICON,renotify:false};
   e.waitUntil((async()=>{
-    // iOS requires every push to show a notification; elsewhere skip it while the app is in front
-    if(!isIOS()){
+    let title='GABS Connect',opts=genericAlert();
+    try{
+      const p=e.data?e.data.json():null;
+      const d=p&&typeof p==='object'?(p.data&&typeof p.data==='object'?p.data:p):null;
+      const str=v=>typeof v==='string'?v:'';
+      if(d&&str(d.body)&&str(d.tag)){
+        title=str(d.title)||'GABS Connect';
+        // renotify with the tag: a newer alert from the same sender replaces the old one and still sounds
+        opts={body:str(d.body),tag:str(d.tag),renotify:true,data:{url:safePath(d.url)},icon:PUSH_ICON,badge:PUSH_ICON};
+      }
+    }catch(err){}
+    try{
+      // iOS requires every push to show a notification; elsewhere skip it while the app is in front
+      if(!isIOS()){
+        const wins=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+        if(wins.some(c=>c.focused&&c.visibilityState==='visible'))return;
+      }
+    }catch(err){}
+    try{await self.registration.showNotification(title,opts);}
+    catch(err){try{await self.registration.showNotification('GABS Connect',genericAlert());}catch(err2){}}
+    try{
+      const n=Math.min(99,(await readBadge())+1);
+      await writeBadge(n);
+      if('setAppBadge' in self.navigator)await self.navigator.setAppBadge(n);
+    }catch(err){}
+  })());
+});
+// The browser replaced or expired the push subscription: subscribe again with the same key if possible,
+// and ask open pages to refresh and re-register their token
+self.addEventListener('pushsubscriptionchange',e=>{
+  e.waitUntil((async()=>{
+    try{
+      const key=e.oldSubscription&&e.oldSubscription.options&&e.oldSubscription.options.applicationServerKey;
+      if(key&&!e.newSubscription)await self.registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+    }catch(err){}
+    try{
       const wins=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-      if(wins.some(c=>c.focused&&c.visibilityState==='visible'))return;
-    }
-    await self.registration.showNotification(title,opts);
-    const n=Math.min(99,(await readBadge())+1);
-    await writeBadge(n);
-    try{if('setAppBadge' in self.navigator)await self.navigator.setAppBadge(n);}catch(err){}
+      wins.forEach(c=>c.postMessage({type:'push-resubscribe'}));
+    }catch(err){}
   })());
 });
 self.addEventListener('notificationclick',e=>{
