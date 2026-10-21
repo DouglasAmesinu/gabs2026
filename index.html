@@ -285,6 +285,22 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ann-x{position:absolute;top:4px;right:4px;width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:8px}
 .ann-item{padding:14px 0;border-bottom:1px solid var(--border)}
 .ann-item:last-child{border-bottom:none}
+/* Message alerts: Discover card and the Edit Profile switch */
+.push-card{margin:0 16px 12px;background:var(--white);border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:14px;padding:12px 14px}
+.push-card-title{font-size:14px;font-weight:800;color:var(--text)}
+.push-card-text{font-size:13px;color:var(--text);line-height:1.45;margin-top:4px}
+.push-steps{margin:6px 0 0 18px;padding:0;font-size:13px;line-height:1.6;color:var(--text)}
+.push-note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
+.push-actions{display:flex;gap:8px;margin-top:10px}
+.push-actions .btn-sm{flex:1}
+.push-help{font-size:12px;color:var(--text);margin-top:8px;line-height:1.45}
+.push-help:empty{display:none}
+.push-row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;color:var(--text);margin-top:4px}
+.push-switch{position:relative;width:46px;height:28px;border-radius:14px;border:none;background:var(--border);cursor:pointer;flex-shrink:0;transition:background .2s;padding:0}
+.push-switch[aria-checked="true"]{background:var(--navy)}
+.push-switch .push-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.push-switch[aria-checked="true"] .push-knob{transform:translateX(18px)}
+.push-switch:disabled{opacity:.6}
 .form-label{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:14px}
 .form-label:first-of-type{margin-top:0}
 .form-inp{width:100%;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;color:var(--text);background:#F9FAFB;transition:border-color .2s}
@@ -916,6 +932,8 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("click",e=>{
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(pv){openProfileFrom(pv);return;}
+  const pb=e.target&&e.target.closest&&e.target.closest("[data-push]");
+  if(pb){handlePushAction(pb);return;}
   const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
   if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
@@ -1120,6 +1138,7 @@ function showEditProfile(){
     <textarea class="form-inp" id="ep-bio" rows="3" maxlength="200" placeholder="${esc(bioPlaceholder())}" style="resize:none;line-height:1.5">${esc(me.bio||"")}</textarea>
     <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
     <div id="ep-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">${(me.bio||"").length} / 200</div>
+    ${pushSectionHTML()}
     <div id="ep-feedback"></div>
     <div class="btn-row" style="margin-top:18px">
       <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
@@ -1217,6 +1236,7 @@ function showEditProfile(){
 
   document.getElementById("ep-logout").onclick=async()=>{
     ov.remove();
+    await pushSignOut();
     stopMessageListeners();
     if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
     me=null;localStorage.removeItem("gabs_me");
@@ -1366,6 +1386,7 @@ function renderDiscover(){
       <div class="page-title">Discover</div>
       <div class="page-sub">${discSubText()}</div>
     </div>
+    <div id="push-wrap">${pushCardHTML()}</div>
     <div id="ann-wrap">${annCardHTML()}</div>
     <div class="search-wrap">
       <div class="search-box">
@@ -1654,6 +1675,7 @@ function startMessageListeners(){
   if(msgListenersStarted||!me||!window._fb)return;
   msgListenersStarted=true;
   startAnnouncementListener();
+  refreshPushToken();
   const fb=window._fb,myId=me.id;
   const msgs=fb.collectionGroup(fb.db,"messages");
   const inboxQ=fb.query(msgs,fb.where("participants","array-contains",myId),fb.orderBy("ts","desc"),fb.limit(400));
@@ -1790,6 +1812,150 @@ function startAnnouncementListener(){
     refreshAnnouncements();
   });
   annTimer=setInterval(refreshAnnouncements,60000);
+}
+// ── Message alerts (web push) ───────────────────────────────────────────────
+// window._push is null where push is unsupported; then only the iPhone/iPad Home Screen guide can show.
+// Never logs tokens. Notification.requestPermission() runs only from a tap on "Turn on" or the switch.
+const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, or the ms until which Not now hides the card
+const PUSH_TOKEN_KEY="gabs_push_token";     // the token last registered from this device
+const PUSH_CHECKED_KEY="gabs_push_checked"; // last token refresh (ms), at most once a day
+const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the switch was turned off
+const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REFRESH_MS=24*60*60*1000;
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
+const lsDel=k=>{try{localStorage.removeItem(k);}catch(e){}};
+const PUSH_UA=navigator.userAgent||"";
+const isIOSDevice=/iPhone|iPad|iPod/.test(PUSH_UA)||(/Macintosh/.test(PUSH_UA)&&navigator.maxTouchPoints>1);
+const pushPlatform=()=>isIOSDevice?"ios":/Android/i.test(PUSH_UA)?"android":"desktop";
+const isStandalone=()=>navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);
+// iPhone/iPad in the browser: alerts need the Home Screen app, so show the guide instead
+const needsHomeScreen=()=>isIOSDevice&&!isStandalone();
+const pushGranted=()=>!!window._push&&Notification.permission==="granted";
+const pushIsOn=()=>pushGranted()&&lsGet(PUSH_MUTED_KEY)!=="1";
+function pushCardDue(){
+  if(!me)return false;
+  if(!needsHomeScreen()&&(!window._push||pushGranted()))return false;
+  const v=lsGet(PUSH_ASKED_KEY);
+  if(!v)return true;
+  if(v==="done")return false;
+  return Date.now()>(Number(v)||0);
+}
+function pushCardHTML(){
+  if(!pushCardDue())return"";
+  if(needsHomeScreen())return`<div class="push-card" role="region" aria-label="Message alerts">
+    <div class="push-card-title">🔔 Get message alerts: add GABS Connect to your Home Screen</div>
+    <ol class="push-steps"><li>Tap the Share button</li><li>Choose Add to Home Screen</li><li>Open GABS Connect from the icon and sign in there</li></ol>
+    <div class="push-note">On iPhone and iPad, alerts only work from the icon.</div>
+    <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button></div>
+  </div>`;
+  return`<div class="push-card" role="region" aria-label="Message alerts">
+    <div class="push-card-title">🔔 Turn on message alerts?</div>
+    <div class="push-card-text">We will notify you when someone writes to you. Alerts show only the sender's name.</div>
+    <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
+    <div class="push-help" id="push-card-help" role="status"></div>
+  </div>`;
+}
+function refreshPushCard(){
+  const h=pushCardHTML();
+  patchHTML(document.getElementById("push-wrap"),h,h);
+}
+function pushSectionHTML(){
+  if(!window._push&&!needsHomeScreen())return"";
+  if(!window._push)return`<div class="form-label">Message alerts</div>
+    <div class="push-note">On iPhone and iPad, alerts only work from the icon: tap Share, choose Add to Home Screen, then open GABS Connect from the icon and sign in there.</div>`;
+  const on=pushIsOn();
+  return`<div class="form-label">Message alerts</div>
+    <div class="push-row"><span id="push-switch-label">Alerts for new messages</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
+    <div class="push-note">Alerts show only the sender's name, never the message.</div>
+    <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
+    <div class="push-help" id="push-ep-help" role="status"></div>`;
+}
+function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
+function syncPushSwitch(){
+  document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(pushIsOn())));
+}
+const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
+// "Turn on" and switch On: permission (from this tap), token, register, unmute
+async function enablePush(helpId){
+  if(!window._push||!window._fn||!me)return false;
+  let perm=Notification.permission;
+  if(perm!=="granted"){try{perm=await Notification.requestPermission();}catch(e){perm="denied";}}
+  if(perm!=="granted"){
+    setPushHelp(helpId,isIOSDevice?"To allow alerts: Settings, Notifications, GABS Connect.":"To allow alerts: tap the lock icon in the address bar, then Notifications, then Allow.");
+    return false;
+  }
+  try{
+    const token=await window._push.getToken();
+    if(!token)throw new Error("no token");
+    await callFn("registerPushToken",{token,platform:pushPlatform()});
+    await callFn("setPushMuted",{muted:false});
+    lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_CHECKED_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
+    setPushHelp(helpId,"");
+    showToast("Message alerts are on.");
+    return true;
+  }catch(e){
+    console.warn("push enable failed:",e&&e.code);
+    setPushHelp(helpId,"Couldn't turn on alerts. Please try again.");
+    return false;
+  }
+}
+let pushBusy=false;
+async function handlePushAction(btn){
+  const act=btn.dataset.push;
+  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
+  if(pushBusy||!me)return;
+  pushBusy=true;btn.disabled=true;
+  try{
+    if(act==="on"){
+      lsSet(PUSH_ASKED_KEY,"done");
+      if(await enablePush("push-card-help"))refreshPushCard();
+    }else if(act==="toggle"){
+      if(pushIsOn()){
+        try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-ep-help","");}
+        catch(e){setPushHelp("push-ep-help","Couldn't turn off alerts. Please try again.");}
+      }else{
+        lsSet(PUSH_ASKED_KEY,"done");
+        await enablePush("push-ep-help");
+        refreshPushCard();
+      }
+      syncPushSwitch();
+    }else if(act==="test"){
+      setPushHelp("push-ep-help","Sending…");
+      try{
+        const res=await callFn("sendTestPush",{});
+        setPushHelp("push-ep-help",res&&res.data&&res.data.sent>0?"Sent. It can take a few seconds.":"No device registered. Turn on alerts first.");
+      }catch(e){
+        const code=String((e&&e.code)||"");
+        setPushHelp("push-ep-help",code.endsWith("resource-exhausted")?"Too many test alerts. Please try again later.":"Couldn't send a test alert. Please try again.");
+      }
+    }
+  }finally{pushBusy=false;btn.disabled=false;}
+}
+// Every sign-in with permission already granted: refresh the token at most once a day
+async function refreshPushToken(){
+  if(!pushGranted()||!window._fn||!me)return;
+  if(Date.now()-(Number(lsGet(PUSH_CHECKED_KEY))||0)<PUSH_REFRESH_MS)return;
+  lsSet(PUSH_CHECKED_KEY,String(Date.now()));
+  try{
+    const token=await window._push.getToken();
+    if(token&&token!==lsGet(PUSH_TOKEN_KEY)){
+      await callFn("registerPushToken",{token,platform:pushPlatform()});
+      lsSet(PUSH_TOKEN_KEY,token);
+    }
+  }catch(e){console.warn("push refresh failed:",e&&e.code);}
+}
+// Sign-out (while still signed in): unregister this device, delete the token, clear the local flags
+async function pushSignOut(){
+  const token=lsGet(PUSH_TOKEN_KEY);
+  if(window._push&&(token||pushGranted())){
+    const work=(async()=>{
+      if(token&&window._fn){try{await callFn("unregisterPushToken",{token});}catch(e){}}
+      try{await window._push.deleteToken();}catch(e){}
+    })();
+    // Never hold up sign-out for long on a bad connection
+    await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
+  }
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_CHECKED_KEY,PUSH_MUTED_KEY].forEach(lsDel);
 }
 function stopAnnouncementListener(){
   annStarted=false;
