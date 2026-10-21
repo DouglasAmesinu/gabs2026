@@ -507,6 +507,12 @@ function clip(s,max){
   const cps=Array.from(str);
   return cps.length<=n?str:cps.slice(0,n).join("");
 }
+
+// A sign-in link's hash (#t=<reference>): the reference uppercased, or "" for anything else
+function parseTicketHash(hash){
+  const m=/^#t=(GABS[A-Za-z0-9-]{6,60})$/i.exec(typeof hash==="string"?hash:"");
+  return m?m[1].toUpperCase():"";
+}
 // END safe-helpers
 
 
@@ -2439,10 +2445,11 @@ function showEntry(opts){
     if(inp)inp.disabled=!on;
     if(go)go.disabled=!on;
   }
-  async function checkTicket(){
+  // linkRef: a reference from a sign-in link; the button and Enter key pass none (or an event) and use the box
+  async function checkTicket(linkRef){
     if(checkingTicket)return;
     const t0=performance.now();
-    const typed=normalizeTicketInput(document.getElementById("t-input")?.value);
+    const typed=typeof linkRef==="string"?linkRef:normalizeTicketInput(document.getElementById("t-input")?.value);
     // Full references (incl. test refs like GABS-2026-TEST-001) are used as is; otherwise add the prefix
     const val=!typed?"":typed.startsWith("GABS")?typed:TICKET_PREFIX+typed;
     if(!val){const err=document.getElementById("t-err");if(err)err.innerHTML=`<div class="err-msg" style="margin-top:10px">Please enter your ticket reference.</div>`;return;}
@@ -2647,6 +2654,7 @@ function showEntry(opts){
 
   document.body.appendChild(el);
   render();
+  if(opts&&opts.ticketRef&&stage==="enter")checkTicket(opts.ticketRef);
 }
 
 // ── Admin panel ────────────────────────────────────────────────────────────
@@ -2960,6 +2968,10 @@ async function boot(){
     document.getElementById("loader").classList.add("gone");
     showAdmin();return;
   }
+  // Sign-in link (#t=<reference>): read it once and clear it from the address bar right away
+  const linkRef=parseTicketHash(window.location.hash);
+  history.replaceState(null,"",location.pathname+location.search);
+  const linkIgnored=()=>{if(linkRef)showToast("You're already signed in. Sign out first to use a different link.");};
 
   const A=window._auth;
   const user=A?await new Promise(resolve=>{const u=A.onAuthStateChanged(A.auth,usr=>{u();resolve(usr);});}):null;
@@ -2976,7 +2988,7 @@ async function boot(){
 
   if(!delegateUid){
     me=null;localStorage.removeItem("gabs_me");
-    showEntry();return;
+    showEntry({ticketRef:linkRef});return;
   }
 
   startParticipantListener();
@@ -2986,11 +2998,11 @@ async function boot(){
     if(!snap.empty){
       me=normParticipant({id:delegateUid,...snap.docs[0].data()});
       localStorage.setItem("gabs_me",JSON.stringify(me));
-      renderApp();startMessageListeners();return;
+      renderApp();startMessageListeners();linkIgnored();return;
     }
   }
   me=null;localStorage.removeItem("gabs_me");
-  showEntry({pendingUid:delegateUid});
+  showEntry({pendingUid:delegateUid});linkIgnored();
 }
 
 if(window._fb){boot();}
