@@ -837,7 +837,10 @@ function generateICSLocal(meeting,fromName,toName){
     `SUMMARY:${esc2(`GABS 2026 B2B Meeting: ${fromName} & ${toName}`)}`,
     `LOCATION:${esc2(meeting.loc||"GABS 2026 Venue, Accra")}`,
     `DESCRIPTION:${esc2(`B2B Meeting at GABS 2026\nDate: ${meeting.dayLabel||""}\nTime: ${meeting.start} (${meeting.dur||30} min)\nVenue: ${meeting.loc||""}\nAll times GMT (Accra time)`)}`,
-    "STATUS:CONFIRMED","END:VEVENT","END:VCALENDAR"].join("\r\n");
+    "STATUS:CONFIRMED",
+    // Reminder 15 minutes before the meeting (same block as functions/ics.js)
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:GABS 2026 meeting in 15 minutes","TRIGGER:-PT15M","END:VALARM",
+    "END:VEVENT","END:VCALENDAR"].join("\r\n");
   const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   if(isIOS){
     const openData=()=>{const u="data:text/calendar;charset=utf-8,"+encodeURIComponent(ics);window.open(u,"_blank")||(window.location.href=u);};
