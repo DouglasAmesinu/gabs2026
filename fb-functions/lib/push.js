@@ -221,6 +221,45 @@ function callWindow(existing, nowMs, limit, windowMs = 60 * 60 * 1000) {
   return { allowed: true, next: { count: existing.count + 1, windowStart: existing.windowStart } };
 }
 
+const ERROR_CODE_RE = /^[a-z0-9/_-]{1,80}$/i;
+
+/**
+ * The one log entry notifyNewMessage writes per alert: counts and FCM
+ * error codes only, never ids, names, tokens or text. latencyMs (now
+ * minus the message's ts) is left out when the ts is missing.
+ * @param {{kind?:string, tokenCount?:number, responses?:*, pruned?:number, nowMs?:number, sentAtMs?:number|null}} p
+ * @returns {{event:"push", kind:string, tokens:number, success:number, failure:number, pruned:number,
+ *   latencyMs?:number, errors:Object<string, number>}}
+ */
+function pushLogEntry({ kind, tokenCount, responses, pruned, nowMs, sentAtMs } = {}) {
+  const errors = new Map();
+  let success = 0;
+  let failure = 0;
+  for (const r of Array.isArray(responses) ? responses : []) {
+    if (r && r.success === true) {
+      success++;
+      continue;
+    }
+    failure++;
+    const raw = r && r.error && r.error.code;
+    const code = typeof raw === "string" && ERROR_CODE_RE.test(raw) ? raw : "unknown";
+    errors.set(code, (errors.get(code) || 0) + 1);
+  }
+  const count = (n) => (Number.isInteger(n) && n >= 0 ? n : 0);
+  const entry = {
+    event: "push",
+    kind: kind === "meeting" ? "meeting" : "message",
+    tokens: count(tokenCount),
+    success,
+    failure,
+    pruned: count(pruned),
+  };
+  if (Number.isFinite(nowMs) && Number.isFinite(sentAtMs)) entry.latencyMs = Math.max(0, Math.round(nowMs - sentAtMs));
+  // fromEntries defines own properties, so a code such as "__proto__" stays a plain key
+  entry.errors = Object.fromEntries(errors);
+  return entry;
+}
+
 module.exports = {
   validToken,
   addToken,
@@ -231,6 +270,7 @@ module.exports = {
   recipientOf,
   deadTokens,
   callWindow,
+  pushLogEntry,
   LAST_SENT_MAX,
   DEAD_TOKEN_CODES,
 };

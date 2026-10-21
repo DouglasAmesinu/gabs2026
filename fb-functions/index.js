@@ -29,6 +29,7 @@ const {
   recipientOf,
   deadTokens,
   callWindow,
+  pushLogEntry,
 } = require("./lib/push");
 const {
   validateBlockInput,
@@ -670,7 +671,7 @@ async function sendPush(uid, tokens, data) {
       tx.update(ref, { tokens: tokensLeft });
     });
   }
-  return { sent: res.successCount, failed: res.failureCount, removed: dead.length };
+  return { sent: res.successCount, failed: res.failureCount, removed: dead.length, responses: res.responses };
 }
 
 /**
@@ -752,7 +753,7 @@ exports.sendTestPush = onCall(PUSH_OPTS, async (request) => {
     url: "/",
     kind: "test",
   });
-  logger.info("sendTestPush: done", result);
+  logger.info("sendTestPush: done", { sent: result.sent, failed: result.failed, removed: result.removed });
   return { sent: result.sent };
 });
 
@@ -806,6 +807,14 @@ exports.notifyNewMessage = onDocumentCreated(
     });
     if (!alert) return;
     const result = await sendPush(recipient, tokens, alert);
-    logger.info("notifyNewMessage: done", result);
+    // One JSON line per alert (Cloud Logging stores it as structured data): counts and error codes only
+    console.log(JSON.stringify(pushLogEntry({
+      kind: alert.kind,
+      tokenCount: tokens.length,
+      responses: result.responses,
+      pruned: result.removed,
+      nowMs: Date.now(),
+      sentAtMs: data.ts && typeof data.ts.toMillis === "function" ? data.ts.toMillis() : null,
+    })));
   }
 );

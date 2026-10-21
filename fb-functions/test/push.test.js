@@ -12,6 +12,7 @@ const {
   recipientOf,
   deadTokens,
   callWindow,
+  pushLogEntry,
 } = require("../lib/push");
 
 // Realistic-looking FCM tokens: "<22 chars>:APA91b<rest>", ~150 characters
@@ -306,6 +307,60 @@ test("deadTokens picks only permanently dead tokens", () => {
   assert.deepEqual(deadTokens([A, B, C, D, E, F], responses), [B, C]);
   assert.deepEqual(deadTokens(null, responses), []);
   assert.deepEqual(deadTokens([A], "x"), []);
+});
+
+test("pushLogEntry counts successes, failures and error codes", () => {
+  const responses = [
+    { success: true, messageId: "projects/x/messages/1" },
+    { success: true },
+    { success: false, error: { code: "messaging/registration-token-not-registered", message: "Requested entity was not found." } },
+    { success: false, error: { code: "messaging/registration-token-not-registered" } },
+    { success: false, error: { code: "messaging/internal-error" } },
+  ];
+  assert.deepEqual(pushLogEntry({ kind: "meeting", tokenCount: 5, responses, pruned: 2, nowMs: 10500, sentAtMs: 10000 }), {
+    event: "push",
+    kind: "meeting",
+    tokens: 5,
+    success: 2,
+    failure: 3,
+    pruned: 2,
+    latencyMs: 500,
+    errors: { "messaging/registration-token-not-registered": 2, "messaging/internal-error": 1 },
+  });
+});
+
+test("pushLogEntry leaves out latencyMs when the message has no ts", () => {
+  const e = pushLogEntry({ kind: "message", tokenCount: 1, responses: [{ success: true }], pruned: 0, nowMs: 5, sentAtMs: null });
+  assert.equal("latencyMs" in e, false);
+  assert.deepEqual(Object.keys(e), ["event", "kind", "tokens", "success", "failure", "pruned", "errors"]);
+});
+
+test("pushLogEntry never carries ids, tokens, names or text", () => {
+  const token = "fAbc:APA91b" + "x".repeat(140);
+  const e = pushLogEntry({
+    kind: "message",
+    tokenCount: 1,
+    responses: [{ success: false, error: { code: `messaging/${token} Ama sent "hello"`, message: token } }, { success: false, error: { code: "__proto__" } }],
+    pruned: 0,
+    nowMs: 1,
+    sentAtMs: 2,
+  });
+  const json = JSON.stringify(e);
+  assert.ok(!json.includes("APA91b") && !json.includes("Ama") && !json.includes("hello"), json);
+  assert.equal(e.errors.unknown, 1, "a code that is not a plain code is counted as unknown");
+  assert.equal(e.latencyMs, 0, "a ts in the future gives 0, never a negative latency");
+  assert.equal(Object.getPrototypeOf(e.errors), Object.prototype);
+  assert.equal({}.polluted, undefined);
+});
+
+test("pushLogEntry handles missing or hostile input", () => {
+  assert.deepEqual(pushLogEntry(), { event: "push", kind: "message", tokens: 0, success: 0, failure: 0, pruned: 0, errors: {} });
+  const e = pushLogEntry({ kind: "<b>", tokenCount: -1, responses: [null, "x", {}], pruned: 1.5 });
+  assert.equal(e.kind, "message");
+  assert.equal(e.tokens, 0);
+  assert.equal(e.pruned, 0);
+  assert.equal(e.failure, 3);
+  assert.deepEqual(e.errors, { unknown: 3 });
 });
 
 test("callWindow allows `limit` calls per window, then refuses until it resets", () => {
