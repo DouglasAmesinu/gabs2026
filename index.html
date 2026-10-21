@@ -2069,6 +2069,17 @@ function updateMsgBadge(){
 // Every API is optional and nothing here may throw.
 const BASE_TITLE=document.title;
 let lastAppBadge=-1; // -1: not yet sent, so the next update always goes through
+// Back in the app: alerts already shown are stale, so close them, then resend the real unread count
+// (the service worker raised its own counter for each alert)
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState!=="visible"||!me)return;
+  try{
+    const reg="serviceWorker"in navigator?await navigator.serviceWorker.getRegistration():null;
+    if(reg&&typeof reg.getNotifications==="function")(await reg.getNotifications()).forEach(n=>n.close());
+  }catch(e){}
+  lastAppBadge=-1;
+  try{updateMsgBadge();}catch(e){}
+});
 function syncAppBadge(count){
   const n=clampBadge(count);
   const title=count>0?`(${count}) GABS Connect`:BASE_TITLE;
