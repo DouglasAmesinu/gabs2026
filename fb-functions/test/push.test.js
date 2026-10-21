@@ -13,6 +13,7 @@ const {
   deadTokens,
   callWindow,
   pushLogEntry,
+  pushStatusOf,
 } = require("../lib/push");
 
 // Realistic-looking FCM tokens: "<22 chars>:APA91b<rest>", ~150 characters
@@ -361,6 +362,31 @@ test("pushLogEntry handles missing or hostile input", () => {
   assert.equal(e.pruned, 0);
   assert.equal(e.failure, 3);
   assert.deepEqual(e.errors, { unknown: 3 });
+});
+
+test("pushStatusOf reports count, muted, platform and age, never a token", () => {
+  const H = 3600000;
+  const now = 100 * H;
+  const s = pushStatusOf({ tokens: [{ t: A, at: now - 3 * H }, { t: B, at: now - 30 * H }], muted: true, platform: "android", lastSent: { u1: [1] } }, now);
+  assert.deepEqual(s, { tokens: 2, muted: true, platform: "android", ageHours: 3 });
+  assert.ok(!JSON.stringify(s).includes("APA91b"));
+  assert.equal(pushStatusOf({ tokens: [{ t: A, at: now - 90 * 60000 }] }, now).ageHours, 1.5);
+});
+
+test("pushStatusOf for a missing document", () => {
+  for (const d of [null, undefined, {}, "x", 42]) {
+    assert.deepEqual(pushStatusOf(d, 1000), { tokens: 0, muted: false, platform: null, ageHours: null }, String(d));
+  }
+});
+
+test("pushStatusOf ignores malformed stored values", () => {
+  const now = 100 * 3600000;
+  const s = pushStatusOf({ tokens: [null, { t: "short" }, { t: A }, "x"], muted: "yes", platform: "<b>windows</b>" }, now);
+  assert.deepEqual(s, { tokens: 1, muted: false, platform: null, ageHours: null }, "a token without a time has no age");
+  const many = [A, B, C, D, E, F].map((t, i) => ({ t, at: now - i }));
+  assert.equal(pushStatusOf({ tokens: many }, now).tokens, 5, "at most 5");
+  assert.equal(pushStatusOf({ tokens: [{ t: A, at: now + 5000 }] }, now).ageHours, 0, "a future time counts as just now");
+  assert.equal(pushStatusOf({ tokens: [{ t: A, at: now }] }, NaN).ageHours, null);
 });
 
 test("callWindow allows `limit` calls per window, then refuses until it resets", () => {

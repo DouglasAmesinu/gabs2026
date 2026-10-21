@@ -30,6 +30,7 @@ const {
   deadTokens,
   callWindow,
   pushLogEntry,
+  pushStatusOf,
 } = require("./lib/push");
 const {
   validateBlockInput,
@@ -755,6 +756,17 @@ exports.sendTestPush = onCall(PUSH_OPTS, async (request) => {
   });
   logger.info("sendTestPush: done", { sent: result.sent, failed: result.failed, removed: result.removed });
   return { sent: result.sent };
+});
+
+/**
+ * Delegate callable: this participant's alert set-up, for the app's
+ * "Alerts status": {tokens (0-5), muted, platform, ageHours}. Never
+ * returns a token value.
+ */
+exports.pushStatus = onCall(PUSH_OPTS, async (request) => {
+  const uid = requireDelegate(request);
+  const snap = await db.collection("pushTokens").doc(uid).get();
+  return pushStatusOf(snap.exists ? snap.data() : null, Date.now());
 });
 
 /**

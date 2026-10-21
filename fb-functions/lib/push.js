@@ -260,6 +260,30 @@ function pushLogEntry({ kind, tokenCount, responses, pruned, nowMs, sentAtMs } =
   return entry;
 }
 
+const STATUS_PLATFORMS = ["android", "ios", "desktop"];
+
+/**
+ * What pushStatus returns for a stored pushTokens document (or none):
+ * how many valid tokens (0-5), muted, the platform, and the hours since
+ * the newest token was registered. Never any token value.
+ * @param {*} data the pushTokens document data, or null/undefined
+ * @param {number} nowMs
+ * @returns {{tokens:number, muted:boolean, platform:string|null, ageHours:number|null}}
+ */
+function pushStatusOf(data, nowMs) {
+  const d = data && typeof data === "object" ? data : {};
+  const list = cleanList(d.tokens).slice(0, 5);
+  const newest = list.reduce((m, e) => (e.at > m ? e.at : m), 0);
+  const ageHours =
+    list.length && newest > 0 && Number.isFinite(nowMs) ? Math.round((Math.max(0, nowMs - newest) / 3600000) * 10) / 10 : null;
+  return {
+    tokens: list.length,
+    muted: d.muted === true,
+    platform: STATUS_PLATFORMS.includes(d.platform) ? d.platform : null,
+    ageHours,
+  };
+}
+
 module.exports = {
   validToken,
   addToken,
@@ -271,6 +295,7 @@ module.exports = {
   deadTokens,
   callWindow,
   pushLogEntry,
+  pushStatusOf,
   LAST_SENT_MAX,
   DEAD_TOKEN_CODES,
 };
