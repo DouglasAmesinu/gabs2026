@@ -302,6 +302,9 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .push-switch .push-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
 .push-switch[aria-checked="true"] .push-knob{transform:translateX(18px)}
 .push-switch:disabled{opacity:.6}
+.push-status{margin-top:4px}
+.push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
+.push-status-row span:last-child{color:var(--muted);font-weight:600;text-align:right}
 .form-label{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:14px}
 .form-label:first-of-type{margin-top:0}
 .form-inp{width:100%;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;color:var(--text);background:#F9FAFB;transition:border-color .2s}
@@ -1145,6 +1148,7 @@ function showEditProfile(){
     <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
     <div id="ep-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">${(me.bio||"").length} / 200</div>
     ${pushSectionHTML()}
+    ${pushStatusHTML()}
     <div id="ep-feedback"></div>
     <div class="btn-row" style="margin-top:18px">
       <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
@@ -1153,6 +1157,7 @@ function showEditProfile(){
     <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
   </div>`;
   document.body.appendChild(ov);
+  loadPushStatus();
 
   if(window._fb&&me.id){
     const fbs=window._fb;
@@ -1829,6 +1834,7 @@ const PUSH_TOKEN_AT_KEY="gabs_push_tok_at"; // when it was last registered (ms)
 const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the switch was turned off
 const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
 const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
+const PUSH_LAST_TEST_KEY="gabs_push_last_test"; // the result of the last "Send me a test alert"
 const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REREGISTER_MS=3*24*60*60*1000;
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
@@ -1947,6 +1953,78 @@ function syncPushSwitch(){
   document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(pushIsOn())));
 }
 const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
+// Why alerts cannot work, in plain words, by the step that fails
+const PUSH_REASON={
+  notInstalled:"Not installed on iPhone: add GABS Connect to your Home Screen and open it from the icon. Tap \"How to get message alerts on iPhone\" above.",
+  unsupported:"Unsupported browser: this browser cannot show message alerts. Try Chrome, Edge, Firefox or Safari.",
+  denied:()=>isIOSDevice
+    ?"Permission denied: allow alerts in Settings, Notifications, GABS Connect."
+    :"Permission denied: tap the lock icon in the address bar, then Notifications, then Allow.",
+  notAsked:"Alerts are not turned on yet: tap Fix alerts and allow notifications.",
+  token:"Token failed: this browser could not create an address for alerts. Please try again, or close and reopen the app.",
+  notRegistered:"Server refused: this device is not registered. Tap Fix alerts.",
+  signedOut:"Server refused: please sign in again."
+};
+function pushServerReason(e){
+  const code=String((e&&e.code)||"");
+  if(code.endsWith("resource-exhausted"))return"Server refused: too many attempts. Please try again in an hour.";
+  if(code.endsWith("unauthenticated"))return PUSH_REASON.signedOut;
+  return"Server refused: the alert service could not be reached. Please try again later.";
+}
+// Permission (asked only from a tap), token, registration, unmute. "" when all worked, otherwise the reason.
+async function runPushSetup(){
+  const mode=pushMode();
+  if(mode==="guide")return PUSH_REASON.notInstalled;
+  if(mode==="none")return PUSH_REASON.unsupported;
+  if(!window._fn||!me)return PUSH_REASON.signedOut;
+  let perm=Notification.permission;
+  if(perm!=="granted"){try{perm=await Notification.requestPermission();}catch(e){perm="denied";}}
+  if(perm!=="granted")return PUSH_REASON.denied();
+  let token=null;
+  try{token=await window._push.getToken();}catch(e){}
+  if(!token)return PUSH_REASON.token;
+  try{
+    await callFn("registerPushToken",{token,platform:pushPlatform()});
+    await callFn("setPushMuted",{muted:false});
+  }catch(e){return pushServerReason(e);}
+  lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
+  return"";
+}
+// Edit Profile "Alerts status": always shown, whatever the device supports
+let pushRegText="checking…";
+function pushStatusRowsHTML(){
+  const perm=pushMode()!=="push"||!("Notification"in window)?"unsupported"
+    :Notification.permission==="granted"?"granted":Notification.permission==="denied"?"denied":"not asked";
+  const rows=[
+    ["Permission",perm],
+    ["App installed",isStandalone()?"yes":"no"],
+    ["This device registered",pushRegText],
+    ["Icon number supported","setAppBadge"in navigator?"yes":"no"],
+    ["Last test",lsGet(PUSH_LAST_TEST_KEY)||"none yet"]
+  ];
+  return rows.map(([k,v])=>`<div class="push-status-row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+}
+function pushStatusHTML(){
+  return`<div class="form-label">Alerts status</div>
+    <div class="push-status" id="push-status">${pushStatusRowsHTML()}</div>
+    <button type="button" class="btn-outline btn-sm" data-push="fix" style="margin-top:10px">Fix alerts</button>
+    <div class="push-help" id="push-fix-help" role="status"></div>`;
+}
+function renderPushStatus(){
+  const box=document.getElementById("push-status");
+  if(box)box.innerHTML=pushStatusRowsHTML();
+}
+// "This device registered": the server has tokens for this participant and this device has one stored
+async function loadPushStatus(){
+  if(pushMode()!=="push"||!window._fn||!me){pushRegText="no";renderPushStatus();return;}
+  pushRegText="checking…";renderPushStatus();
+  try{
+    const res=await callFn("pushStatus",{});
+    const d=(res&&res.data)||{};
+    pushRegText=d.tokens>0&&lsGet(PUSH_TOKEN_KEY)?"yes":"no";
+  }catch(e){pushRegText="unknown";}
+  renderPushStatus();
+}
 // "Turn on" and switch On: permission (from this tap), token, register, unmute
 async function enablePush(helpId){
   if(pushMode()!=="push"||!window._fn||!me)return false;
@@ -1982,7 +2060,14 @@ async function handlePushAction(btn){
   if(pushBusy||!me)return;
   pushBusy=true;btn.disabled=true;
   try{
-    if(act==="on"){
+    if(act==="fix"){
+      setPushHelp("push-fix-help","Checking…");
+      lsSet(PUSH_ASKED_KEY,"done");
+      const problem=await runPushSetup();
+      setPushHelp("push-fix-help",problem||"All set: this device is registered for message alerts. You can send a test alert.");
+      syncPushSwitch();refreshPushCard();
+      await loadPushStatus();
+    }else if(act==="on"){
       lsSet(PUSH_ASKED_KEY,"done");
       if(await enablePush("push-card-help"))refreshPushCard();
     }else if(act==="toggle"){
@@ -2037,7 +2122,7 @@ async function pushSignOut(){
     // Never hold up sign-out for long on a bad connection
     await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
   }
-  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY].forEach(lsDel);
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
 }
 function stopAnnouncementListener(){
   annStarted=false;
