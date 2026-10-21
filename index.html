@@ -2851,16 +2851,19 @@ function showAdminPanel(){
         <div id="at-pending" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="pending"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Pending ${pendingCount>0?`<span style="background:#DC2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px">${pendingCount}</span>`:""}
         </div>
         <div id="at-parts" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="participants"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Participants</div>
+        <div id="at-ann" style="flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;${adminTab==="announcements"?"background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(0,0,0,.08)":"color:var(--muted)"}">Announcements</div>
       </div>
       <div id="admin-body"></div>
     </div>`;
     document.getElementById("a-cl").onclick=()=>ov.remove();
     document.getElementById("at-pending").onclick=()=>{adminTab="pending";renderAdminBody();};
     document.getElementById("at-parts").onclick=()=>{adminTab="participants";renderAdminBody();};
+    document.getElementById("at-ann").onclick=()=>{adminTab="announcements";renderAdminBody();};
     renderAdminBody();
   }
   function renderAdminBody(){
     const body=document.getElementById("admin-body");if(!body)return;
+    if(adminTab==="announcements"){renderAnnBody(body);return;}
     if(adminLoadError){
       body.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:16px;color:var(--red);font-size:13px;font-weight:600;line-height:1.5">⚠️ Couldn't load participant data: ${esc(adminLoadError.code||adminLoadError.message||"unknown error")}</div>`;
       return;
@@ -2892,6 +2895,115 @@ function showAdminPanel(){
       if(btn.dataset.act==="apr")btn.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.updateDoc(window._fb.doc(window._fb.db,"participants",p.id),{status:"approved"});await reloadAndRerender();});
       else btn.addEventListener("click",async()=>{if(!window._fb)return;await window._fb.deleteDoc(window._fb.doc(window._fb.db,"participants",p.id));await reloadAndRerender();});
     });
+  }
+  // Admin panel body: one delegated click listener (Block on Participants, Delete on Announcements)
+  async function adminBodyClick(e){
+    const del=e.target.closest&&e.target.closest("[data-ann-del]");
+    if(del){
+      const id=safeId(del.dataset.annDel);
+      if(!id)return;
+      if(!confirm("Delete this announcement for every participant?"))return;
+      const out=document.getElementById("an-fb");
+      if(!window._fn){if(out)out.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+      del.disabled=true;del.textContent="Deleting…";
+      try{
+        await window._fn.httpsCallable("adminDeleteAnnouncement")({id});
+        if(out)out.innerHTML=`<div class="ok-msg">✓ Announcement deleted.</div>`;
+      }catch(err){
+        if(out)out.innerHTML=`<div class="err-msg">Delete failed: ${esc(err.code||"unknown error")}</div>`;
+      }
+      await loadAdminAnnouncements();
+      return;
+    }
+    const btn=e.target.closest&&e.target.closest("[data-block-uid]");
+    if(!btn)return;
+    const uid=safeId(btn.dataset.blockUid);
+    if(!uid)return;
+    if(!confirm("Block this delegate? This signs them out, deletes their profile, photo and conversations, and disables their ticket until you unblock it."))return;
+    if(!window._fn){const fb2=document.getElementById("a-fb");if(fb2)fb2.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+    btn.disabled=true;btn.textContent="Blocking…";
+    let msg;
+    try{
+      const res=await window._fn.httpsCallable("adminBlockDelegate")({uid});
+      const r=res.data||{};
+      msg=`<div class="ok-msg">✓ Blocked: ${esc(r.ticketsBlocked)} ticket(s) disabled, ${esc(r.profileDeleted)} profile deleted, ${esc(r.messagesDeleted)} messages deleted, ${esc(r.authDeleted)} sign-in account deleted</div>`;
+    }catch(err){
+      msg=`<div class="err-msg">Block failed: ${esc(err.code||"unknown error")}</div>`;
+    }
+    await reloadAndRerender();
+    const fb3=document.getElementById("a-fb");if(fb3)fb3.innerHTML=msg;
+  }
+  // Announcements tab: post form, then the posted list (newest first, max 50)
+  const ANN_EXPIRY_OPTIONS=[[0,"Never"],[60,"1 hour"],[180,"3 hours"],[1440,"24 hours"]];
+  function renderAnnBody(body){
+    body.innerHTML=`<div style="display:flex;flex-direction:column">
+      <div class="form-label">Title *</div>
+      <input class="form-inp" id="an-title" maxlength="60" placeholder="e.g. Lunch moved to 13:00" autocomplete="off"/>
+      <div class="form-label">Message</div>
+      <textarea class="form-inp" id="an-body" rows="4" maxlength="300" style="resize:none;line-height:1.5"></textarea>
+      <div id="an-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">0 / 300</div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);margin-top:8px;cursor:pointer"><input type="checkbox" id="an-pin"/>Pin to the top</label>
+      <div class="form-label">Expires</div>
+      <select class="form-inp" id="an-exp">${ANN_EXPIRY_OPTIONS.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join("")}</select>
+      <button class="btn-navy" id="an-post" style="color:#fff;margin-top:14px">📢 Post announcement</button>
+      <div id="an-fb"></div>
+      <div class="form-label" style="margin-top:18px">Posted announcements</div>
+      <div id="an-list"><div style="color:var(--muted);font-size:13px;padding:10px 0">Loading…</div></div>
+    </div>`;
+    body.onclick=adminBodyClick;
+    const ta=document.getElementById("an-body"),cnt=document.getElementById("an-count");
+    ta.oninput=()=>{cnt.textContent=`${ta.value.length} / 300`;};
+    document.getElementById("an-post").onclick=async()=>{
+      const out=document.getElementById("an-fb");
+      const title=(document.getElementById("an-title").value||"").trim();
+      if(!title){out.innerHTML=`<div class="err-msg">Enter a title.</div>`;return;}
+      if(!window._fn){out.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
+      if(!confirm("Send this to every participant?"))return;
+      const btn=document.getElementById("an-post");
+      btn.disabled=true;
+      out.innerHTML=`<div class="ok-msg">⏳ Posting…</div>`;
+      try{
+        await window._fn.httpsCallable("adminPostAnnouncement")({
+          title,
+          body:ta.value||"",
+          pinned:document.getElementById("an-pin").checked,
+          expiresInMinutes:Number(document.getElementById("an-exp").value)||0,
+        });
+        out.innerHTML=`<div class="ok-msg">✓ Announcement posted.</div>`;
+        document.getElementById("an-title").value="";ta.value="";cnt.textContent="0 / 300";
+        document.getElementById("an-pin").checked=false;document.getElementById("an-exp").value="0";
+      }catch(err){
+        out.innerHTML=`<div class="err-msg">Post failed: ${esc(err.code||"unknown error")}</div>`;
+      }
+      btn.disabled=false;
+      await loadAdminAnnouncements();
+    };
+    loadAdminAnnouncements();
+  }
+  async function loadAdminAnnouncements(){
+    if(!document.getElementById("an-list"))return;
+    let html;
+    try{
+      const fbs=window._fb;
+      const snap=await fbs.getDocs(fbs.query(fbs.collection(fbs.db,"announcements"),fbs.orderBy("createdAt","desc"),fbs.limit(50)));
+      const now=Date.now();
+      html=snap.empty?`<div style="color:var(--muted);font-size:13px;padding:10px 0">No announcements yet.</div>`:snap.docs.map(d=>{
+        const a=normAnnouncement(d.id,d.data());
+        const exp=a.expiresMs===null?"":a.expiresMs>now?` · expires ${fmtAnnTime(a.expiresMs)}`:" · expired";
+        return`<div class="ann-item" style="display:flex;gap:10px;align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <div class="ann-title">${a.pinned?"📌 ":""}${esc(a.title)}</div>
+            ${a.body?`<div class="ann-body">${esc(a.body)}</div>`:""}
+            <div class="ann-meta"><span>${esc(fmtAnnTime(a.createdMs)+exp)}</span></div>
+          </div>
+          ${a.id?`<button class="btn-outline btn-sm" data-ann-del="${esc(a.id)}" style="color:var(--red);border-color:#FECACA;flex-shrink:0">Delete</button>`:""}
+        </div>`;
+      }).join("");
+    }catch(e){
+      html=`<div class="err-msg">Couldn't load announcements: ${esc(e.code||"unknown error")}</div>`;
+    }
+    const wrap=document.getElementById("an-list");
+    if(wrap)wrap.innerHTML=html;
   }
   function renderPartsBody(body){
     body.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px">
@@ -3020,26 +3132,7 @@ function showAdminPanel(){
     }
     document.getElementById("a-rst").onclick=()=>runReset(false);
     document.getElementById("a-rst-unlink").onclick=()=>runReset(true);
-    // Block buttons: one delegated listener on the panel body
-    body.onclick=async e=>{
-      const btn=e.target.closest&&e.target.closest("[data-block-uid]");
-      if(!btn)return;
-      const uid=safeId(btn.dataset.blockUid);
-      if(!uid)return;
-      if(!confirm("Block this delegate? This signs them out, deletes their profile, photo and conversations, and disables their ticket until you unblock it."))return;
-      if(!window._fn){const fb2=document.getElementById("a-fb");if(fb2)fb2.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
-      btn.disabled=true;btn.textContent="Blocking…";
-      let msg;
-      try{
-        const res=await window._fn.httpsCallable("adminBlockDelegate")({uid});
-        const r=res.data||{};
-        msg=`<div class="ok-msg">✓ Blocked: ${esc(r.ticketsBlocked)} ticket(s) disabled, ${esc(r.profileDeleted)} profile deleted, ${esc(r.messagesDeleted)} messages deleted, ${esc(r.authDeleted)} sign-in account deleted</div>`;
-      }catch(err){
-        msg=`<div class="err-msg">Block failed: ${esc(err.code||"unknown error")}</div>`;
-      }
-      await reloadAndRerender();
-      const fb3=document.getElementById("a-fb");if(fb3)fb3.innerHTML=msg;
-    };
+    body.onclick=adminBodyClick;
     document.getElementById("a-unblock").onclick=async()=>{
       const inp=document.getElementById("a-unblock-ref");
       const out=document.getElementById("a-unblock-fb");
