@@ -17,6 +17,7 @@ const { validateResetInput, chunk, RESET_COLLECTIONS } = require("./lib/reset");
 const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, dayKeyFor } = require("./lib/match");
 const { requireAdmin } = require("./lib/adminAuth");
 const { pickProfile } = require("./lib/profile");
+const { validateAnnouncement, validateAnnouncementId } = require("./lib/announce");
 const {
   validateBlockInput,
   validateUnblockInput,
@@ -46,6 +47,8 @@ const SIGNIN_MIN_INSTANCES = defineInt("SIGNIN_MIN_INSTANCES", { default: 0 });
 const AI_GLOBAL_DAILY_LIMIT = 1500;
 
 const MAX_REFS_PER_CALL = 2000;
+// adminPostAnnouncement refuses new posts once this many announcement documents exist
+const MAX_ANNOUNCEMENTS = 100;
 const BATCH_SIZE = 400;
 
 /**
@@ -318,6 +321,54 @@ exports.adminUnblockTicket = onCall({ region: REGION, maxInstances: 2 }, async (
     claimedAt: FieldValue.delete(),
   });
   logger.info("adminUnblockTicket: done");
+  return { ok: true };
+});
+
+/**
+ * Admin-only callable: post an announcement to every participant.
+ * Input {title, body, pinned, expiresInMinutes} (see lib/announce).
+ * Refused once MAX_ANNOUNCEMENTS documents exist. expiresAt is a
+ * Timestamp, or null when the announcement never expires. Never logs
+ * the announcement text.
+ */
+exports.adminPostAnnouncement = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
+  requireAdmin(request, ADMIN_UID.value());
+  const input = validateAnnouncement(request.data);
+  if (!input) {
+    throw new HttpsError("invalid-argument", "Invalid announcement.");
+  }
+  const coll = db.collection("announcements");
+  const existing = (await coll.count().get()).data().count;
+  if (existing >= MAX_ANNOUNCEMENTS) {
+    throw new HttpsError("resource-exhausted", "Too many announcements. Delete some first.");
+  }
+  const { Timestamp, FieldValue } = admin.firestore;
+  const expiresAt = input.expiresInMinutes > 0
+    ? Timestamp.fromMillis(Date.now() + input.expiresInMinutes * 60 * 1000)
+    : null;
+  const ref = await coll.add({
+    title: input.title,
+    body: input.body,
+    pinned: input.pinned,
+    createdAt: FieldValue.serverTimestamp(),
+    expiresAt,
+  });
+  logger.info("adminPostAnnouncement: done", { pinned: input.pinned, expiresInMinutes: input.expiresInMinutes });
+  return { id: ref.id };
+});
+
+/**
+ * Admin-only callable: delete one announcement. Input {id}: 1-40
+ * letters or digits.
+ */
+exports.adminDeleteAnnouncement = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
+  requireAdmin(request, ADMIN_UID.value());
+  const id = validateAnnouncementId(request.data);
+  if (!id) {
+    throw new HttpsError("invalid-argument", "Invalid announcement id.");
+  }
+  await db.collection("announcements").doc(id).delete();
+  logger.info("adminDeleteAnnouncement: done");
   return { ok: true };
 });
 
