@@ -2062,6 +2062,24 @@ function updateMsgBadge(){
     if(!b){b=document.createElement("div");b.className="nav-badge";nav.appendChild(b);}
     if(b.textContent!==String(count))b.textContent=count;
   });
+  syncAppBadge(count);
+}
+
+// Unread conversations outside the tab bar: page title, app icon badge and the service worker's counter.
+// Every API is optional and nothing here may throw.
+const BASE_TITLE=document.title;
+let lastAppBadge=-1; // -1: not yet sent, so the next update always goes through
+function syncAppBadge(count){
+  const n=clampBadge(count);
+  const title=count>0?`(${count}) GABS Connect`:BASE_TITLE;
+  if(document.title!==title)document.title=title;
+  if(n===lastAppBadge)return;
+  lastAppBadge=n;
+  try{
+    if(n>0){if("setAppBadge"in navigator)navigator.setAppBadge(n).catch(()=>{});}
+    else if("clearAppBadge"in navigator)navigator.clearAppBadge().catch(()=>{});
+  }catch(e){}
+  try{navigator.serviceWorker?.controller?.postMessage({type:"badge-set",n});}catch(e){}
 }
 
 // ── Thread ─────────────────────────────────────────────────────────────────
