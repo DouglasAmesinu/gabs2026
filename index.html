@@ -1869,7 +1869,7 @@ function pushCardHTML(){
   </div>`;
   return`<div class="push-card" role="region" aria-label="Message alerts">
     <div class="push-card-title">🔔 Turn on message alerts?</div>
-    <div class="push-card-text">We will notify you when someone writes to you. Alerts show only the sender's name.</div>
+    <div class="push-card-text">We'll let you know when someone writes to you.</div>
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
     ${installButtonHTML()}
     <div class="push-help" id="push-card-help" role="status"></div>
@@ -1938,8 +1938,7 @@ function pushSectionHTML(){
   const mode=pushMode();
   if(mode==="none")return"";
   if(mode==="guide")return`<div class="form-label">Message alerts</div>
-    <div class="push-note">On iPhone and iPad, message alerts only work from the Home Screen icon.</div>
-    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:10px">How to get message alerts on iPhone</button>`;
+    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get message alerts on iPhone</button>`;
   const on=pushIsOn();
   return`<div class="form-label">Message alerts</div>
     <div class="push-row"><span id="push-switch-label">Alerts for new messages</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
@@ -1956,13 +1955,11 @@ const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
 // Why alerts cannot work, in plain words, by the step that fails
 const PUSH_REASON={
   notInstalled:"Not installed on iPhone: add GABS Connect to your Home Screen and open it from the icon. Tap \"How to get message alerts on iPhone\" above.",
-  unsupported:"Unsupported browser: this browser cannot show message alerts. Try Chrome, Edge, Firefox or Safari.",
+  unsupported:"Unsupported browser: this browser cannot show message alerts.",
   denied:()=>isIOSDevice
-    ?"Permission denied: allow alerts in Settings, Notifications, GABS Connect."
+    ?"Permission denied: alerts are blocked for GABS Connect."
     :"Permission denied: tap the lock icon in the address bar, then Notifications, then Allow.",
-  notAsked:"Alerts are not turned on yet: tap Fix alerts and allow notifications.",
   token:"Token failed: this browser could not create an address for alerts. Please try again, or close and reopen the app.",
-  notRegistered:"Server refused: this device is not registered. Tap Fix alerts.",
   signedOut:"Server refused: please sign in again."
 };
 function pushServerReason(e){
@@ -2004,7 +2001,10 @@ function pushStatusRowsHTML(){
   ];
   return rows.map(([k,v])=>`<div class="push-status-row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
 }
+// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts
+const pushDebug=()=>lsGet("gabs_debug")==="1";
 function pushStatusHTML(){
+  if(!pushDebug())return"";
   return`<div class="form-label">Alerts status</div>
     <div class="push-status" id="push-status">${pushStatusRowsHTML()}</div>
     <button type="button" class="btn-outline btn-sm" data-push="fix" style="margin-top:10px">Fix alerts</button>
@@ -2016,6 +2016,7 @@ function renderPushStatus(){
 }
 // "This device registered": the server has tokens for this participant and this device has one stored
 async function loadPushStatus(){
+  if(!pushDebug())return;
   if(pushMode()!=="push"||!window._fn||!me){pushRegText="no";renderPushStatus();return;}
   pushRegText="checking…";renderPushStatus();
   try{
@@ -2035,16 +2036,7 @@ async function enablePush(helpId){
   showToast("Message alerts are on.");
   return true;
 }
-// Why no device is registered right now, in plain words (for a test alert that reached no device)
-function pushBlocker(){
-  const mode=pushMode();
-  if(mode==="guide")return PUSH_REASON.notInstalled;
-  if(mode==="none")return PUSH_REASON.unsupported;
-  if(Notification.permission==="denied")return PUSH_REASON.denied();
-  if(Notification.permission!=="granted")return PUSH_REASON.notAsked;
-  if(!lsGet(PUSH_TOKEN_KEY))return PUSH_REASON.token;
-  return PUSH_REASON.notRegistered;
-}
+const PUSH_TEST_FAILED="We couldn't reach this phone. Your messages are still safe in the app.";
 const pushTestStamp=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
 let pushBusy=false;
 async function handlePushAction(btn){
@@ -2086,12 +2078,11 @@ async function handlePushAction(btn){
           setPushHelp("push-ep-help","Sent. It can take a few seconds.");
           last="sent";
         }else{
-          setPushHelp("push-ep-help","No device registered. "+pushBlocker());
+          setPushHelp("push-ep-help",PUSH_TEST_FAILED);
           last="no device registered";
         }
       }catch(e){
-        const code=String((e&&e.code)||"");
-        setPushHelp("push-ep-help",code.endsWith("resource-exhausted")?"Too many test alerts. Please try again later.":pushServerReason(e));
+        setPushHelp("push-ep-help",PUSH_TEST_FAILED);
         last="failed";
       }
       lsSet(PUSH_LAST_TEST_KEY,`${last} (${pushTestStamp()})`);
