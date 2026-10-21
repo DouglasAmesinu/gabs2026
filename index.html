@@ -507,6 +507,12 @@ function clip(s,max){
   const cps=Array.from(str);
   return cps.length<=n?str:cps.slice(0,n).join("");
 }
+
+// A sign-in link's hash (#t=<reference>): the reference uppercased, or "" for anything else
+function parseTicketHash(hash){
+  const m=/^#t=(GABS[A-Za-z0-9-]{6,60})$/i.exec(typeof hash==="string"?hash:"");
+  return m?m[1].toUpperCase():"";
+}
 // END safe-helpers
 
 

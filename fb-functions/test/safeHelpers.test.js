@@ -15,10 +15,10 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -149,4 +149,45 @@ test("clip handles null, undefined, non-strings and odd limits", () => {
   assert.equal(clip("abcdef", 2.7), "ab");
   assert.equal(clip("abc", undefined), "abc", "no limit given keeps the whole string");
   assert.equal(clip(SCRIPT_BREAK, 9), "</script>", "clip does not escape; esc still has to run");
+});
+
+test("parseTicketHash returns a valid reference from a sign-in link, uppercased", () => {
+  assert.equal(parseTicketHash("#t=GABS2026-T-ABC123"), "GABS2026-T-ABC123");
+  assert.equal(parseTicketHash("#t=GABS-2026-TEST-001"), "GABS-2026-TEST-001");
+  assert.equal(parseTicketHash("#t=gabs2026-t-abc123"), "GABS2026-T-ABC123", "lowercase is uppercased");
+  assert.equal(parseTicketHash("#T=Gabs2026-t-Abc123"), "GABS2026-T-ABC123", "the match is case-insensitive");
+});
+
+test("parseTicketHash returns an empty string for anything that is not a sign-in link", () => {
+  for (const h of [
+    "#admin",
+    "#t=",
+    "#t=<script>",
+    "#t=GABS<script>alert(1)</script>",
+    "#t=GABS2026-T-<img src=x onerror=alert(1)>",
+    "#t=GABS2026 T ABC123",
+    "#t= GABS2026-T-ABC123",
+    "#t=GABS2026-T-ABC123 ",
+    "#t=GABS2026-T-ABC123%20",
+    "#t=GABS12",               // too short: fewer than 6 characters after GABS
+    "#t=XYZ2026-T-ABC123",     // not a GABS reference
+    "t=GABS2026-T-ABC123",     // no leading #
+    "#x=GABS2026-T-ABC123",
+    "#t=GABS2026-T-ABC123&t=GABS2026-T-OTHER1",
+    "",
+  ]) {
+    assert.equal(parseTicketHash(h), "", JSON.stringify(h));
+  }
+});
+
+test("parseTicketHash refuses a very long value", () => {
+  assert.equal(parseTicketHash("#t=GABS" + "A".repeat(60)), "GABS" + "A".repeat(60), "60 characters after GABS is the limit");
+  assert.equal(parseTicketHash("#t=GABS" + "A".repeat(61)), "");
+  assert.equal(parseTicketHash("#t=GABS" + "A".repeat(10000)), "");
+});
+
+test("parseTicketHash handles a missing hash and non-strings", () => {
+  for (const h of [undefined, null, 0, 123, {}, [], ["#t=GABS2026-T-ABC123"]]) {
+    assert.equal(parseTicketHash(h), "", String(h));
+  }
 });
