@@ -525,6 +525,12 @@ function parseTicketHash(hash){
   const m=/^#t=(GABS[A-Za-z0-9-]{6,60})$/i.exec(typeof hash==="string"?hash:"");
   return m?m[1].toUpperCase():"";
 }
+
+// An alert's chat link (#chat=<participant id>): the id, or "" for anything else
+function parseChatHash(hash){
+  const m=/^#chat=([A-Za-z0-9_-]{1,64})$/.exec(typeof hash==="string"?hash:"");
+  return m?m[1]:"";
+}
 // END safe-helpers
 
 
@@ -860,6 +866,20 @@ function generateICSLocal(meeting,fromName,toName){
 function downloadMeetingICS(id){
   const m=myMeetings.find(x=>x.id===id);
   if(m&&m.meeting)generateICS(m.meeting,me.name,m.otherParticipant.name);
+}
+// Open a chat from an alert (#chat= link or the service worker's open-chat message), like an inbox row,
+// once the participants list has arrived (waiting up to 10 seconds)
+function openChatWhenReady(id){
+  if(!id)return;
+  const t0=Date.now();
+  const tick=()=>{
+    if(!me)return;
+    const p=participants.find(x=>x.id===id);
+    if(p){openThread(p);return;}
+    if(!participantsLoaded&&Date.now()-t0<10000){setTimeout(tick,250);return;}
+    showToast("Profile not available.");
+  };
+  tick();
 }
 function showToast(msg){
   document.querySelector(".toast")?.remove();
@@ -3185,6 +3205,7 @@ async function boot(){
     showAdmin();return;
   }
   // Sign-in link (#t=<reference>): read it once and clear it from the address bar right away
+  const chatLinkId=parseChatHash(window.location.hash); // #chat=<id> from an alert; cleared with the line below
   const linkRef=parseTicketHash(window.location.hash);
   history.replaceState(null,"",location.pathname+location.search);
   const linkIgnored=()=>{if(linkRef)showToast("You're already signed in. Sign out first to use a different link.");};
@@ -3214,7 +3235,7 @@ async function boot(){
     if(!snap.empty){
       me=normParticipant({id:delegateUid,...snap.docs[0].data()});
       localStorage.setItem("gabs_me",JSON.stringify(me));
-      renderApp();startMessageListeners();linkIgnored();return;
+      renderApp();startMessageListeners();linkIgnored();openChatWhenReady(chatLinkId);return;
     }
   }
   me=null;localStorage.removeItem("gabs_me");
@@ -3235,6 +3256,14 @@ else{
 
 const qs=document.createElement("script");qs.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";document.head.appendChild(qs);
 if("serviceWorker"in navigator){
+  // Tapping an alert while the app is open: the service worker posts the alert's url
+  navigator.serviceWorker.addEventListener("message",e=>{
+    const d=e.data;
+    if(!d||d.type!=="open-chat"||typeof d.url!=="string")return;
+    let hash="";try{hash=new URL(d.url,location.origin).hash;}catch(err){}
+    const id=parseChatHash(hash);
+    if(id&&me)openChatWhenReady(id);
+  });
   navigator.serviceWorker.register("sw.js").then(reg=>{
     document.addEventListener("visibilitychange",()=>{if(!document.hidden)reg.update().catch(()=>{});});
   }).catch(()=>{});

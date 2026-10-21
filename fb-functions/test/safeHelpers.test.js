@@ -15,10 +15,10 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -189,5 +189,40 @@ test("parseTicketHash refuses a very long value", () => {
 test("parseTicketHash handles a missing hash and non-strings", () => {
   for (const h of [undefined, null, 0, 123, {}, [], ["#t=GABS2026-T-ABC123"]]) {
     assert.equal(parseTicketHash(h), "", String(h));
+  }
+});
+
+test("parseChatHash returns the participant id from an alert link", () => {
+  assert.equal(parseChatHash("#chat=abc123"), "abc123");
+  assert.equal(parseChatHash("#chat=csv_0"), "csv_0");
+  assert.equal(parseChatHash("#chat=Ab-9_x"), "Ab-9_x", "case is kept: ids are case-sensitive");
+  assert.equal(parseChatHash("#chat=" + "a".repeat(64)), "a".repeat(64));
+});
+
+test("parseChatHash returns an empty string for anything else", () => {
+  for (const h of [
+    "#admin",
+    "#t=GABS2026-T-ABC123",
+    "#chat=",
+    "#chat=<script>",
+    "#chat=abc<script>alert(1)</script>",
+    "#chat=a/b",
+    "#chat=../x",
+    "#chat=a b",
+    "#chat=abc%20",
+    "#chat=abc&x=1",
+    "#CHAT=abc",
+    "chat=abc",
+    "#chat=" + "a".repeat(65),
+    "#chat=" + "a".repeat(10000),
+    "",
+  ]) {
+    assert.equal(parseChatHash(h), "", JSON.stringify(h.slice(0, 80)));
+  }
+});
+
+test("parseChatHash handles a missing hash and non-strings", () => {
+  for (const h of [undefined, null, 0, 123, {}, [], ["#chat=abc"]]) {
+    assert.equal(parseChatHash(h), "", String(h));
   }
 });
