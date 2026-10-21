@@ -1243,6 +1243,7 @@ function showEditProfile(){
   document.getElementById("ep-logout").onclick=async()=>{
     ov.remove();
     await pushSignOut();
+    resetAppBadge();
     stopMessageListeners();
     if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
     me=null;localStorage.removeItem("gabs_me");
@@ -2091,6 +2092,11 @@ function syncAppBadge(count){
     else if("clearAppBadge"in navigator)navigator.clearAppBadge().catch(()=>{});
   }catch(e){}
   try{navigator.serviceWorker?.controller?.postMessage({type:"badge-set",n});}catch(e){}
+}
+// Sign-out: no badge, the original title, and the service worker's counter back to 0
+function resetAppBadge(){
+  lastAppBadge=-1;
+  syncAppBadge(0);
 }
 
 // ── Thread ─────────────────────────────────────────────────────────────────
