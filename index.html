@@ -2026,29 +2026,26 @@ async function loadPushStatus(){
   renderPushStatus();
 }
 // "Turn on" and switch On: permission (from this tap), token, register, unmute
+// When setup fails, the help line says which step failed (runPushSetup's reason)
 async function enablePush(helpId){
-  if(pushMode()!=="push"||!window._fn||!me)return false;
-  let perm=Notification.permission;
-  if(perm!=="granted"){try{perm=await Notification.requestPermission();}catch(e){perm="denied";}}
-  if(perm!=="granted"){
-    setPushHelp(helpId,isIOSDevice?"To allow alerts: Settings, Notifications, GABS Connect.":"To allow alerts: tap the lock icon in the address bar, then Notifications, then Allow.");
-    return false;
-  }
-  try{
-    const token=await window._push.getToken();
-    if(!token)throw new Error("no token");
-    await callFn("registerPushToken",{token,platform:pushPlatform()});
-    await callFn("setPushMuted",{muted:false});
-    lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
-    setPushHelp(helpId,"");
-    showToast("Message alerts are on.");
-    return true;
-  }catch(e){
-    console.warn("push enable failed:",e&&e.code);
-    setPushHelp(helpId,"Couldn't turn on alerts. Please try again.");
-    return false;
-  }
+  const problem=await runPushSetup();
+  if(document.getElementById("push-status"))loadPushStatus();
+  if(problem){setPushHelp(helpId,problem);return false;}
+  setPushHelp(helpId,"");
+  showToast("Message alerts are on.");
+  return true;
 }
+// Why no device is registered right now, in plain words (for a test alert that reached no device)
+function pushBlocker(){
+  const mode=pushMode();
+  if(mode==="guide")return PUSH_REASON.notInstalled;
+  if(mode==="none")return PUSH_REASON.unsupported;
+  if(Notification.permission==="denied")return PUSH_REASON.denied();
+  if(Notification.permission!=="granted")return PUSH_REASON.notAsked;
+  if(!lsGet(PUSH_TOKEN_KEY))return PUSH_REASON.token;
+  return PUSH_REASON.notRegistered;
+}
+const pushTestStamp=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
 let pushBusy=false;
 async function handlePushAction(btn){
   const act=btn.dataset.push;
@@ -2082,13 +2079,23 @@ async function handlePushAction(btn){
       syncPushSwitch();
     }else if(act==="test"){
       setPushHelp("push-ep-help","Sending…");
+      let last;
       try{
         const res=await callFn("sendTestPush",{});
-        setPushHelp("push-ep-help",res&&res.data&&res.data.sent>0?"Sent. It can take a few seconds.":"No device registered. Turn on alerts first.");
+        if(res&&res.data&&res.data.sent>0){
+          setPushHelp("push-ep-help","Sent. It can take a few seconds.");
+          last="sent";
+        }else{
+          setPushHelp("push-ep-help","No device registered. "+pushBlocker());
+          last="no device registered";
+        }
       }catch(e){
         const code=String((e&&e.code)||"");
-        setPushHelp("push-ep-help",code.endsWith("resource-exhausted")?"Too many test alerts. Please try again later.":"Couldn't send a test alert. Please try again.");
+        setPushHelp("push-ep-help",code.endsWith("resource-exhausted")?"Too many test alerts. Please try again later.":pushServerReason(e));
+        last="failed";
       }
+      lsSet(PUSH_LAST_TEST_KEY,`${last} (${pushTestStamp()})`);
+      renderPushStatus();
     }
   }finally{pushBusy=false;btn.disabled=false;}
 }
