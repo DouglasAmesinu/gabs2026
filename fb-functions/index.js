@@ -779,11 +779,13 @@ exports.pushStatus = onCall(PUSH_OPTS, async (request) => {
 exports.notifyNewMessage = onDocumentCreated(
   { document: "threads/{tid}/messages/{mid}", region: REGION, maxInstances: 10 },
   async (event) => {
+    // Every early return logs ONE JSON line with only the reason: no ids, names or text
+    const skip = (reason) => console.log(JSON.stringify({ event: "push-skip", reason }));
     const snap = event.data;
-    if (!snap) return;
+    if (!snap) return skip("no-recipient");
     const data = snap.data() || {};
     const recipient = recipientOf(event.params.tid, data.fromId);
-    if (!recipient) return;
+    if (!recipient) return skip("no-recipient");
 
     const createdMs =
       data.ts && typeof data.ts.toMillis === "function"
@@ -791,33 +793,38 @@ exports.notifyNewMessage = onDocumentCreated(
         : snap.createTime && typeof snap.createTime.toMillis === "function"
           ? snap.createTime.toMillis()
           : Date.now();
-    if (Date.now() - createdMs > PUSH_MAX_AGE_MS) return;
+    if (Date.now() - createdMs > PUSH_MAX_AGE_MS) return skip("stale");
 
     const ref = db.collection("pushTokens").doc(recipient);
     const first = await ref.get();
-    if (!first.exists || first.data().muted === true || !storedTokens(first.data()).length) return;
+    if (!first.exists) return skip("no-token-doc");
+    if (first.data().muted === true) return skip("muted");
+    if (!storedTokens(first.data()).length) return skip("no-tokens");
 
     // Decide and stamp lastSent in one transaction so near-simultaneous
     // messages from the same sender raise one alert
-    const tokens = await db.runTransaction(async (tx) => {
+    const outcome = await db.runTransaction(async (tx) => {
       const cur = await tx.get(ref);
-      if (!cur.exists) return null;
+      if (!cur.exists) return { skip: "no-token-doc" };
       const d = cur.data();
+      if (d.muted === true) return { skip: "muted" };
       const list = storedTokens(d);
-      if (!list.length) return null;
+      if (!list.length) return { skip: "no-tokens" };
       const decision = shouldSend({ muted: d.muted, lastSent: d.lastSent, senderId: data.fromId, nowMs: Date.now() });
-      if (!decision.send) return null;
+      if (!decision.send) return { skip: "throttled" };
       tx.update(ref, { lastSent: decision.nextLastSent });
-      return list;
+      return { tokens: list };
     });
-    if (!tokens) return;
+    if (outcome.skip) return skip(outcome.skip);
+    const tokens = outcome.tokens;
 
     const alert = buildAlert({
       kind: data.hasMeeting === true ? "meeting" : "message",
       senderName: cleanName(data.fromName),
       senderId: data.fromId,
     });
-    if (!alert) return;
+    // buildAlert refuses only a sender id that is not a plain id: nobody valid to name in the alert
+    if (!alert) return skip("no-recipient");
     const result = await sendPush(recipient, tokens, alert);
     // One JSON line per alert (Cloud Logging stores it as structured data): counts and error codes only
     console.log(JSON.stringify(pushLogEntry({
