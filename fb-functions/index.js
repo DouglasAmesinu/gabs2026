@@ -2,11 +2,12 @@
 
 const crypto = require("crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineString, defineSecret, defineInt } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const { getMessaging } = require("firebase-admin/messaging");
 
 const { normalizeRef, isValidRef } = require("./lib/ticketRef");
 const { isBlocked, recordFailure } = require("./lib/rateLimit");
@@ -18,6 +19,17 @@ const { validateInput, buildPrompt, extractText, parseMatchReply, rateDecision, 
 const { requireAdmin } = require("./lib/adminAuth");
 const { pickProfile } = require("./lib/profile");
 const { validateAnnouncement, validateAnnouncementId } = require("./lib/announce");
+const {
+  validToken,
+  addToken,
+  removeToken,
+  shouldSend,
+  cleanName,
+  buildAlert,
+  recipientOf,
+  deadTokens,
+  callWindow,
+} = require("./lib/push");
 const {
   validateBlockInput,
   validateUnblockInput,
@@ -598,5 +610,201 @@ exports.syncBookedSlots = onDocumentUpdated(
         db.collection("participants").doc(b).set({ bookedSlots: FieldValue.arrayRemove(slotForB) }, { merge: true }),
       ]);
     }
+  }
+);
+
+// ── Push alerts ──────────────────────────────────────────────────────────────
+// pushTokens/{uid} is SERVER-ONLY: firestore.rules has no entry for it, so
+// the default deny applies and no client can read or write it. Only these
+// functions (Admin SDK) touch it: {tokens:[{t, at}], platform, updatedAt,
+// muted, lastSent:{senderId: ms}}. Never log tokens, names, message text
+// or participant ids here; counts only.
+const PUSH_PLATFORMS = ["android", "ios", "desktop"];
+const PUSH_OPTS = { region: REGION, maxInstances: 5 };
+const PUSH_REGISTER_PER_HOUR = 10;
+const PUSH_TEST_PER_HOUR = 3;
+const PUSH_MAX_AGE_MS = 120 * 1000;
+const PUSH_WEBPUSH = { headers: { TTL: "3600", Urgency: "high" } };
+
+/** The caller's uid when signed in as a delegate; otherwise unauthenticated. */
+function requireDelegate(request) {
+  if (!request.auth || request.auth.token.delegate !== true) {
+    throw new HttpsError("unauthenticated", "Please sign in again.");
+  }
+  return request.auth.uid;
+}
+
+/**
+ * Count one call against rate/{docId} (same transaction pattern as the
+ * sign-in limiter); refuses with resource-exhausted over the limit.
+ */
+async function consumePushCall(docId, perHour) {
+  const rateRef = db.collection("rate").doc(docId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(rateRef);
+    const decision = callWindow(snap.exists ? snap.data() : null, Date.now(), perHour);
+    if (!decision.allowed) {
+      throw new HttpsError("resource-exhausted", "Too many requests. Please try again later.");
+    }
+    tx.set(rateRef, decision.next, { merge: true });
+  });
+}
+
+/** The stored token strings (malformed entries dropped). */
+const storedTokens = (data) => removeToken(data && data.tokens, null).map((e) => e.t);
+
+/**
+ * Send a DATA-ONLY message (no "notification" field; every value a
+ * string) to the given tokens, then remove the tokens FCM reports as
+ * dead from pushTokens/{uid}. Returns counts only.
+ */
+async function sendPush(uid, tokens, data) {
+  const res = await getMessaging().sendEachForMulticast({ tokens, data, webpush: PUSH_WEBPUSH });
+  const dead = deadTokens(tokens, res.responses);
+  if (dead.length) {
+    const ref = db.collection("pushTokens").doc(uid);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const tokensLeft = dead.reduce((list, t) => removeToken(list, t), snap.data().tokens);
+      tx.update(ref, { tokens: tokensLeft });
+    });
+  }
+  return { sent: res.successCount, failed: res.failureCount, removed: dead.length };
+}
+
+/**
+ * Delegate callable: register this device's FCM token. Input {token,
+ * platform: "android"|"ios"|"desktop"}. Keeps at most 5 tokens, newest
+ * first, and the stored muted and lastSent. 10 calls per hour per uid.
+ */
+exports.registerPushToken = onCall(PUSH_OPTS, async (request) => {
+  const uid = requireDelegate(request);
+  await consumePushCall(`push_${uid}`, PUSH_REGISTER_PER_HOUR);
+  const data = request.data || {};
+  if (!validToken(data.token) || !PUSH_PLATFORMS.includes(data.platform)) {
+    throw new HttpsError("invalid-argument", "Invalid push registration.");
+  }
+  const ref = db.collection("pushTokens").doc(uid);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.exists ? snap.data() : {};
+    tx.set(ref, {
+      tokens: addToken(cur.tokens, data.token, Date.now()),
+      platform: data.platform,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      muted: cur.muted === true,
+      lastSent: cur.lastSent && typeof cur.lastSent === "object" && !Array.isArray(cur.lastSent) ? cur.lastSent : {},
+    });
+  });
+  logger.info("registerPushToken: done");
+  return { ok: true };
+});
+
+/** Delegate callable: forget one of the caller's tokens. Input {token}. */
+exports.unregisterPushToken = onCall(PUSH_OPTS, async (request) => {
+  const uid = requireDelegate(request);
+  const token = request.data && request.data.token;
+  if (!validToken(token)) {
+    throw new HttpsError("invalid-argument", "Invalid push token.");
+  }
+  const ref = db.collection("pushTokens").doc(uid);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    tx.update(ref, {
+      tokens: removeToken(snap.data().tokens, token),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  return { ok: true };
+});
+
+/** Delegate callable: mute or unmute alerts. Input {muted: boolean}. */
+exports.setPushMuted = onCall(PUSH_OPTS, async (request) => {
+  const uid = requireDelegate(request);
+  const muted = request.data && request.data.muted;
+  if (typeof muted !== "boolean") {
+    throw new HttpsError("invalid-argument", "muted must be true or false.");
+  }
+  await db.collection("pushTokens").doc(uid).set(
+    { muted, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+  return { ok: true };
+});
+
+/**
+ * Delegate callable: send a test alert to the caller's own devices (also
+ * when muted, since the caller asked for it). 3 calls per hour per uid.
+ * Returns {sent}.
+ */
+exports.sendTestPush = onCall(PUSH_OPTS, async (request) => {
+  const uid = requireDelegate(request);
+  await consumePushCall(`pushtest_${uid}`, PUSH_TEST_PER_HOUR);
+  const snap = await db.collection("pushTokens").doc(uid).get();
+  const tokens = snap.exists ? storedTokens(snap.data()) : [];
+  if (!tokens.length) return { sent: 0 };
+  const result = await sendPush(uid, tokens, {
+    title: "GABS Connect",
+    body: "Test alert: notifications are working.",
+    tag: "test",
+    url: "/",
+    kind: "test",
+  });
+  logger.info("sendTestPush: done", result);
+  return { sent: result.sent };
+});
+
+/**
+ * Firestore trigger: alert the recipient of a new chat message or
+ * meeting request on their registered devices. Skips messages older
+ * than 2 minutes (late or retried events), muted recipients and repeat
+ * alerts from the same sender within a minute (shouldSend).
+ */
+exports.notifyNewMessage = onDocumentCreated(
+  { document: "threads/{tid}/messages/{mid}", region: REGION, maxInstances: 10 },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data() || {};
+    const recipient = recipientOf(event.params.tid, data.fromId);
+    if (!recipient) return;
+
+    const createdMs =
+      data.ts && typeof data.ts.toMillis === "function"
+        ? data.ts.toMillis()
+        : snap.createTime && typeof snap.createTime.toMillis === "function"
+          ? snap.createTime.toMillis()
+          : Date.now();
+    if (Date.now() - createdMs > PUSH_MAX_AGE_MS) return;
+
+    const ref = db.collection("pushTokens").doc(recipient);
+    const first = await ref.get();
+    if (!first.exists || first.data().muted === true || !storedTokens(first.data()).length) return;
+
+    // Decide and stamp lastSent in one transaction so near-simultaneous
+    // messages from the same sender raise one alert
+    const tokens = await db.runTransaction(async (tx) => {
+      const cur = await tx.get(ref);
+      if (!cur.exists) return null;
+      const d = cur.data();
+      const list = storedTokens(d);
+      if (!list.length) return null;
+      const decision = shouldSend({ muted: d.muted, lastSent: d.lastSent, senderId: data.fromId, nowMs: Date.now() });
+      if (!decision.send) return null;
+      tx.update(ref, { lastSent: decision.nextLastSent });
+      return list;
+    });
+    if (!tokens) return;
+
+    const alert = buildAlert({
+      kind: data.hasMeeting === true ? "meeting" : "message",
+      senderName: cleanName(data.fromName),
+      senderId: data.fromId,
+    });
+    if (!alert) return;
+    const result = await sendPush(recipient, tokens, alert);
+    logger.info("notifyNewMessage: done", result);
   }
 );
