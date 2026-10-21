@@ -2,6 +2,7 @@
   "name": "GABS 2026 - German-African Business Summit",
   "short_name": "GABS 2026",
   "description": "6th German-African Business Summit · 23-25 November 2026 · Accra, Ghana",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
