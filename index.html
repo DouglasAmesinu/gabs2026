@@ -1859,6 +1859,7 @@ function pushCardHTML(){
     <div class="push-card-title">🔔 Turn on message alerts?</div>
     <div class="push-card-text">We will notify you when someone writes to you. Alerts show only the sender's name.</div>
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
+    ${installButtonHTML()}
     <div class="push-help" id="push-card-help" role="status"></div>
   </div>`;
 }
@@ -1897,6 +1898,22 @@ async function copyAppLink(){
   try{await navigator.clipboard.writeText(location.origin);showToast("Link copied. Paste it into Safari.");}
   catch(e){showToast("Couldn't copy. Open "+location.host+" in Safari.");}
 }
+// Android and desktop: alerts work in a normal tab, so installing is never asked for. When the browser
+// offers it (beforeinstallprompt), an optional "Install app" button appears; it never fires on iOS.
+let installPromptEvent=null;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPromptEvent=e;syncInstallButtons();});
+window.addEventListener("appinstalled",()=>{installPromptEvent=null;syncInstallButtons();});
+const installButtonHTML=()=>`<button type="button" class="btn-outline btn-sm" data-push="install" style="margin-top:10px"${installPromptEvent?"":" hidden"}>⬇ Install app</button>`;
+function syncInstallButtons(){
+  document.querySelectorAll('[data-push="install"]').forEach(b=>{b.hidden=!installPromptEvent;});
+}
+async function promptInstall(){
+  const ev=installPromptEvent;
+  if(!ev)return;
+  installPromptEvent=null; // a prompt can only be shown once
+  syncInstallButtons();
+  try{await ev.prompt();await ev.userChoice;}catch(e){}
+}
 function refreshPushCard(){
   const h=pushCardHTML();
   patchHTML(document.getElementById("push-wrap"),h,h);
@@ -1912,6 +1929,7 @@ function pushSectionHTML(){
     <div class="push-row"><span id="push-switch-label">Alerts for new messages</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
     <div class="push-note">Alerts show only the sender's name, never the message.</div>
     <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
+    ${installButtonHTML()}
     <div class="push-help" id="push-ep-help" role="status"></div>`;
 }
 function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
@@ -1950,6 +1968,7 @@ async function handlePushAction(btn){
   if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
   if(act==="guide"){showIosGuideSheet();return;}
   if(act==="copy"){copyAppLink();return;}
+  if(act==="install"){promptInstall();return;}
   if(pushBusy||!me)return;
   pushBusy=true;btn.disabled=true;
   try{
