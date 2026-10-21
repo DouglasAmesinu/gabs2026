@@ -1863,20 +1863,18 @@ function pushCardHTML(){
     <div class="push-help" id="push-card-help" role="status"></div>
   </div>`;
 }
-// The Add to Home Screen steps for this iOS browser: Safari, Chrome/Edge, or anything else (open in Safari first)
-function iosBrowser(){
-  if(/CriOS|EdgiOS/.test(PUSH_UA))return"chromium";
-  if(/FxiOS|OPiOS|OPT\/|GSA\/|DuckDuckGo|Ddg\//.test(PUSH_UA)||!/Version\/[\d.]+.*Safari\//.test(PUSH_UA))return"other";
-  return"safari";
-}
+// Two variants by user agent: Safari (no CriOS, EdgiOS or FxiOS token) adds to the Home Screen directly;
+// every other iPhone/iPad browser copies the link and continues in Safari
+const isIOSSafari=()=>!/CriOS|EdgiOS|FxiOS/.test(PUSH_UA);
 function iosGuideHTML(){
-  const b=iosBrowser();
-  const steps=b==="safari"?["Tap the Share button (a square with an arrow).","Scroll down and tap Add to Home Screen.","Tap Add."]
-    :b==="chromium"?["Tap the Share icon in the address bar at the top right.","Tap Add to Home Screen.","Tap Add."]:null;
-  return`${steps
-    ?`<ol class="push-steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>`
-    :`<div class="push-card-text">Open this page in Safari first: tap Copy link, open Safari, paste the link, then use Share, Add to Home Screen.</div>
-    <div class="push-actions"><button class="btn-navy btn-sm" data-push="copy" style="color:#fff">Copy link</button></div>`}
+  const safari=isIOSSafari();
+  const steps=safari
+    ?["Tap the Share button (a square with an arrow).","Scroll down and tap Add to Home Screen.","Tap Add."]
+    :["Tap Copy link below.","Open Safari and paste the link.","Tap Share, then Add to Home Screen, then Add."];
+  return`${safari?"":`<div class="push-card-text">Message alerts on iPhone need Safari for one step.</div>`}
+    <ol class="push-steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
+    ${safari?"":`<div class="push-actions"><button class="btn-navy btn-sm" data-push="copy" style="color:#fff">Copy link</button></div>
+    <input class="form-inp" data-copy-box readonly value="${esc(location.origin)}" aria-label="Link to open in Safari" style="margin-top:8px" hidden/>`}
     <div class="push-note">Then open GABS Connect from the new icon and sign in there. Message alerts only work from the icon. Needs iOS 16.4 or later; if you do not see Add to Home Screen, update iOS in Settings, General, Software Update.</div>`;
 }
 // Edit Profile's "How to get message alerts on iPhone": the same guide in a sheet
@@ -1894,9 +1892,15 @@ function showIosGuideSheet(){
   document.getElementById("ios-guide-close").onclick=()=>ov.remove();
   ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
 }
-async function copyAppLink(){
-  try{await navigator.clipboard.writeText(location.origin);showToast("Link copied. Paste it into Safari.");}
-  catch(e){showToast("Couldn't copy. Open "+location.host+" in Safari.");}
+// Copy link; without clipboard access, show the address next to the button, selected for copying by hand
+async function copyAppLink(btn){
+  try{
+    await navigator.clipboard.writeText(location.origin);
+    showToast("Link copied. Paste it into Safari.");
+  }catch(e){
+    const box=btn&&btn.closest(".push-card,.sheet")?.querySelector("[data-copy-box]");
+    if(box){box.hidden=false;box.focus();box.select();}
+  }
 }
 // Android and desktop: alerts work in a normal tab, so installing is never asked for. When the browser
 // offers it (beforeinstallprompt), an optional "Install app" button appears; it never fires on iOS.
@@ -1967,7 +1971,7 @@ async function handlePushAction(btn){
   if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
   if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
   if(act==="guide"){showIosGuideSheet();return;}
-  if(act==="copy"){copyAppLink();return;}
+  if(act==="copy"){copyAppLink(btn);return;}
   if(act==="install"){promptInstall();return;}
   if(pushBusy||!me)return;
   pushBusy=true;btn.disabled=true;
