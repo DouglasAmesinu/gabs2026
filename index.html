@@ -53,7 +53,8 @@ window._fn={httpsCallable:(n,o)=>httpsCallable(functions,n,o)};
 window._fb={db,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,collectionGroup,limit};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
 // Message alerts (web push): only where service workers, the Push API and notifications all exist;
-// window._push stays null elsewhere and every push control is hidden. Messaging is created on first use.
+// window._push stays null elsewhere and every push control is hidden (an iPhone/iPad browser tab shows the
+// Home Screen guide instead, since PushManager only exists in the installed app). Messaging is created on first use.
 const VAPID_KEY=IS_LIVE?"BPhZrto5ZREq1WWkBJmX4CdWvz0MmJ-B3L_IqRQVQxUTIK5b1XwkdyThb2uThrKFB5JVzwsHpsStVz7nyasK96M":"BE-54K5VnFfMw3_NbhLzG-BwX19je1H5v37McoKyOUG6eTQhKRD89NVfGKLYLmiJkJiCr_G2-q1r1qQNbU4lKG4";
 const PUSH_SUPPORTED="serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
 let messaging=null;
@@ -1830,11 +1831,15 @@ const pushPlatform=()=>isIOSDevice?"ios":/Android/i.test(PUSH_UA)?"android":"des
 const isStandalone=()=>navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);
 // iPhone/iPad in the browser: alerts need the Home Screen app, so show the guide instead
 const needsHomeScreen=()=>isIOSDevice&&!isStandalone();
-const pushGranted=()=>!!window._push&&Notification.permission==="granted";
+// "guide": iOS browser tab, always the Home Screen guide (PushManager is missing there by design);
+// "push": installed iOS app or any other device with push support; "none": nothing push-related
+const pushMode=()=>needsHomeScreen()?"guide":window._push?"push":"none";
+const pushGranted=()=>pushMode()==="push"&&Notification.permission==="granted";
 const pushIsOn=()=>pushGranted()&&lsGet(PUSH_MUTED_KEY)!=="1";
 function pushCardDue(){
   if(!me)return false;
-  if(!needsHomeScreen()&&(!window._push||pushGranted()))return false;
+  const mode=pushMode();
+  if(mode==="none"||(mode==="push"&&pushGranted()))return false;
   const v=lsGet(PUSH_ASKED_KEY);
   if(!v)return true;
   if(v==="done")return false;
@@ -1842,7 +1847,7 @@ function pushCardDue(){
 }
 function pushCardHTML(){
   if(!pushCardDue())return"";
-  if(needsHomeScreen())return`<div class="push-card" role="region" aria-label="Message alerts">
+  if(pushMode()==="guide")return`<div class="push-card" role="region" aria-label="Message alerts">
     <div class="push-card-title">🔔 Get message alerts: add GABS Connect to your Home Screen</div>
     <ol class="push-steps"><li>Tap the Share button</li><li>Choose Add to Home Screen</li><li>Open GABS Connect from the icon and sign in there</li></ol>
     <div class="push-note">On iPhone and iPad, alerts only work from the icon.</div>
@@ -1860,8 +1865,9 @@ function refreshPushCard(){
   patchHTML(document.getElementById("push-wrap"),h,h);
 }
 function pushSectionHTML(){
-  if(!window._push&&!needsHomeScreen())return"";
-  if(!window._push)return`<div class="form-label">Message alerts</div>
+  const mode=pushMode();
+  if(mode==="none")return"";
+  if(mode==="guide")return`<div class="form-label">Message alerts</div>
     <div class="push-note">On iPhone and iPad, alerts only work from the icon: tap Share, choose Add to Home Screen, then open GABS Connect from the icon and sign in there.</div>`;
   const on=pushIsOn();
   return`<div class="form-label">Message alerts</div>
@@ -1877,7 +1883,7 @@ function syncPushSwitch(){
 const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
 // "Turn on" and switch On: permission (from this tap), token, register, unmute
 async function enablePush(helpId){
-  if(!window._push||!window._fn||!me)return false;
+  if(pushMode()!=="push"||!window._fn||!me)return false;
   let perm=Notification.permission;
   if(perm!=="granted"){try{perm=await Notification.requestPermission();}catch(e){perm="denied";}}
   if(perm!=="granted"){
