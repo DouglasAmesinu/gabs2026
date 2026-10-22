@@ -309,10 +309,32 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 /* Settings: the gear in the bottom bar and the sheet's rows */
 .profile-actions{display:flex;align-items:center;gap:4px}
 .gear-btn{min-width:44px;min-height:44px;margin:-6px -10px -6px 0;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;border-radius:12px;font-size:20px;color:var(--steel);cursor:pointer;touch-action:manipulation}
-.set-sec{margin-top:16px}
-.set-sub{font-size:12px;color:var(--muted);margin-top:2px}
-.set-link{display:flex;align-items:center;width:100%;min-height:44px;padding:0;background:none;border:none;border-bottom:1px solid var(--border);font-size:14px;font-weight:600;color:var(--navy);text-align:left;text-decoration:none;cursor:pointer;touch-action:manipulation}
+/* Settings soft cards: grey sheet, one white card per group, 52px rows with a 38px icon tile */
+.set-sheet{background:#F4F6FA}
+.set-sec{margin-top:18px}
+.set-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);margin:0 4px 8px}
+.set-card{background:var(--white);border:1px solid #E5E7EB;border-radius:16px;overflow:hidden}
+.set-row{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 14px;background:none;border:none;text-align:left;text-decoration:none;color:var(--text);font:inherit}
+.set-row+.set-row{border-top:1px solid #E5E7EB}
+.set-row-link{cursor:pointer;touch-action:manipulation}
+.set-row-txt{flex:1;min-width:0}
+.set-row-label{display:block;font-size:14px;font-weight:700;color:var(--text)}
+.set-row-sub{display:block;font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.set-tile{width:38px;height:38px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.set-tile svg{width:20px;height:20px}
+.t-bell{background:#E4EBF6;color:var(--navy)}
+.t-down{background:#DBEAFE;color:#1D4ED8}
+.t-mail{background:#DCFCE7;color:#166534}
+.t-lock{background:#EDE9FE;color:#6D28D9}
+.t-trash{background:#FEE2E2;color:#B91C1C}
+.set-chev{flex-shrink:0;color:var(--muted)}
+.set-extra{padding:0 14px 10px 64px}
+.set-extra:empty{display:none}
+.set-card .push-help{margin:0;padding:0 14px 10px 64px}
+.set-card .push-help:empty{display:none}
 .set-text-btn{display:inline-block;background:none;border:none;padding:10px 0;margin-right:16px;min-height:44px;font-size:13px;font-weight:700;color:var(--navy);text-decoration:underline;cursor:pointer;touch-action:manipulation}
+.set-signout{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;margin-top:18px;background:var(--white);border:1.5px solid var(--red);border-radius:16px;font-size:14px;font-weight:700;color:var(--red);cursor:pointer;touch-action:manipulation}
+.set-signout svg{width:20px;height:20px}
 /* Settings profile strip: avatar, name, company · country, Edit › */
 .set-prof{display:flex;align-items:center;gap:12px;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-top:8px}
 .set-prof-av{width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block}
@@ -321,7 +343,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .set-prof-name{font-size:15px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-prof-sub{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-prof-edit{flex-shrink:0;min-height:44px;padding:0 4px;background:none;border:none;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation}
-.set-foot{text-align:center;font-size:11px;color:var(--muted);margin-top:18px}
+.set-foot{text-align:center;font-size:11px;color:#4B5563;margin-top:18px}
 .push-status{margin-top:4px}
 .push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
 .push-status-row span:last-child{color:var(--muted);font-weight:600;text-align:right}
@@ -2279,22 +2301,37 @@ function notifActionsHTML(n){
   return(n.showAllow?`<button type="button" class="set-text-btn" data-push="allow">Allow alerts</button>`:"")
     +(n.showTest?`<button type="button" class="set-text-btn" data-push="test">Send me a test alert</button>`:"");
 }
-function settingsSwitchHTML(id,label,sub,checked,act,disabled){
-  return`<div class="push-row"><div><div id="${id}">${esc(label)}</div><div class="set-sub" id="set-notif-line">${esc(sub)}</div></div><button type="button" class="push-switch" role="switch" aria-checked="${checked}" aria-labelledby="${id}" data-push="${act}"${disabled?" disabled":""}><span class="push-knob"></span></button></div>`;
-}
+// Hand-written 24x24 icons (stroke currentColor) for the Settings rows
+const SET_ICON_PATHS={
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  down:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  signout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  chevron:'<path d="M9 6l6 6-6 6"/>',
+};
+const setSvg=(name,cls="")=>`<svg${cls?` class="${cls}"`:""} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SET_ICON_PATHS[name]}</svg>`;
+const setTile=(name,tone)=>`<span class="set-tile ${tone}" aria-hidden="true">${setSvg(name)}</span>`;
+// A tappable row: icon tile, label, chevron. attrs carries the data-* (or href) of the existing handler.
+const setLinkRow=(tag,attrs,icon,tone,label)=>
+  `<${tag} class="set-row set-row-link" ${attrs}>${setTile(icon,tone)}<span class="set-row-txt"><span class="set-row-label">${esc(label)}</span></span>${setSvg("chevron","set-chev")}</${tag}>`;
 // One switch through handlePushAction ("toggle", "allow", "test"); help text goes to #push-set-help
 function settingsAlertsHTML(){
   const n=notifLine(notifInputs());
-  return`${settingsSwitchHTML("set-notif-label","Notifications",n.line,soundIsOn(),"toggle",false)}
-    <div id="set-notif-actions">${notifActionsHTML(n)}</div>
+  return`<div class="set-row">${setTile("bell","t-bell")}
+      <div class="set-row-txt"><div class="set-row-label" id="set-notif-label">Notifications</div><div class="set-row-sub" id="set-notif-line">${esc(n.line)}</div></div>
+      <button type="button" class="push-switch" role="switch" aria-checked="${soundIsOn()}" aria-labelledby="set-notif-label" aria-describedby="set-notif-line" data-push="toggle"><span class="push-knob"></span></button>
+    </div>
+    <div id="set-notif-actions" class="set-extra">${notifActionsHTML(n)}</div>
     <div class="push-help" id="push-set-help" role="status"></div>`;
 }
 // "App": Install app only while the browser offers it; Add to Home Screen on a non-installed iPhone/iPad
 function settingsAppHTML(){
-  if(needsHomeScreen())return`<div class="set-sec"><div class="form-label">App</div>
-    <button type="button" class="set-link" data-push="guide">Add to Home Screen</button></div>`;
-  return`<div class="set-sec" data-app-install${installPromptEvent&&!isStandalone()?"":" hidden"}><div class="form-label">App</div>
-    <button type="button" class="set-link" data-push="install">Install app</button></div>`;
+  if(needsHomeScreen())return`<div class="set-sec"><div class="set-label">App</div>
+    <div class="set-card">${setLinkRow("button",'type="button" data-push="guide"',"down","t-down","Add to Home Screen")}</div></div>`;
+  return`<div class="set-sec" data-app-install${installPromptEvent&&!isStandalone()?"":" hidden"}><div class="set-label">App</div>
+    <div class="set-card">${setLinkRow("button",'type="button" data-push="install"',"down","t-down","Install app")}</div></div>`;
 }
 // Profile strip at the top of Settings: only "Edit ›" is tappable
 function settingsProfileHTML(){
@@ -2313,25 +2350,25 @@ let settingsKeyHandler=null;
 function showSettings(){
   closeSettings(false);
   const ov=makeOv(false);ov.id="settings-sheet";
-  ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" style="padding-bottom:calc(22px + var(--safe-b))">
+  ov.innerHTML=`<div class="sheet set-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" style="padding-bottom:calc(22px + var(--safe-b))">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div class="sheet-title" id="settings-title" style="margin:0">Settings</div>
       <button type="button" class="btn-outline btn-sm" data-settings="close" aria-label="Close settings">✕</button>
     </div>
     ${settingsProfileHTML()}
-    <div class="set-sec"><div class="form-label">Notifications</div>
-      <div id="set-alerts">${settingsAlertsHTML()}</div>
+    <div class="set-sec"><div class="set-label">Notifications</div>
+      <div class="set-card" id="set-alerts">${settingsAlertsHTML()}</div>
       ${pushStatusHTML()}
     </div>
     ${settingsAppHTML()}
-    <div class="set-sec"><div class="form-label">Help and privacy</div>
-      <button type="button" class="set-link" data-settings="support">Contact support</button>
-      <a class="set-link" href="/privacy" target="_blank" rel="noopener noreferrer">Privacy notice</a>
-      <button type="button" class="set-link" data-settings="delete">Ask us to delete my data</button>
+    <div class="set-sec"><div class="set-label">Help and privacy</div>
+      <div class="set-card">
+        ${setLinkRow("button",'type="button" data-settings="support"',"mail","t-mail","Contact support")}
+        ${setLinkRow("a",'href="/privacy" target="_blank" rel="noopener noreferrer"',"lock","t-lock","Privacy notice")}
+        ${setLinkRow("button",'type="button" data-settings="delete"',"trash","t-trash","Ask us to delete my data")}
+      </div>
     </div>
-    <div class="set-sec"><div class="form-label">Account</div>
-      <button type="button" class="btn-outline" data-settings="signout" style="color:var(--red);border-color:#FECACA;font-size:12px;margin-top:4px">Sign out</button>
-    </div>
+    <button type="button" class="set-signout" data-settings="signout">${setSvg("signout")}Sign out</button>
     <div class="set-foot">GABS Connect · version ${esc(String(APP_VERSION))}</div>
   </div>`;
   ov.addEventListener("click",e=>{if(e.target===ov)closeSettings();});
