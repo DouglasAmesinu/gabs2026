@@ -15,10 +15,10 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -252,6 +252,104 @@ test("isAnnouncementsHash is true only for exactly #announcements", () => {
   assert.equal(isAnnouncementsHash("#chat=abc"), false);
   assert.equal(isAnnouncementsHash(""), false);
   assert.equal(isAnnouncementsHash(undefined), false);
+});
+
+// A message that should sound: everything set, from someone else, long after the last sound
+const SOUND = { soundOn: true, visible: true, isFirstSnapshot: false, fromId: "u2", myId: "u1", chatOpenWithSender: false, nowMs: 100000, lastPlayedMs: 0, minGapMs: 2000 };
+
+test("soundFor: ding outside the chat, tick in the open chat with the sender", () => {
+  assert.equal(soundFor(SOUND), "ding");
+  assert.equal(soundFor({ ...SOUND, chatOpenWithSender: true }), "tick");
+  assert.equal(soundFor({ ...SOUND, chatOpenWithSender: "yes" }), "ding", "only true means the chat is open");
+  assert.equal(soundFor({ ...SOUND, chatOpenWithSender: undefined }), "ding");
+});
+
+test("soundFor: silent when sound is off or missing", () => {
+  assert.equal(soundFor({ ...SOUND, soundOn: false }), null);
+  assert.equal(soundFor({ ...SOUND, soundOn: undefined }), null);
+  assert.equal(soundFor({ ...SOUND, soundOn: "1" }), null);
+});
+
+test("soundFor: silent when the page is not visible or visibility is unknown", () => {
+  assert.equal(soundFor({ ...SOUND, visible: false }), null);
+  assert.equal(soundFor({ ...SOUND, visible: undefined }), null);
+});
+
+test("soundFor: silent for a first snapshot (history) or when that is unknown", () => {
+  assert.equal(soundFor({ ...SOUND, isFirstSnapshot: true }), null);
+  assert.equal(soundFor({ ...SOUND, isFirstSnapshot: undefined }), null);
+});
+
+test("soundFor: silent for my own message", () => {
+  assert.equal(soundFor({ ...SOUND, fromId: "u1" }), null);
+  assert.equal(soundFor({ ...SOUND, fromId: "u1", chatOpenWithSender: true }), null);
+});
+
+test("soundFor: an announcement (no fromId) still sounds; missing myId is not 'own'", () => {
+  assert.equal(soundFor({ ...SOUND, fromId: undefined }), "ding");
+  assert.equal(soundFor({ ...SOUND, fromId: undefined, myId: undefined }), "ding");
+  assert.equal(soundFor({ ...SOUND, fromId: "", myId: "" }), "ding");
+  assert.equal(soundFor({ ...SOUND, myId: undefined }), "ding");
+});
+
+test("soundFor: at most one sound per minGapMs", () => {
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 98001 }), null, "1999 ms after the last sound");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 98000 }), "ding", "exactly 2000 ms");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 99000, minGapMs: 500 }), "ding");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 98001, minGapMs: undefined }), null, "default gap is 2000");
+});
+
+test("soundFor: a missing last sound means none yet; a missing clock means silence", () => {
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: undefined }), "ding");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: null }), "ding");
+  assert.equal(soundFor({ ...SOUND, nowMs: undefined }), null);
+  assert.equal(soundFor({ ...SOUND, nowMs: NaN }), null);
+});
+
+test("soundFor: no argument or an empty object is silent", () => {
+  assert.equal(soundFor(), null);
+  assert.equal(soundFor({}), null);
+});
+
+const TO = "help" + "@" + "example.org";
+
+test("mailtoLink: only the address when nothing else is given", () => {
+  assert.equal(mailtoLink({ to: TO }), "mailto:help@example.org");
+  assert.equal(mailtoLink({ to: TO, cc: "", subject: "", body: "" }), "mailto:help@example.org");
+});
+
+test("mailtoLink: present parameters in order cc, subject, body, each encoded", () => {
+  assert.equal(mailtoLink({ to: TO, subject: "GABS Connect support" }), "mailto:help@example.org?subject=GABS%20Connect%20support");
+  assert.equal(
+    mailtoLink({ to: TO, cc: "b" + "@" + "example.org", subject: "A & B?", body: "Line 1\n\nName: Ama & Kofi" }),
+    "mailto:help@example.org?cc=b%40example.org&subject=A%20%26%20B%3F&body=Line%201%0A%0AName%3A%20Ama%20%26%20Kofi"
+  );
+  assert.equal(mailtoLink({ to: TO, body: "x" }), "mailto:help@example.org?body=x");
+});
+
+test("mailtoLink: newline injection in subject, cc and to is removed; the body keeps its line breaks", () => {
+  const link = mailtoLink({ to: TO, subject: "Hi\r\nBcc: evil" + "@" + "x.com", body: "a\nb" });
+  assert.equal(link, "mailto:help@example.org?subject=HiBcc%3A%20evil%40x.com&body=a%0Ab");
+  assert.ok(!/[\r\n]/.test(link));
+  assert.equal(mailtoLink({ to: TO, cc: "c" + "@" + "x.com\r\n" }), "mailto:help@example.org?cc=c%40x.com");
+  assert.equal(mailtoLink({ to: "help\r\n" + "@" + "example.org" }), "mailto:help@example.org");
+});
+
+test("mailtoLink: query characters inside the address cannot add parameters", () => {
+  const link = mailtoLink({ to: "a?cc=evil" + "@" + "x.com" });
+  assert.equal(link, "mailto:a%3Fcc%3Devil@x.com");
+});
+
+test("mailtoLink returns '' for an invalid or missing address", () => {
+  for (const to of ["", "nobody", "a@b", "@example.org", "a@@example.org", "a b" + "@" + "example.org", "a" + "@" + "exa mple.org", undefined, null, 42, {}]) {
+    assert.equal(mailtoLink({ to, subject: "x" }), "", String(to));
+  }
+  assert.equal(mailtoLink(), "");
+  assert.equal(mailtoLink({}), "");
+});
+
+test("mailtoLink ignores non-string optional values", () => {
+  assert.equal(mailtoLink({ to: TO, cc: 5, subject: null, body: {} }), "mailto:help@example.org");
 });
 
 test("isAnnouncementsHash refuses near misses and non-strings", () => {

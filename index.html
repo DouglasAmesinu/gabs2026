@@ -573,6 +573,31 @@ function parseChatHash(hash){
 function isAnnouncementsHash(hash){
   return hash==="#announcements";
 }
+
+// In-app sound for something that just arrived: "tick" in the open chat with its sender, "ding" anywhere
+// else, null for silence (sound off, page not visible, history from a first snapshot, own message, or less
+// than minGapMs, default 2000, since the last sound). Unknown or missing values err towards silence.
+function soundFor({soundOn,visible,isFirstSnapshot,fromId,myId,chatOpenWithSender,nowMs,lastPlayedMs,minGapMs}={}){
+  if(soundOn!==true||visible!==true||isFirstSnapshot!==false)return null;
+  if(typeof fromId==="string"&&fromId!==""&&fromId===myId)return null;
+  if(!Number.isFinite(nowMs))return null;
+  const gap=Number.isFinite(minGapMs)?minGapMs:2000;
+  if(Number.isFinite(lastPlayedMs)&&nowMs-lastPlayedMs<gap)return null;
+  return chatOpenWithSender===true?"tick":"ding";
+}
+
+// A mailto: link, or "" when "to" is not a plain address. CR and LF are removed from to, cc and subject
+// (no header injection); cc, subject and body are added only when present, each encodeURIComponent'd.
+function mailtoLink({to,cc,subject,body}={}){
+  const line=v=>typeof v==="string"?v.replace(/[\r\n]/g,""):"";
+  const addr=line(to);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr))return"";
+  const at=addr.indexOf("@");
+  const params=[["cc",line(cc)],["subject",line(subject)],["body",typeof body==="string"?body:""]]
+    .filter(([,v])=>v!=="")
+    .map(([k,v])=>k+"="+encodeURIComponent(v));
+  return"mailto:"+encodeURIComponent(addr.slice(0,at))+"@"+encodeURIComponent(addr.slice(at+1))+(params.length?"?"+params.join("&"):"");
+}
 // END safe-helpers
 
 
