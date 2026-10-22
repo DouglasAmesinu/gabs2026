@@ -23,7 +23,7 @@ test("unlinkTickets is only true for a literal boolean true", () => {
 });
 
 test("tickets are never in the deleted collections", () => {
-  assert.deepEqual(RESET_COLLECTIONS, ["participants", "threads", "aiUsage", "rate"]);
+  assert.deepEqual(RESET_COLLECTIONS, ["participants", "threads", "aiUsage", "rate", "pushTokens"]);
   assert.ok(!RESET_COLLECTIONS.includes("tickets"));
 });
 

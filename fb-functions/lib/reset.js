@@ -3,7 +3,7 @@
 // Collections wiped by adminReset. recursiveDelete also removes every
 // subcollection (participants/*/private, threads/*/messages). The
 // tickets collection is deliberately NOT in this list.
-const RESET_COLLECTIONS = ["participants", "threads", "aiUsage", "rate"];
+const RESET_COLLECTIONS = ["participants", "threads", "aiUsage", "rate", "pushTokens"];
 const RESET_BATCH_SIZE = 400;
 
 /**
