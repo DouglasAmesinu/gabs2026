@@ -14,6 +14,9 @@ const {
   callWindow,
   pushLogEntry,
   pushStatusOf,
+  buildAnnouncementAlert,
+  chunk,
+  allowAnnouncementAlert,
 } = require("../lib/push");
 
 // Realistic-looking FCM tokens: "<22 chars>:APA91b<rest>", ~150 characters
@@ -405,5 +408,89 @@ test("callWindow allows `limit` calls per window, then refuses until it resets",
 test("callWindow starts afresh on malformed or future state", () => {
   for (const st of [undefined, null, {}, { count: "9", windowStart: 1 }, { count: 9 }, { count: 99, windowStart: 9e12 }]) {
     assert.deepEqual(callWindow(st, 5000, 10), { allowed: true, next: { count: 1, windowStart: 5000 } }, JSON.stringify(st));
+  }
+});
+
+test("buildAnnouncementAlert builds the announcement payload", () => {
+  assert.deepEqual(buildAnnouncementAlert({ title: "Lunch moved to Hall B" }), {
+    title: "GABS Connect",
+    body: "\u{1F4E2} Lunch moved to Hall B",
+    tag: "announcement",
+    url: "/#announcements",
+    kind: "announcement",
+    renotify: "1",
+  });
+});
+
+test("buildAnnouncementAlert: every value is a string", () => {
+  for (const v of Object.values(buildAnnouncementAlert({ title: "Hi" }))) assert.equal(typeof v, "string");
+});
+
+test("buildAnnouncementAlert keeps HTML as plain text and strips control characters", () => {
+  assert.equal(buildAnnouncementAlert({ title: "<img src=x onerror=alert(1)>" }).body, "\u{1F4E2} <img src=x onerror=alert(1)>");
+  assert.equal(buildAnnouncementAlert({ title: "a\u0000b\u0007c\u009f\td" }).body, "\u{1F4E2} abc d");
+  assert.equal(buildAnnouncementAlert({ title: "Line one\r\nLine two\n\nthree" }).body, "\u{1F4E2} Line one Line two three");
+});
+
+test("buildAnnouncementAlert clips very long titles to 60 code points", () => {
+  assert.equal(buildAnnouncementAlert({ title: "x".repeat(5000) }).body, "\u{1F4E2} " + "x".repeat(60));
+  const emoji = buildAnnouncementAlert({ title: "\u{1F389}".repeat(100) }).body;
+  assert.equal(Array.from(emoji).length, 62);
+  assert.ok(emoji.endsWith("\u{1F389}"));
+});
+
+test("buildAnnouncementAlert: empty and non-string titles become 'New announcement'", () => {
+  for (const title of ["", "   ", "\u0000\u0001", "\n\n", undefined, null, 42, true, {}, ["a"]]) {
+    assert.equal(buildAnnouncementAlert({ title }).body, "\u{1F4E2} New announcement", JSON.stringify(title));
+  }
+  assert.equal(buildAnnouncementAlert().body, "\u{1F4E2} New announcement");
+  assert.equal(buildAnnouncementAlert({}).body, "\u{1F4E2} New announcement");
+});
+
+test("chunk splits into pieces of at most size", () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(chunk([1, 2, 3, 4], 2), [[1, 2], [3, 4]]);
+  assert.deepEqual(chunk([1, 2], 500), [[1, 2]]);
+  assert.deepEqual(chunk([], 500), []);
+  const big = Array.from({ length: 1201 }, (_, i) => i);
+  assert.deepEqual(chunk(big, 500).map((c) => c.length), [500, 500, 201]);
+  assert.deepEqual(chunk(big, 500).flat(), big);
+});
+
+test("chunk handles bad input", () => {
+  assert.deepEqual(chunk(null, 2), []);
+  assert.deepEqual(chunk("abc", 2), []);
+  assert.deepEqual(chunk([1, 2], 0), [[1], [2]]);
+  assert.deepEqual(chunk([1, 2], NaN), [[1], [2]]);
+  assert.deepEqual(chunk([1, 2, 3], 2.7), [[1, 2], [3]]);
+});
+
+test("allowAnnouncementAlert starts a window and counts up to max", () => {
+  let st = { count: undefined, windowStart: undefined };
+  for (let i = 1; i <= 10; i++) {
+    const r = allowAnnouncementAlert({ ...st, nowMs: 1000 + i });
+    assert.equal(r.allow, true, "alert " + i);
+    assert.deepEqual(r.next, { count: i, windowStart: 1001 });
+    st = r.next;
+  }
+  const r = allowAnnouncementAlert({ ...st, nowMs: 2000 });
+  assert.deepEqual(r, { allow: false, next: { count: 10, windowStart: 1001 } });
+});
+
+test("allowAnnouncementAlert opens a new window after an hour", () => {
+  const st = { count: 10, windowStart: 0 };
+  assert.equal(allowAnnouncementAlert({ ...st, nowMs: 3599999 }).allow, false);
+  assert.deepEqual(allowAnnouncementAlert({ ...st, nowMs: 3600000 }), { allow: true, next: { count: 1, windowStart: 3600000 } });
+});
+
+test("allowAnnouncementAlert honours custom max and windowMs", () => {
+  assert.equal(allowAnnouncementAlert({ count: 2, windowStart: 0, nowMs: 50, max: 2, windowMs: 100 }).allow, false);
+  assert.equal(allowAnnouncementAlert({ count: 2, windowStart: 0, nowMs: 100, max: 2, windowMs: 100 }).allow, true);
+  assert.equal(allowAnnouncementAlert({ nowMs: 5, max: 0 }).allow, false);
+});
+
+test("allowAnnouncementAlert starts afresh on malformed or future state", () => {
+  for (const st of [{}, { count: "9", windowStart: 1 }, { count: 9 }, { count: -1, windowStart: 1 }, { count: 1.5, windowStart: 1 }, { count: 99, windowStart: 9e12 }]) {
+    assert.deepEqual(allowAnnouncementAlert({ ...st, nowMs: 5000 }), { allow: true, next: { count: 1, windowStart: 5000 } }, JSON.stringify(st));
   }
 });
