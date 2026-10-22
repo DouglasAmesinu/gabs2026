@@ -1,4 +1,4 @@
-const CACHE_NAME='gabs2026-v17'; // Must match APP_VERSION in index.html: update them together on every release
+const CACHE_NAME='gabs2026-v18'; // Must match APP_VERSION in index.html: update them together on every release
 // App icon badge counter, kept in its own cache so it survives the worker being stopped and app updates
 const BADGE_CACHE='gabs-badge',BADGE_KEY='/__badge';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(['/','index.html','manifest.json']).catch(()=>{})));self.skipWaiting();});
