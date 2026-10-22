@@ -40,13 +40,23 @@ test("cleanText does not escape HTML (the page renders with esc())", () => {
 });
 
 test("validateAnnouncement returns a clean object with defaults", () => {
-  assert.deepEqual(ok(), { title: "Lunch moved", body: "Lunch is now at 13:00.", pinned: false, expiresInMinutes: 0 });
-  assert.deepEqual(validateAnnouncement({ title: "  Hi  " }), { title: "Hi", body: "", pinned: false, expiresInMinutes: 0 });
+  assert.deepEqual(ok(), { title: "Lunch moved", body: "Lunch is now at 13:00.", pinned: false, expiresInMinutes: 0, alert: false });
+  assert.deepEqual(validateAnnouncement({ title: "  Hi  " }), { title: "Hi", body: "", pinned: false, expiresInMinutes: 0, alert: false });
   assert.deepEqual(validateAnnouncement({ title: "Hi", body: null, pinned: null, expiresInMinutes: null }),
-    { title: "Hi", body: "", pinned: false, expiresInMinutes: 0 });
+    { title: "Hi", body: "", pinned: false, expiresInMinutes: 0, alert: false });
   assert.deepEqual(ok({ pinned: true, expiresInMinutes: 60 }).pinned, true);
   assert.equal(ok({ expiresInMinutes: 1440 }).expiresInMinutes, 1440);
   assert.equal(ok({ expiresInMinutes: 0 }).expiresInMinutes, 0);
+});
+
+test("validateAnnouncement: alert is true only for the boolean true, never a refusal", () => {
+  assert.equal(ok({ alert: true }).alert, true);
+  assert.equal(ok({ alert: false }).alert, false);
+  for (const alert of [undefined, null, "true", 1, "yes", {}, [true]]) {
+    const r = ok({ alert });
+    assert.notEqual(r, null, JSON.stringify(alert));
+    assert.equal(r.alert, false, JSON.stringify(alert));
+  }
 });
 
 test("validateAnnouncement puts the title on one line and keeps body line breaks", () => {

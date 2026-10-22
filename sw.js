@@ -1,4 +1,4 @@
-const CACHE_NAME='gabs2026-v15';
+const CACHE_NAME='gabs2026-v16';
 // App icon badge counter, kept in its own cache so it survives the worker being stopped and app updates
 const BADGE_CACHE='gabs-badge',BADGE_KEY='/__badge';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(['/','index.html','manifest.json']).catch(()=>{})));self.skipWaiting();});
@@ -17,6 +17,7 @@ self.addEventListener('fetch',e=>{
 });
 // ── Push alerts ──────────────────────────────────────────────────────────────
 // Data-only FCM messages: {title, body, tag, url, kind}, all strings, under p.data.
+// kind "announcement" shows the same way but never counts on the app icon badge.
 const PUSH_ICON='/icon-192.png';
 // iPadOS reports a Mac user agent and a worker cannot see touch support, so Safari on a Mac counts too
 const isIOS=()=>{const ua=self.navigator.userAgent;return /iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&/Safari/.test(ua)&&!/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/.test(ua));};
@@ -55,11 +56,12 @@ const safePath=u=>typeof u==='string'&&u.startsWith('/')&&!u.startsWith('//')?u:
 const genericAlert=()=>({body:'You have a new message',tag:'gabs-generic',renotify:true,data:{url:'/'},icon:PUSH_ICON,badge:PUSH_ICON});
 self.addEventListener('push',e=>{
   e.waitUntil((async()=>{
-    let title='GABS Connect',opts=genericAlert();
+    let title='GABS Connect',opts=genericAlert(),announcement=false;
     try{
       const p=e.data?e.data.json():null;
       const d=p&&typeof p==='object'?(p.data&&typeof p.data==='object'?p.data:p):null;
       const str=v=>typeof v==='string'?v:'';
+      announcement=!!d&&d.kind==='announcement';
       if(d&&str(d.body)&&str(d.tag)){
         title=str(d.title)||'GABS Connect';
         // renotify with the tag: a newer alert from the same sender replaces the old one and still sounds
@@ -75,6 +77,8 @@ self.addEventListener('push',e=>{
     }catch(err){}
     try{await self.registration.showNotification(title,opts);}
     catch(err){try{await self.registration.showNotification('GABS Connect',genericAlert());}catch(err2){}}
+    // The badge counts unread messages only, so an announcement leaves it alone
+    if(announcement)return;
     try{
       const n=Math.min(99,(await readBadge())+1);
       await writeBadge(n);

@@ -568,6 +568,11 @@ function parseChatHash(hash){
   const m=/^#chat=([A-Za-z0-9_-]{1,64})$/.exec(typeof hash==="string"?hash:"");
   return m?m[1]:"";
 }
+
+// An announcement alert's link: true only for exactly "#announcements"
+function isAnnouncementsHash(hash){
+  return hash==="#announcements";
+}
 // END safe-helpers
 
 
@@ -918,6 +923,17 @@ function openChatWhenReady(id){
     if(p){openThread(p);return;}
     if(!participantsLoaded&&Date.now()-t0<10000){setTimeout(tick,250);return;}
     showToast("Profile not available.");
+  };
+  tick();
+}
+// Open the announcements "See all" sheet from an alert (#announcements link or the service worker's
+// open-chat message), once the participants list has arrived (waiting up to 10 seconds)
+function openAnnouncementsWhenReady(){
+  const t0=Date.now();
+  const tick=()=>{
+    if(!me)return;
+    if(!participantsLoaded&&Date.now()-t0<10000){setTimeout(tick,250);return;}
+    showAnnouncementsSheet();
   };
   tick();
 }
@@ -1865,14 +1881,14 @@ function pushCardDue(){
 }
 function pushCardHTML(){
   if(!pushCardDue())return"";
-  if(pushMode()==="guide")return`<div class="push-card" role="region" aria-label="Message alerts">
-    <div class="push-card-title">🔔 Get message alerts: add GABS Connect to your Home Screen</div>
+  if(pushMode()==="guide")return`<div class="push-card" role="region" aria-label="Alerts">
+    <div class="push-card-title">🔔 Get alerts: add GABS Connect to your Home Screen</div>
     ${iosGuideHTML()}
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="guide-later">Not now</button></div>
   </div>`;
-  return`<div class="push-card" role="region" aria-label="Message alerts">
-    <div class="push-card-title">🔔 Turn on message alerts?</div>
-    <div class="push-card-text">We'll let you know when someone writes to you.</div>
+  return`<div class="push-card" role="region" aria-label="Alerts">
+    <div class="push-card-title">🔔 Turn on alerts?</div>
+    <div class="push-card-text">We'll let you know when someone writes to you and when the organisers post an announcement.</div>
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
     ${installButtonHTML()}
     <div class="push-help" id="push-card-help" role="status"></div>
@@ -1886,19 +1902,19 @@ function iosGuideHTML(){
   const steps=safari
     ?["Tap the Share button (a square with an arrow).","Scroll down and tap Add to Home Screen.","Tap Add."]
     :["Tap Copy link below.","Open Safari and paste the link.","Tap Share, then Add to Home Screen, then Add."];
-  return`${safari?"":`<div class="push-card-text">Message alerts on iPhone need Safari for one step.</div>`}
+  return`${safari?"":`<div class="push-card-text">Alerts on iPhone need Safari for one step.</div>`}
     <ol class="push-steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
     ${safari?"":`<div class="push-actions"><button class="btn-navy btn-sm" data-push="copy" style="color:#fff">Copy link</button></div>
     <input class="form-inp" data-copy-box readonly value="${esc(location.origin)}" aria-label="Link to open in Safari" style="margin-top:8px" hidden/>`}
-    <div class="push-note">Then open GABS Connect from the new icon and sign in there. Message alerts only work from the icon. Needs iOS 16.4 or later.</div>`;
+    <div class="push-note">Then open GABS Connect from the new icon and sign in there. Alerts only work from the icon. Needs iOS 16.4 or later.</div>`;
 }
-// Edit Profile's "How to get message alerts on iPhone": the same guide in a sheet
+// Edit Profile's "How to get alerts on iPhone": the same guide in a sheet
 function showIosGuideSheet(){
   document.getElementById("ios-guide")?.remove();
   const ov=makeOv(true);ov.id="ios-guide";
   ov.innerHTML=`<div class="sheet pop" role="dialog" aria-modal="true" aria-labelledby="ios-guide-title" style="max-width:420px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div class="sheet-title" id="ios-guide-title" style="margin:0">Message alerts on iPhone</div>
+      <div class="sheet-title" id="ios-guide-title" style="margin:0">Alerts on iPhone</div>
       <button class="btn-outline btn-sm" id="ios-guide-close">Close</button>
     </div>
     ${iosGuideHTML()}
@@ -1940,12 +1956,12 @@ function refreshPushCard(){
 function pushSectionHTML(){
   const mode=pushMode();
   if(mode==="none")return"";
-  if(mode==="guide")return`<div class="form-label">Message alerts</div>
-    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get message alerts on iPhone</button>`;
+  if(mode==="guide")return`<div class="form-label">Alerts</div>
+    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get alerts on iPhone</button>`;
   const on=pushIsOn();
-  return`<div class="form-label">Message alerts</div>
-    <div class="push-row"><span id="push-switch-label">Alerts for new messages</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
-    <div class="push-note">Alerts show only the sender's name, never the message.</div>
+  return`<div class="form-label">Alerts</div>
+    <div class="push-row"><span id="push-switch-label">Alerts for messages and announcements</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
+    <div class="push-note">Alerts show only the sender's name for messages, and the title for announcements. Never the message.</div>
     <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
     ${installButtonHTML()}
     <div class="push-help" id="push-ep-help" role="status"></div>`;
@@ -1957,8 +1973,8 @@ function syncPushSwitch(){
 const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
 // Why alerts cannot work, in plain words, by the step that fails
 const PUSH_REASON={
-  notInstalled:"Not installed on iPhone: add GABS Connect to your Home Screen and open it from the icon. Tap \"How to get message alerts on iPhone\" above.",
-  unsupported:"Unsupported browser: this browser cannot show message alerts.",
+  notInstalled:"Not installed on iPhone: add GABS Connect to your Home Screen and open it from the icon. Tap \"How to get alerts on iPhone\" above.",
+  unsupported:"Unsupported browser: this browser cannot show alerts.",
   denied:()=>isIOSDevice
     ?"Permission denied: alerts are blocked for GABS Connect."
     :"Permission denied: tap the lock icon in the address bar, then Notifications, then Allow.",
@@ -2036,7 +2052,7 @@ async function enablePush(helpId){
   if(document.getElementById("push-status"))loadPushStatus();
   if(problem){setPushHelp(helpId,problem);return false;}
   setPushHelp(helpId,"");
-  showToast("Message alerts are on.");
+  showToast("Alerts are on.");
   return true;
 }
 const PUSH_TEST_FAILED="We couldn't reach this phone. Your messages are still safe in the app.";
@@ -2056,7 +2072,7 @@ async function handlePushAction(btn){
       setPushHelp("push-fix-help","Checking…");
       lsSet(PUSH_ASKED_KEY,"done");
       const problem=await runPushSetup();
-      setPushHelp("push-fix-help",problem||"All set: this device is registered for message alerts. You can send a test alert.");
+      setPushHelp("push-fix-help",problem||"All set: this device is registered for alerts. You can send a test alert.");
       syncPushSwitch();refreshPushCard();
       await loadPushStatus();
     }else if(act==="on"){
@@ -3298,6 +3314,14 @@ function showAdminPanel(){
   }
   // Admin panel body: one delegated click listener (Block on Participants, Delete on Announcements)
   async function adminBodyClick(e){
+    // Announcement form: the alert box follows "Pin to the top" until the admin changes it by hand
+    const opt=e.target.closest&&e.target.closest("input[data-an-opt]");
+    if(opt){
+      const box=document.getElementById("an-alert");
+      if(opt.dataset.anOpt==="alert")opt.dataset.touched="1";
+      else if(box&&box.dataset.touched!=="1")box.checked=opt.checked;
+      return;
+    }
     const del=e.target.closest&&e.target.closest("[data-ann-del]");
     if(del){
       const id=safeId(del.dataset.annDel);
@@ -3342,7 +3366,8 @@ function showAdminPanel(){
       <div class="form-label">Message</div>
       <textarea class="form-inp" id="an-body" rows="4" maxlength="300" style="resize:none;line-height:1.5"></textarea>
       <div id="an-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">0 / 300</div>
-      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);margin-top:8px;cursor:pointer"><input type="checkbox" id="an-pin"/>Pin to the top</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);margin-top:8px;cursor:pointer"><input type="checkbox" id="an-pin" data-an-opt="pin"/>Pin to the top</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);margin-top:8px;cursor:pointer"><input type="checkbox" id="an-alert" data-an-opt="alert"/>Send a phone alert to everyone with alerts on</label>
       <div class="form-label">Expires</div>
       <select class="form-inp" id="an-exp">${ANN_EXPIRY_OPTIONS.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join("")}</select>
       <button class="btn-navy" id="an-post" style="color:#fff;margin-top:14px">📢 Post announcement</button>
@@ -3358,20 +3383,27 @@ function showAdminPanel(){
       const title=(document.getElementById("an-title").value||"").trim();
       if(!title){out.innerHTML=`<div class="err-msg">Enter a title.</div>`;return;}
       if(!window._fn){out.innerHTML=`<div class="err-msg">Not connected.</div>`;return;}
-      if(!confirm("Send this to every participant?"))return;
+      const alertBox=document.getElementById("an-alert");
+      const sendAlert=!!(alertBox&&alertBox.checked);
+      if(!confirm("Send this to every participant?"+(sendAlert?" A phone alert will go to everyone who has alerts on.":"")))return;
       const btn=document.getElementById("an-post");
       btn.disabled=true;
       out.innerHTML=`<div class="ok-msg">⏳ Posting…</div>`;
       try{
-        await window._fn.httpsCallable("adminPostAnnouncement")({
+        const res=await window._fn.httpsCallable("adminPostAnnouncement")({
           title,
           body:ta.value||"",
           pinned:document.getElementById("an-pin").checked,
           expiresInMinutes:Number(document.getElementById("an-exp").value)||0,
+          alert:sendAlert,
         });
-        out.innerHTML=`<div class="ok-msg">✓ Announcement posted.</div>`;
+        const r=(res&&res.data)||{};
+        const sent=Number.isInteger(r.alerted)&&r.alerted>0?r.alerted:0;
+        const note=sent>0?` Alert sent to ${sent} phone${sent===1?"":"s"}.`:r.limited===true?" Alert limit reached: not sent.":"";
+        out.innerHTML=`<div class="ok-msg">${esc("Posted."+note)}</div>`;
         document.getElementById("an-title").value="";ta.value="";cnt.textContent="0 / 300";
         document.getElementById("an-pin").checked=false;document.getElementById("an-exp").value="0";
+        if(alertBox){alertBox.checked=false;delete alertBox.dataset.touched;}
       }catch(err){
         out.innerHTML=`<div class="err-msg">Post failed: ${esc(err.code||"unknown error")}</div>`;
       }
@@ -3586,6 +3618,7 @@ async function boot(){
   }
   // Sign-in link (#t=<reference>): read it once and clear it from the address bar right away
   const chatLinkId=parseChatHash(window.location.hash); // #chat=<id> from an alert; cleared with the line below
+  const annLink=isAnnouncementsHash(window.location.hash); // #announcements from an alert; cleared the same way
   const linkRef=parseTicketHash(window.location.hash);
   history.replaceState(null,"",location.pathname+location.search);
   const linkIgnored=()=>{if(linkRef)showToast("You're already signed in. Sign out first to use a different link.");};
@@ -3615,7 +3648,7 @@ async function boot(){
     if(!snap.empty){
       me=normParticipant({id:delegateUid,...snap.docs[0].data()});
       localStorage.setItem("gabs_me",JSON.stringify(me));
-      renderApp();startMessageListeners();linkIgnored();openChatWhenReady(chatLinkId);return;
+      renderApp();startMessageListeners();linkIgnored();openChatWhenReady(chatLinkId);if(annLink)openAnnouncementsWhenReady();return;
     }
   }
   me=null;localStorage.removeItem("gabs_me");
@@ -3642,6 +3675,7 @@ if("serviceWorker"in navigator){
     if(d&&d.type==="push-resubscribe"){if(me)refreshPushToken();return;}
     if(!d||d.type!=="open-chat"||typeof d.url!=="string")return;
     let hash="";try{hash=new URL(d.url,location.origin).hash;}catch(err){}
+    if(isAnnouncementsHash(hash)){if(me)openAnnouncementsWhenReady();return;}
     const id=parseChatHash(hash);
     if(id&&me)openChatWhenReady(id);
   });

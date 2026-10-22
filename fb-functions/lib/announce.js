@@ -43,9 +43,10 @@ const length = (s) => Array.from(s).length;
  * or null when the request must be refused. Title: 1-60 characters on
  * one line. Body: 0-300 characters. pinned: boolean, default false.
  * expiresInMinutes: integer 0-1440, 0 (the default) means never.
- * Text that is too long is refused, not clipped.
+ * alert: true only for the boolean true; anything else is false (never
+ * a reason to refuse). Text that is too long is refused, not clipped.
  * @param {*} data request.data
- * @returns {{title:string, body:string, pinned:boolean, expiresInMinutes:number}|null}
+ * @returns {{title:string, body:string, pinned:boolean, expiresInMinutes:number, alert:boolean}|null}
  */
 function validateAnnouncement(data) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
@@ -74,7 +75,7 @@ function validateAnnouncement(data) {
     exp = expiresInMinutes;
   }
 
-  return { title: t, body: b, pinned: pin, expiresInMinutes: exp };
+  return { title: t, body: b, pinned: pin, expiresInMinutes: exp, alert: data.alert === true };
 }
 
 const ANNOUNCEMENT_ID_RE = /^[A-Za-z0-9]{1,40}$/;

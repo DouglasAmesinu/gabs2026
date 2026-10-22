@@ -15,10 +15,10 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -242,5 +242,20 @@ test("clampBadge caps large counts at 99 and turns everything else into 0", () =
 test("parseChatHash handles a missing hash and non-strings", () => {
   for (const h of [undefined, null, 0, 123, {}, [], ["#chat=abc"]]) {
     assert.equal(parseChatHash(h), "", String(h));
+  }
+});
+
+test("isAnnouncementsHash is true only for exactly #announcements", () => {
+  assert.equal(isAnnouncementsHash("#announcements"), true);
+  assert.equal(isAnnouncementsHash("#announcements2"), false);
+  assert.equal(isAnnouncementsHash("#admin"), false);
+  assert.equal(isAnnouncementsHash("#chat=abc"), false);
+  assert.equal(isAnnouncementsHash(""), false);
+  assert.equal(isAnnouncementsHash(undefined), false);
+});
+
+test("isAnnouncementsHash refuses near misses and non-strings", () => {
+  for (const h of ["announcements", "#Announcements", "#announcements ", " #announcements", "#announcements/", null, 0, {}, ["#announcements"]]) {
+    assert.equal(isAnnouncementsHash(h), false, String(h));
   }
 });

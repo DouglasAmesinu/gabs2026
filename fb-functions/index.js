@@ -31,6 +31,9 @@ const {
   callWindow,
   pushLogEntry,
   pushStatusOf,
+  buildAnnouncementAlert,
+  chunk: chunkList,
+  allowAnnouncementAlert,
 } = require("./lib/push");
 const {
   validateBlockInput,
@@ -202,7 +205,7 @@ exports.adminUploadTickets = onCall({ region: REGION, maxInstances: 2 }, async (
 /**
  * Admin-only callable: wipe event data. Recursively deletes
  * participants (incl. private contact records), threads (incl.
- * messages), aiUsage and rate. Ticket documents are NEVER deleted;
+ * messages), aiUsage, rate and pushTokens. Ticket documents are NEVER deleted;
  * with unlinkTickets === true their uid is reset to null and
  * claimedAt removed so every ticket can be claimed again. Logs counts
  * only — never names or refs.
@@ -242,6 +245,7 @@ exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512M
     threads: counts.threads,
     aiUsage: counts.aiUsage,
     rate: counts.rate,
+    pushTokensDeleted: counts.pushTokens,
     ticketsUnlinked,
   };
   logger.info("adminReset: done", result);
@@ -251,7 +255,8 @@ exports.adminReset = onCall({ region: REGION, timeoutSeconds: 540, memory: "512M
 /**
  * Admin-only callable: block a delegate. Marks their ticket(s) blocked
  * (signInWithTicket then refuses them), revokes their sessions and
- * deletes their auth user, and unless deleteProfile === false deletes
+ * deletes their auth user and their pushTokens document (no more
+ * alerts), and unless deleteProfile === false deletes
  * their profile (incl. private contact), photo and every message they
  * are a participant of. Logs counts only, never the uid.
  */
@@ -282,7 +287,12 @@ exports.adminBlockDelegate = onCall({ region: REGION, maxInstances: 2 }, async (
     if (!isAuthUserNotFound(e)) throw e;
   }
 
-  // 3) Profile, photo, messages
+  // 3) Push tokens (deleting a missing document is not an error)
+  const pushRef = db.collection("pushTokens").doc(uid);
+  const pushTokensDeleted = (await pushRef.get()).exists ? 1 : 0;
+  await pushRef.delete();
+
+  // 4) Profile, photo, messages
   let profileDeleted = 0;
   let messagesDeleted = 0;
   if (deleteProfile) {
@@ -307,7 +317,7 @@ exports.adminBlockDelegate = onCall({ region: REGION, maxInstances: 2 }, async (
     }
   }
 
-  const result = { ticketsBlocked: ticketsSnap.size, profileDeleted, messagesDeleted, authDeleted };
+  const result = { ticketsBlocked: ticketsSnap.size, profileDeleted, messagesDeleted, authDeleted, pushTokensDeleted };
   logger.info("adminBlockDelegate: done", result);
   return result;
 });
@@ -340,10 +350,11 @@ exports.adminUnblockTicket = onCall({ region: REGION, maxInstances: 2 }, async (
 
 /**
  * Admin-only callable: post an announcement to every participant.
- * Input {title, body, pinned, expiresInMinutes} (see lib/announce).
+ * Input {title, body, pinned, expiresInMinutes, alert} (see lib/announce).
  * Refused once MAX_ANNOUNCEMENTS documents exist. expiresAt is a
- * Timestamp, or null when the announcement never expires. Never logs
- * the announcement text.
+ * Timestamp, or null when the announcement never expires. With alert
+ * true a phone alert goes to everyone with alerts on (sendAnnouncementAlert).
+ * Returns {id, alerted, limited}. Never logs the announcement text.
  */
 exports.adminPostAnnouncement = onCall({ region: REGION, maxInstances: 2 }, async (request) => {
   requireAdmin(request, ADMIN_UID.value());
@@ -368,7 +379,16 @@ exports.adminPostAnnouncement = onCall({ region: REGION, maxInstances: 2 }, asyn
     expiresAt,
   });
   logger.info("adminPostAnnouncement: done", { pinned: input.pinned, expiresInMinutes: input.expiresInMinutes });
-  return { id: ref.id };
+  if (!input.alert) return { id: ref.id, alerted: 0, limited: false };
+  // The announcement is already written: a failed alert never undoes it
+  try {
+    const { alerted, limited } = await sendAnnouncementAlert(input.title);
+    return { id: ref.id, alerted, limited };
+  } catch (e) {
+    const code = String((e && e.code) || "");
+    console.log(JSON.stringify({ event: "announce-push-error", code: /^[a-z0-9/_-]{1,80}$/i.test(code) ? code : "unknown" }));
+    return { id: ref.id, alerted: 0, limited: false };
+  }
 });
 
 /**
@@ -673,6 +693,72 @@ async function sendPush(uid, tokens, data) {
     });
   }
   return { sent: res.successCount, failed: res.failureCount, removed: dead.length, responses: res.responses };
+}
+
+const ANNOUNCE_PUSH_PAGE = 500;
+const ANNOUNCE_PRUNE_BATCH = 400;
+
+/**
+ * Phone alert for a new announcement to every unmuted pushTokens
+ * document. Limited by allowAnnouncementAlert in rate/ann_push (checked
+ * in a transaction; nothing is sent over the limit). Reads pushTokens in
+ * pages of 500, sends DATA-ONLY in chunks of 500, then removes the tokens
+ * FCM reports as dead from their documents in batches. Logs one JSON
+ * line with counts only.
+ * @returns {Promise<{alerted:number, limited:boolean}>}
+ */
+async function sendAnnouncementAlert(title) {
+  const rateRef = db.collection("rate").doc("ann_push");
+  const allowed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(rateRef);
+    const d = snap.exists ? snap.data() : {};
+    const decision = allowAnnouncementAlert({ count: d.count, windowStart: d.windowStart, nowMs: Date.now() });
+    if (decision.allow) tx.set(rateRef, decision.next, { merge: true });
+    return decision.allow;
+  });
+  if (!allowed) return { alerted: 0, limited: true };
+
+  // token -> [{ref, entry}]: the stored entry is kept so arrayRemove can match it exactly
+  const owners = new Map();
+  const { FieldPath, FieldValue } = admin.firestore;
+  let last = null;
+  for (;;) {
+    let q = db.collection("pushTokens").orderBy(FieldPath.documentId()).select("tokens", "muted").limit(ANNOUNCE_PUSH_PAGE);
+    if (last) q = q.startAfter(last);
+    const page = await q.get();
+    for (const doc of page.docs) {
+      const d = doc.data();
+      if (d.muted === true || !Array.isArray(d.tokens)) continue;
+      const valid = new Set(storedTokens(d));
+      for (const entry of d.tokens) {
+        if (!entry || !valid.has(entry.t)) continue;
+        if (!owners.has(entry.t)) owners.set(entry.t, []);
+        owners.get(entry.t).push({ ref: doc.ref, entry });
+      }
+    }
+    if (page.size < ANNOUNCE_PUSH_PAGE) break;
+    last = page.docs[page.docs.length - 1];
+  }
+
+  const tokens = [...owners.keys()];
+  const data = buildAnnouncementAlert({ title });
+  let success = 0;
+  let failure = 0;
+  const dead = [];
+  for (const part of chunkList(tokens, ANNOUNCE_PUSH_PAGE)) {
+    const res = await getMessaging().sendEachForMulticast({ tokens: part, data, webpush: PUSH_WEBPUSH });
+    success += res.successCount;
+    failure += res.failureCount;
+    for (const t of deadTokens(part, res.responses)) dead.push(...owners.get(t));
+  }
+  for (const part of chunkList(dead, ANNOUNCE_PRUNE_BATCH)) {
+    const batch = db.batch();
+    part.forEach(({ ref, entry }) => batch.update(ref, { tokens: FieldValue.arrayRemove(entry) }));
+    await batch.commit();
+  }
+
+  console.log(JSON.stringify({ event: "announce-push", tokens: tokens.length, success, failure, pruned: dead.length }));
+  return { alerted: success, limited: false };
 }
 
 /**

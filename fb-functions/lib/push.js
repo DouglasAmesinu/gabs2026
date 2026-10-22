@@ -1,6 +1,7 @@
 "use strict";
 
 const { splitThreadId } = require("./slots");
+const { cleanText } = require("./announce");
 
 // Pure helpers for push alerts (registerPushToken, notifyNewMessage and
 // friends). No I/O here: index.js reads and writes Firestore and FCM.
@@ -13,6 +14,8 @@ const LAST_SENT_MAX = 50;
 const NAME_MAX = 40;
 const NAME_FALLBACK = "a participant";
 const ALERT_TITLE = "GABS Connect";
+const ANNOUNCE_ALERT_MAX = 60;
+const ANNOUNCE_ALERT_FALLBACK = "New announcement";
 // FCM error codes that mean the token will never work again
 const DEAD_TOKEN_CODES = new Set(["messaging/registration-token-not-registered", "messaging/invalid-registration-token"]);
 
@@ -284,6 +287,59 @@ function pushStatusOf(data, nowMs) {
   };
 }
 
+/**
+ * The data payload for an announcement alert: the title cleaned with
+ * cleanText on one line and clipped to 60 characters ("New announcement"
+ * when nothing is left). Plain text only: notifications never render HTML.
+ * @param {{title:*}} p
+ * @returns {{title:string, body:string, tag:string, url:string, kind:string, renotify:string}}
+ */
+function buildAnnouncementAlert({ title } = {}) {
+  const t = typeof title === "string" ? cleanText(title.replace(/[\r\n]+/g, " "), ANNOUNCE_ALERT_MAX) : "";
+  return {
+    title: ALERT_TITLE,
+    body: "\u{1F4E2} " + (t || ANNOUNCE_ALERT_FALLBACK),
+    tag: "announcement",
+    url: "/#announcements",
+    kind: "announcement",
+    renotify: "1",
+  };
+}
+
+/**
+ * Split an array into pieces of at most `size` items (size below 1 or
+ * not a number counts as 1). Anything that is not an array gives [].
+ * @template T
+ * @param {T[]} list
+ * @param {number} size
+ * @returns {T[][]}
+ */
+function chunk(list, size) {
+  if (!Array.isArray(list)) return [];
+  const n = Number.isFinite(size) && size >= 1 ? Math.floor(size) : 1;
+  const out = [];
+  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+  return out;
+}
+
+/**
+ * Limit for announcement alerts ({count, windowStart} stored in
+ * rate/ann_push): at most `max` in a window that restarts once
+ * `windowMs` has passed since its first alert. Malformed or future state
+ * starts a new window.
+ * @param {{count?:*, windowStart?:*, nowMs:number, max?:number, windowMs?:number}} p
+ * @returns {{allow:boolean, next:{count:number, windowStart:number}}}
+ */
+function allowAnnouncementAlert({ count, windowStart, nowMs, max = 10, windowMs = 3600000 } = {}) {
+  const active =
+    Number.isInteger(count) && count >= 0 &&
+    Number.isFinite(windowStart) && windowStart <= nowMs &&
+    nowMs - windowStart < windowMs;
+  if (!active) return max > 0 ? { allow: true, next: { count: 1, windowStart: nowMs } } : { allow: false, next: { count: 0, windowStart: nowMs } };
+  if (count >= max) return { allow: false, next: { count, windowStart } };
+  return { allow: true, next: { count: count + 1, windowStart } };
+}
+
 module.exports = {
   validToken,
   addToken,
@@ -296,6 +352,9 @@ module.exports = {
   callWindow,
   pushLogEntry,
   pushStatusOf,
+  buildAnnouncementAlert,
+  chunk,
+  allowAnnouncementAlert,
   LAST_SENT_MAX,
   DEAD_TOKEN_CODES,
 };
