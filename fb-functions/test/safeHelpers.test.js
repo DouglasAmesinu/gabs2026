@@ -15,10 +15,11 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine } =
+  loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -309,6 +310,59 @@ test("soundFor: a missing last sound means none yet; a missing clock means silen
 test("soundFor: no argument or an empty object is silent", () => {
   assert.equal(soundFor(), null);
   assert.equal(soundFor({}), null);
+});
+
+// A push-capable browser with the switch on
+const NOTIF = { permission: "default", supported: true, iosNotInstalled: false, registered: false, on: true };
+const line = (line, showAllow = false, showTest = false) => ({ line, showAllow, showTest });
+
+test("notifLine: off means no sound and no alerts, whatever else is true", () => {
+  const off = line("Off. No sound and no alerts.");
+  assert.deepEqual(notifLine({ ...NOTIF, on: false }), off);
+  assert.deepEqual(notifLine({ ...NOTIF, on: false, permission: "granted", registered: true }), off);
+  assert.deepEqual(notifLine({ ...NOTIF, on: undefined }), off, "missing on is off");
+  assert.deepEqual(notifLine(), off);
+  assert.deepEqual(notifLine({}), off);
+});
+
+test("notifLine: granted and registered shows the test button", () => {
+  assert.deepEqual(notifLine({ ...NOTIF, permission: "granted", registered: true }),
+    line("Sound in the app and alerts on this device", false, true));
+});
+
+test("notifLine: never asked offers Allow alerts", () => {
+  assert.deepEqual(notifLine(NOTIF), line("Sound in the app. Turn on alerts for when the app is closed.", true, false));
+});
+
+test("notifLine: granted without a registration (setup failed) offers Allow alerts again", () => {
+  assert.deepEqual(notifLine({ ...NOTIF, permission: "granted", registered: false }),
+    line("Sound in the app. Turn on alerts for when the app is closed.", true, false));
+  assert.deepEqual(notifLine({ ...NOTIF, permission: "granted", registered: undefined }).showAllow, true);
+});
+
+test("notifLine: denied says blocked, with no buttons", () => {
+  assert.deepEqual(notifLine({ ...NOTIF, permission: "denied" }),
+    line("Sound in the app. Alerts outside the app are blocked in this browser."));
+  assert.deepEqual(notifLine({ ...NOTIF, permission: "denied", registered: true }).showTest, false);
+});
+
+test("notifLine: an iPhone that is not installed needs the Home Screen", () => {
+  const ios = line("Sound in the app. Alerts outside the app need the app on your Home Screen.");
+  assert.deepEqual(notifLine({ ...NOTIF, iosNotInstalled: true, supported: false, permission: "unsupported" }), ios);
+  assert.deepEqual(notifLine({ ...NOTIF, iosNotInstalled: true }), ios, "never offers Allow on an uninstalled iPhone");
+});
+
+test("notifLine: unsupported or missing details mean sound only", () => {
+  assert.deepEqual(notifLine({ ...NOTIF, supported: false, permission: "unsupported" }), line("Sound in the app."));
+  assert.deepEqual(notifLine({ ...NOTIF, supported: false }), line("Sound in the app."), "default without support");
+  assert.deepEqual(notifLine({ on: true }), line("Sound in the app."));
+  assert.deepEqual(notifLine({ ...NOTIF, permission: undefined }), line("Sound in the app."));
+});
+
+test("notifLine: no line mentions battery, power saving, phone settings or background restrictions", () => {
+  const inputs = [NOTIF, { ...NOTIF, on: false }, { ...NOTIF, permission: "granted", registered: true }, { ...NOTIF, permission: "denied" },
+    { ...NOTIF, iosNotInstalled: true }, { on: true }];
+  for (const i of inputs) assert.doesNotMatch(notifLine(i).line, /battery|power|setting|optimi|background/i);
 });
 
 const TO = "help" + "@" + "example.org";
