@@ -1874,6 +1874,8 @@ function pushCardDue(){
   const mode=pushMode();
   if(mode==="guide")return Date.now()>(Number(lsGet(PUSH_GUIDE_KEY))||0);
   if(mode==="none"||pushGranted())return false;
+  // Blocked in the browser: asking again cannot work, so the card never shows
+  if(Notification.permission==="denied")return false;
   const v=lsGet(PUSH_ASKED_KEY);
   if(!v)return true;
   if(v==="done")return false;
@@ -1952,6 +1954,31 @@ async function promptInstall(){
 function refreshPushCard(){
   const h=pushCardHTML();
   patchHTML(document.getElementById("push-wrap"),h,h);
+}
+// "Turn on" and "Not now": the card fades out at once (150 ms), without waiting for anything
+function fadeOutPushCard(){
+  const card=document.querySelector("#push-wrap .push-card");
+  if(!card){refreshPushCard();return;}
+  card.style.transition="opacity .15s";
+  card.style.opacity="0";
+  card.style.pointerEvents="none";
+  setTimeout(refreshPushCard,150);
+}
+const PUSH_CARD_FAILED="We couldn't turn on alerts. You can try again in Edit Profile.";
+// Discover card "Turn on": the card is already gone; permission, token and registration run in the
+// background. A failure hides the card for 14 days (Edit Profile's switch still works).
+function turnOnFromCard(){
+  if(pushBusy||!me)return;
+  pushBusy=true;
+  lsSet(PUSH_ASKED_KEY,"done");
+  // runPushSetup asks for permission before its first await, so the request still comes from this tap
+  const setup=runPushSetup();
+  fadeOutPushCard();
+  setup.catch(()=>PUSH_CARD_FAILED).then(problem=>{
+    if(problem){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));showToast(PUSH_CARD_FAILED);}
+    else showToast("Alerts are on.");
+    if(document.getElementById("push-status"))loadPushStatus();
+  }).finally(()=>{pushBusy=false;syncPushSwitch();});
 }
 function pushSectionHTML(){
   const mode=pushMode();
@@ -2060,7 +2087,8 @@ const pushTestStamp=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:
 let pushBusy=false;
 async function handlePushAction(btn){
   const act=btn.dataset.push;
-  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
+  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));fadeOutPushCard();return;}
+  if(act==="on"){turnOnFromCard();return;}
   if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
   if(act==="guide"){showIosGuideSheet();return;}
   if(act==="copy"){copyAppLink(btn);return;}
@@ -2075,9 +2103,6 @@ async function handlePushAction(btn){
       setPushHelp("push-fix-help",problem||"All set: this device is registered for alerts. You can send a test alert.");
       syncPushSwitch();refreshPushCard();
       await loadPushStatus();
-    }else if(act==="on"){
-      lsSet(PUSH_ASKED_KEY,"done");
-      if(await enablePush("push-card-help"))refreshPushCard();
     }else if(act==="toggle"){
       if(pushIsOn()){
         try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-ep-help","");}
