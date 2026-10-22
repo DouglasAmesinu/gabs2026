@@ -302,6 +302,13 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .push-switch .push-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
 .push-switch[aria-checked="true"] .push-knob{transform:translateX(18px)}
 .push-switch:disabled{opacity:.6}
+/* Settings: the gear in the bottom bar and the sheet's rows */
+.profile-actions{display:flex;align-items:center;gap:4px}
+.gear-btn{min-width:44px;min-height:44px;margin:-6px -10px -6px 0;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;border-radius:12px;font-size:20px;color:var(--steel);cursor:pointer;touch-action:manipulation}
+.set-sec{margin-top:16px}
+.set-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.set-link{display:flex;align-items:center;width:100%;min-height:44px;padding:0;background:none;border:none;border-bottom:1px solid var(--border);font-size:14px;font-weight:600;color:var(--navy);text-align:left;text-decoration:none;cursor:pointer;touch-action:manipulation}
+.set-foot{text-align:center;font-size:11px;color:var(--muted);margin-top:18px}
 .push-status{margin-top:4px}
 .push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
 .push-status-row span:last-child{color:var(--muted);font-weight:600;text-align:right}
@@ -987,6 +994,8 @@ document.addEventListener("click",e=>{
   if(pv){openProfileFrom(pv);return;}
   const pb=e.target&&e.target.closest&&e.target.closest("[data-push]");
   if(pb){handlePushAction(pb);return;}
+  const sb=e.target&&e.target.closest&&e.target.closest("[data-settings]");
+  if(sb){handleSettingsAction(sb);return;}
   const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
   if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
@@ -1114,7 +1123,10 @@ function renderProfileBar(){
       ${avHTML(me.av||initials(me.name||"?"),32,me.photoURL)}
       <span class="profile-name">${me.salutation?esc(me.salutation)+". ":""}${esc(me.name)}</span>
     </div>
-    <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
+    <div class="profile-actions">
+      <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
+      <button type="button" class="gear-btn" data-settings="open" aria-label="Settings">⚙</button>
+    </div>
   </div>`;
 }
 
@@ -1122,6 +1134,20 @@ function renderProfileBar(){
 
 function bindProfileBar(){
   document.getElementById("edit-profile-btn")?.addEventListener("click",showEditProfile);
+}
+
+// Sign out on this device: alerts token, badge, listeners, auth session, cached data, then the entry screen
+async function signOutNow(){
+  await pushSignOut();
+  resetAppBadge();
+  stopMessageListeners();
+  if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
+  me=null;localStorage.removeItem("gabs_me");
+  readThreadIds=new Set();
+  stopParticipantListener();participants=[];
+  stopAnnouncementListener();
+  localStorage.removeItem("gabs_read");
+  showEntry();
 }
 
 function showEditProfile(){
@@ -1291,16 +1317,7 @@ function showEditProfile(){
 
   document.getElementById("ep-logout").onclick=async()=>{
     ov.remove();
-    await pushSignOut();
-    resetAppBadge();
-    stopMessageListeners();
-    if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
-    me=null;localStorage.removeItem("gabs_me");
-    readThreadIds=new Set();
-    stopParticipantListener();participants=[];
-    stopAnnouncementListener();
-    localStorage.removeItem("gabs_read");
-    showEntry();
+    await signOutNow();
   };
 
   document.getElementById("ep-save").onclick=async()=>{
@@ -1966,6 +1983,8 @@ window.addEventListener("appinstalled",()=>{installPromptEvent=null;syncInstallB
 const installButtonHTML=()=>`<button type="button" class="btn-outline btn-sm" data-push="install" style="margin-top:10px"${installPromptEvent?"":" hidden"}>⬇ Install app</button>`;
 function syncInstallButtons(){
   document.querySelectorAll('[data-push="install"]').forEach(b=>{b.hidden=!installPromptEvent;});
+  // Settings "App" section: only while the browser offers installing and the app is not installed
+  document.querySelectorAll("[data-app-install]").forEach(s=>{s.hidden=!installPromptEvent||isStandalone();});
 }
 async function promptInstall(){
   const ev=installPromptEvent;
@@ -1994,6 +2013,8 @@ function pushSectionHTML(){
 function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
 function syncPushSwitch(){
   document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(pushIsOn())));
+  const box=document.getElementById("set-alerts");
+  if(box&&box.dataset.state!==settingsAlertsState()){box.dataset.state=settingsAlertsState();box.innerHTML=settingsAlertsHTML();}
 }
 const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
 // Why alerts cannot work, in plain words, by the step that fails
@@ -2045,7 +2066,7 @@ function pushStatusRowsHTML(){
   ];
   return rows.map(([k,v])=>`<div class="push-status-row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
 }
-// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts
+// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts (Edit Profile and Settings)
 const pushDebug=()=>lsGet("gabs_debug")==="1";
 function pushStatusHTML(){
   if(!pushDebug())return"";
@@ -2090,6 +2111,7 @@ async function handlePushAction(btn){
   if(act==="guide"){showIosGuideSheet();return;}
   if(act==="copy"){copyAppLink(btn);return;}
   if(act==="install"){promptInstall();return;}
+  if(act==="sound"){toggleSound();return;}
   if(pushBusy||!me)return;
   pushBusy=true;btn.disabled=true;
   try{
@@ -2133,6 +2155,116 @@ async function handlePushAction(btn){
       renderPushStatus();
     }
   }finally{pushBusy=false;btn.disabled=false;}
+}
+
+// ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
+// APP_VERSION must equal the number in CACHE_NAME in sw.js: update them together on every release
+const APP_VERSION=17;
+// Put together at runtime so the addresses never appear whole in the source
+const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
+const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
+// "Sound in the app": on unless turned off ("0" or "1")
+const SOUND_KEY="gabs_sound";
+const soundIsOn=()=>lsGet(SOUND_KEY)!=="0";
+function toggleSound(){
+  const on=!soundIsOn();
+  lsSet(SOUND_KEY,on?"1":"0");
+  document.querySelectorAll('[data-push="sound"]').forEach(sw=>sw.setAttribute("aria-checked",String(on)));
+}
+// "guide": iPhone/iPad not installed; "none": no push in this browser; "denied": blocked; "push": usable
+function settingsAlertsState(){
+  const mode=pushMode();
+  if(mode!=="push")return mode;
+  return Notification.permission==="denied"?"denied":"push";
+}
+function settingsSwitchHTML(id,label,sub,checked,act,disabled){
+  return`<div class="push-row"><div><div id="${id}">${esc(label)}</div><div class="set-sub">${esc(sub)}</div></div><button type="button" class="push-switch" role="switch" aria-checked="${checked}" aria-labelledby="${id}" data-push="${act}"${disabled?" disabled":""}><span class="push-knob"></span></button></div>`;
+}
+// The alerts switch reuses handlePushAction ("toggle", "test", "guide"); help text goes to #push-ep-help
+function settingsAlertsHTML(){
+  const st=settingsAlertsState();
+  let alerts;
+  if(st==="guide")alerts=`<button type="button" class="set-link" data-push="guide">How to get alerts on iPhone</button>`;
+  else if(st==="none")alerts=`<div class="push-note" style="margin-top:0">Alerts aren't available in this browser. You can still see everything in the app.</div>`;
+  else if(st==="denied")alerts=settingsSwitchHTML("set-alerts-label","Alerts","Messages and announcements",false,"toggle",true)
+    +`<div class="push-note">Alerts are blocked in this browser. You can still see everything in the app.</div>`;
+  else alerts=settingsSwitchHTML("set-alerts-label","Alerts","Messages and announcements",pushIsOn(),"toggle",false);
+  return`${alerts}
+    <div style="margin-top:12px">${settingsSwitchHTML("set-sound-label","Sound in the app","A short sound while the app is open",soundIsOn(),"sound",false)}</div>
+    ${st==="push"?`<button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:12px">Send me a test alert</button>`:""}
+    <div class="push-help" id="push-ep-help" role="status"></div>`;
+}
+// "App": Install app only while the browser offers it; Add to Home Screen on a non-installed iPhone/iPad
+function settingsAppHTML(){
+  if(needsHomeScreen())return`<div class="set-sec"><div class="form-label">App</div>
+    <button type="button" class="set-link" data-push="guide">Add to Home Screen</button></div>`;
+  return`<div class="set-sec" data-app-install${installPromptEvent&&!isStandalone()?"":" hidden"}><div class="form-label">App</div>
+    <button type="button" class="set-link" data-push="install">Install app</button></div>`;
+}
+let settingsKeyHandler=null;
+function showSettings(){
+  closeSettings(false);
+  const ov=makeOv(false);ov.id="settings-sheet";
+  ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" style="padding-bottom:calc(22px + var(--safe-b))">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="sheet-title" id="settings-title" style="margin:0">Settings</div>
+      <button type="button" class="btn-outline btn-sm" data-settings="close" aria-label="Close settings">✕</button>
+    </div>
+    <div class="set-sec"><div class="form-label">Alerts</div>
+      <div id="set-alerts" data-state="${esc(settingsAlertsState())}">${settingsAlertsHTML()}</div>
+      ${pushStatusHTML()}
+    </div>
+    ${settingsAppHTML()}
+    <div class="set-sec"><div class="form-label">Help and privacy</div>
+      <button type="button" class="set-link" data-settings="support">Contact support</button>
+      <a class="set-link" href="/privacy" target="_blank" rel="noopener noreferrer">Privacy notice</a>
+      <button type="button" class="set-link" data-settings="delete">Ask us to delete my data</button>
+    </div>
+    <div class="set-sec"><div class="form-label">Account</div>
+      <button type="button" class="btn-outline" data-settings="signout" style="color:var(--red);border-color:#FECACA;font-size:12px;margin-top:4px">Sign out</button>
+    </div>
+    <div class="set-foot">GABS Connect · version ${esc(String(APP_VERSION))}</div>
+  </div>`;
+  ov.addEventListener("click",e=>{if(e.target===ov)closeSettings();});
+  // Escape closes Settings only when nothing (such as the iPhone guide) is open on top of it
+  settingsKeyHandler=e=>{
+    if(e.key!=="Escape")return;
+    const top=[...document.querySelectorAll(".ov")].pop();
+    if(top===ov){e.preventDefault();closeSettings();}
+  };
+  document.addEventListener("keydown",settingsKeyHandler);
+  document.body.appendChild(ov);
+  ov.querySelector('[data-settings="close"]').focus();
+  loadPushStatus();
+}
+// Removes only the sheet: the screen underneath (scroll, chat draft, listeners) is left as it was
+function closeSettings(restoreFocus=true){
+  if(settingsKeyHandler){document.removeEventListener("keydown",settingsKeyHandler);settingsKeyHandler=null;}
+  const ov=document.getElementById("settings-sheet");
+  if(!ov)return;
+  ov.remove();
+  if(restoreFocus)document.querySelector('[data-settings="open"]')?.focus({preventScroll:true});
+}
+const openMailLink=link=>{if(link)window.location.href=link;};
+function handleSettingsAction(el){
+  const act=el.dataset.settings;
+  if(act==="open"){showSettings();return;}
+  if(act==="close"){closeSettings();return;}
+  if(act==="support"){openMailLink(mailtoLink({to:supportAddress(),subject:"GABS Connect support"}));return;}
+  if(act==="delete"){
+    openMailLink(mailtoLink({
+      to:deletionAddress(),
+      cc:supportAddress(),
+      subject:"GABS Connect: please delete my data",
+      body:"Please delete my GABS Connect profile and data.\n\nMy name:\nMy ticket reference (optional):",
+    }));
+    return;
+  }
+  if(act==="signout"){
+    if(!confirm("Sign out? You will need your ticket reference or your personal link to sign back in."))return;
+    closeSettings(false);
+    signOutNow();
+  }
 }
 // Every app open with a participant session and permission granted (and after the service worker
 // reports a new subscription): get the token, and register it when it changed or was registered more
