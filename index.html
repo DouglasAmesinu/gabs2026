@@ -307,8 +307,9 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .push-switch[aria-checked="true"] .push-knob{transform:translateX(18px)}
 .push-switch:disabled{opacity:.6}
 /* Settings: the gear in the bottom bar and the sheet's rows */
-.profile-actions{display:flex;align-items:center;gap:4px}
-.gear-btn{min-width:44px;min-height:44px;margin:-6px -10px -6px 0;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;border-radius:12px;font-size:20px;color:var(--steel);cursor:pointer;touch-action:manipulation}
+/* Bottom bar: avatar and name (opens Settings) and the navy Settings pill, which never shrinks */
+.settings-pill{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 16px;border:none;border-radius:999px;background:var(--navy);color:#fff;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;touch-action:manipulation}
+.settings-pill svg{width:18px;height:18px}
 /* Settings soft cards: grey sheet, one white card per group, 52px rows with a 38px icon tile */
 .set-sheet{background:#F4F6FA}
 .set-sec{margin-top:18px}
@@ -366,10 +367,9 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .btn-row{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:18px}
 
 /* ── Profile footer ── */
-#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-b));flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
-.profile-info{display:flex;align-items:center;gap:9px}
-.profile-name{font-size:13px;font-weight:700;color:var(--text)}
-.edit-profile-btn{font-size:12px;font-weight:600;color:var(--steel);cursor:pointer;touch-action:manipulation;padding:6px 0}
+#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-b));flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.profile-info{display:flex;align-items:center;gap:9px;flex:1;min-width:0;min-height:44px;cursor:pointer;touch-action:manipulation;border-radius:12px}
+.profile-name{font-size:13px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Logos footer ── */
 .sp-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--steel);margin:18px 2px 10px}
@@ -1033,6 +1033,9 @@ function openProfileFrom(el){
 }
 document.addEventListener("keydown",e=>{
   if(e.key!=="Enter"&&e.key!==" ")return;
+  // role="button" blocks for Settings (the bar's avatar and name, the profile card): Enter and Space
+  const sb=e.target&&e.target.closest&&e.target.closest('[role="button"][data-settings]');
+  if(sb){e.preventDefault();handleSettingsAction(sb);return;}
   const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(!el)return;
   e.preventDefault();openProfileFrom(el);
@@ -1129,7 +1132,6 @@ function renderApp(){
   const tc=document.getElementById("tab-content");if(tc)renderSigs.set(tc,tabHTML);
   bindBottomNav();
   bindTab();
-  bindProfileBar();
   if(!privateEmailLoaded&&me&&window._fb){
     privateEmailLoaded=true;
     const fbs=window._fb;
@@ -1168,21 +1170,12 @@ function bindBottomNav(){
 function renderProfileBar(){
   if(!me)return"";
   return`<div id="profile-bar">
-    <div class="profile-info">
+    <div class="profile-info" role="button" tabindex="0" aria-label="Open settings" data-settings="open">
       ${avHTML(me.av||initials(me.name||"?"),32,me.photoURL)}
       <span class="profile-name">${me.salutation?esc(me.salutation)+". ":""}${esc(me.name)}</span>
     </div>
-    <div class="profile-actions">
-      <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
-      <button type="button" class="gear-btn" data-settings="open" aria-label="Settings">⚙</button>
-    </div>
+    <button type="button" class="settings-pill" id="settings-btn" data-settings="open">${setSvg("gear")}<span>Settings</span></button>
   </div>`;
-}
-
-
-
-function bindProfileBar(){
-  document.getElementById("edit-profile-btn")?.addEventListener("click",showEditProfile);
 }
 
 // Sign out on this device: alerts token, badge, listeners, auth session, cached data, then the entry screen
@@ -2310,6 +2303,7 @@ const SET_ICON_PATHS={
   trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v6"/><path d="M14 11v6"/>',
   signout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   chevron:'<path d="M9 6l6 6-6 6"/>',
+  gear:'<path d="M19.3 9.9L21.8 10.2L21.8 13.8L19.3 14.1L18.7 15.7L20.2 17.7L17.7 20.2L15.7 18.7L14.1 19.3L13.8 21.8L10.2 21.8L9.9 19.3L8.3 18.7L6.3 20.2L3.8 17.7L5.3 15.7L4.7 14.1L2.2 13.8L2.2 10.2L4.7 9.9L5.3 8.3L3.8 6.3L6.3 3.8L8.3 5.3L9.9 4.7L10.2 2.2L13.8 2.2L14.1 4.7L15.7 5.3L17.7 3.8L20.2 6.3L18.7 8.3Z"/><circle cx="12" cy="12" r="3"/>',
 };
 const setSvg=(name,cls="")=>`<svg${cls?` class="${cls}"`:""} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SET_ICON_PATHS[name]}</svg>`;
 const setTile=(name,tone)=>`<span class="set-tile ${tone}" aria-hidden="true">${setSvg(name)}</span>`;
@@ -2389,7 +2383,7 @@ function closeSettings(restoreFocus=true){
   const ov=document.getElementById("settings-sheet");
   if(!ov)return;
   ov.remove();
-  if(restoreFocus)document.querySelector('[data-settings="open"]')?.focus({preventScroll:true});
+  if(restoreFocus)document.getElementById("settings-btn")?.focus({preventScroll:true});
 }
 const openMailLink=link=>{if(link)window.location.href=link;};
 function handleSettingsAction(el){
