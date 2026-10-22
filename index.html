@@ -1969,6 +1969,8 @@ function pushCardDue(){
   if(mode==="none"||pushGranted())return false;
   // Blocked in the browser: asking again cannot work, so the card never shows
   if(Notification.permission==="denied")return false;
+  // Already registered on this device: nothing to turn on
+  if(hasPushToken())return false;
   const v=lsGet(PUSH_ASKED_KEY);
   if(!v)return true;
   if(v==="done")return false;
@@ -1982,7 +1984,7 @@ function pushCardHTML(){
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="guide-later">Not now</button></div>
   </div>`;
   return`<div class="push-card push-card-row" role="region" aria-label="Alerts">
-    <div class="push-card-title">🔔 Turn on alerts?</div>
+    <div class="push-card-title">🔔 Turn on notifications?</div>
     <button class="btn-outline btn-sm" data-push="later">Later</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button>
   </div>`;
 }
@@ -2056,18 +2058,19 @@ function fadeOutPushCard(){
   setTimeout(refreshPushCard,150);
 }
 const PUSH_CARD_FAILED="We couldn't turn on alerts. You can try again in Settings.";
-// Discover card "Turn on": the card is already gone; permission, token and registration run in the
-// background. A failure keeps the card away for 14 days (the Settings switch still works).
+// Discover card "Turn on": notifications (sound) on, the card is already gone; permission, token and
+// registration run in the background. A failure keeps the card away for 14 days (Settings still works).
 function turnOnFromCard(){
   if(pushBusy||!me)return;
   pushBusy=true;
+  lsSet(SOUND_KEY,"1");
   lsSet(PUSH_ASKED_KEY,"done");
   // runPushSetup asks for permission before its first await, so the request still comes from this tap
   const setup=runPushSetup();
   fadeOutPushCard();
   setup.catch(()=>PUSH_CARD_FAILED).then(problem=>{
     if(problem){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));showToast(PUSH_CARD_FAILED);}
-    else showToast("Alerts are on.");
+    else showToast("Notifications are on.");
     if(document.getElementById("push-status"))loadPushStatus();
   }).finally(()=>{pushBusy=false;syncPushSwitch();});
 }
