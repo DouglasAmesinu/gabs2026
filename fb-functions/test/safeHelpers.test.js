@@ -15,11 +15,11 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine } =
-  loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
+  profileLine } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -363,6 +363,42 @@ test("notifLine: no line mentions battery, power saving, phone settings or backg
   const inputs = [NOTIF, { ...NOTIF, on: false }, { ...NOTIF, permission: "granted", registered: true }, { ...NOTIF, permission: "denied" },
     { ...NOTIF, iosNotInstalled: true }, { on: true }];
   for (const i of inputs) assert.doesNotMatch(notifLine(i).line, /battery|power|setting|optimi|background/i);
+});
+
+test("profileLine joins company and country with a middle dot", () => {
+  assert.equal(profileLine({ company: "AHK Ghana", country: "Ghana" }), "AHK Ghana · Ghana");
+});
+
+test("profileLine leaves out an empty part", () => {
+  assert.equal(profileLine({ company: "AHK Ghana" }), "AHK Ghana");
+  assert.equal(profileLine({ company: "AHK Ghana", country: "" }), "AHK Ghana");
+  assert.equal(profileLine({ country: "Germany" }), "Germany");
+  assert.equal(profileLine({ company: "", country: "Germany" }), "Germany");
+});
+
+test("profileLine is empty when neither part is there", () => {
+  assert.equal(profileLine({}), "");
+  assert.equal(profileLine(), "");
+  assert.equal(profileLine({ company: "", country: "" }), "");
+  assert.equal(profileLine({ company: "   ", country: "\t\n" }), "");
+});
+
+test("profileLine trims and collapses extra spaces", () => {
+  assert.equal(profileLine({ company: "  AHK   Ghana ", country: " Ghana  " }), "AHK Ghana · Ghana");
+  assert.equal(profileLine({ company: "AHK\n\tGhana" }), "AHK Ghana");
+});
+
+test("profileLine ignores non-string parts", () => {
+  for (const v of [null, undefined, 42, true, {}, ["Ghana"]]) {
+    assert.equal(profileLine({ company: v, country: "Ghana" }), "Ghana", String(v));
+    assert.equal(profileLine({ company: "AHK", country: v }), "AHK", String(v));
+  }
+});
+
+test("profileLine returns hostile text unchanged (esc is applied when rendering)", () => {
+  const evil = '<img src=x onerror="alert(1)">';
+  assert.equal(profileLine({ company: evil, country: "<b>GH</b>" }), evil + " · <b>GH</b>");
+  assert.equal(esc(profileLine({ company: evil })), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
 });
 
 const TO = "help" + "@" + "example.org";
