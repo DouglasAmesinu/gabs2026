@@ -344,6 +344,8 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .set-prof-name{font-size:15px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-prof-sub{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-prof-edit{flex-shrink:0;white-space:nowrap;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation}
+/* Edit Profile opened from Settings: the way back */
+.ep-back{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;margin:-10px 0 2px -4px;background:none;border:none;font-size:14px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation}
 .set-foot{text-align:center;font-size:11px;color:#4B5563;margin-top:18px}
 .push-status{margin-top:4px}
 .push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
@@ -1199,12 +1201,22 @@ async function signOutNow(){
   showEntry();
 }
 
-function showEditProfile(){
+// The bottom bar alone, re-rendered with the current name and photo (the tab underneath is left alone)
+function refreshProfileBar(){
+  const bar=document.getElementById("profile-bar");
+  if(bar)bar.outerHTML=renderProfileBar();
+}
+// opts.fromSettings: opened from the Settings profile card. Then "‹ Settings", Close, the backdrop, Escape,
+// the phone's back gesture and a successful save all return to Settings (Settings is closed meanwhile,
+// so the two never stack). A history entry makes the back gesture work; every return goes through it.
+function showEditProfile(opts){
+  const fromSettings=!!opts&&opts.fromSettings===true;
   const ov=makeOv(true);
   const epPtypeCustom=!!me.ptype&&!PARTICIPANT_TYPES.includes(me.ptype);
   const epPtypeSel=epPtypeCustom?"Other":(me.ptype||"");
   const epPtypeOther=epPtypeCustom?me.ptype:"";
   ov.innerHTML=`<div class="sheet pop" style="max-width:440px">
+    ${fromSettings?`<button type="button" class="ep-back" id="ep-back">‹ Settings</button>`:""}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div class="sheet-title">Edit Profile</div>
       <button class="btn-outline btn-sm" id="ep-close">Close</button>
@@ -1283,7 +1295,28 @@ function showEditProfile(){
     }).catch(()=>{});
   }
 
-  document.getElementById("ep-close").onclick=()=>ov.remove();
+  let epKeyHandler=null;
+  const backToSettings=()=>{
+    if(epKeyHandler){document.removeEventListener("keydown",epKeyHandler);epKeyHandler=null;}
+    ov.remove();
+    refreshProfileBar();
+    showSettings();
+  };
+  // Close: from Settings, step back through history (popstate then returns); otherwise as before
+  const closeEp=()=>{if(fromSettings)history.back();else ov.remove();};
+  if(fromSettings){
+    history.pushState({gabsEditProfile:true},"");
+    window.addEventListener("popstate",backToSettings,{once:true});
+    epKeyHandler=e=>{
+      if(e.key!=="Escape")return;
+      const top=[...document.querySelectorAll(".ov")].pop();
+      if(top===ov){e.preventDefault();closeEp();}
+    };
+    document.addEventListener("keydown",epKeyHandler);
+    document.getElementById("ep-back").onclick=closeEp;
+    document.getElementById("ep-back").focus();
+  }
+  document.getElementById("ep-close").onclick=closeEp;
   document.querySelectorAll("#ep-interests .interest-chip").forEach(chip=>{
     chip.onclick=()=>chip.classList.toggle("sel");
   });
@@ -1292,7 +1325,7 @@ function showEditProfile(){
   if(epBio&&epBioCount){
     epBio.oninput=()=>{epBioCount.textContent=`${epBio.value.length} / 200`;epBioCount.style.color=epBio.value.length>180?"var(--red)":"var(--muted)";};
   }
-  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+  ov.addEventListener("click",e=>{if(e.target===ov)closeEp();});
 
   document.getElementById("ep-sector")?.addEventListener("change",e=>{
     const otherInp=document.getElementById("ep-sector-other");
@@ -1407,7 +1440,9 @@ function showEditProfile(){
       // Refresh the profile bar name display
       const pname=document.querySelector(".profile-name");
       if(pname)pname.textContent=(me.salutation?me.salutation+". ":"")+me.name;
-      setTimeout(()=>ov.remove(),1200);
+      // From Settings: straight back to it, with the profile card and the bar showing the new values
+      if(fromSettings){showToast("Profile saved.");closeEp();}
+      else setTimeout(()=>ov.remove(),1200);
     }catch(e){
       if(fb)fb.innerHTML=`<div class="err-msg">Update failed. Try again.</div>`;
       if(btn){btn.disabled=false;btn.textContent="Save changes";}
@@ -2398,7 +2433,7 @@ function handleSettingsAction(el){
   if(act==="open"){showSettings();return;}
   if(act==="close"){closeSettings();return;}
   // The same Edit Profile the bottom bar opens
-  if(act==="edit"){closeSettings(false);showEditProfile();return;}
+  if(act==="edit"){closeSettings(false);showEditProfile({fromSettings:true});return;}
   if(act==="support"){openMailLink(mailtoLink({to:supportAddress(),subject:"GABS Connect support"}));return;}
   if(act==="delete"){
     openMailLink(mailtoLink({
