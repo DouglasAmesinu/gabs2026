@@ -20,6 +20,7 @@ import{initializeFirestore,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs
 import{getStorage,ref,uploadBytes,getDownloadURL}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import{getAuth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import{getMessaging,getToken,deleteToken}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 const LIVE_HOSTS=["gabsconnect.com","www.gabsconnect.com","gabsconnect.pages.dev"];
 const IS_LIVE=LIVE_HOSTS.includes(location.hostname);
 const firebaseConfig=IS_LIVE?{apiKey:"AIzaSyBYv9Zyaysn04TbPABSn6WIhCtShrdvep8",authDomain:"gabs2026-4f482.firebaseapp.com",projectId:"gabs2026-4f482",storageBucket:"gabs2026-4f482.firebasestorage.app",messagingSenderId:"426300183068",appId:"1:426300183068:web:511a81600d649a1abb05d9"}:{
@@ -51,6 +52,18 @@ window._auth={auth,signInWithEmailAndPassword,signInWithCustomToken,signOut,onAu
 window._fn={httpsCallable:(n,o)=>httpsCallable(functions,n,o)};
 window._fb={db,collection,doc,getDoc,addDoc,updateDoc,setDoc,getDocs,deleteDoc,onSnapshot,query,orderBy,where,serverTimestamp,collectionGroup,limit};
 window._storage={storage,ref,uploadBytes,getDownloadURL};
+// Message alerts (web push): only where service workers, the Push API and notifications all exist;
+// window._push stays null elsewhere and every push control is hidden (an iPhone/iPad browser tab shows the
+// Home Screen guide instead, since PushManager only exists in the installed app). Messaging is created on first use.
+const VAPID_KEY=IS_LIVE?"BPhZrto5ZREq1WWkBJmX4CdWvz0MmJ-B3L_IqRQVQxUTIK5b1XwkdyThb2uThrKFB5JVzwsHpsStVz7nyasK96M":"BE-54K5VnFfMw3_NbhLzG-BwX19je1H5v37McoKyOUG6eTQhKRD89NVfGKLYLmiJkJiCr_G2-q1r1qQNbU4lKG4";
+const PUSH_SUPPORTED="serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
+let messaging=null;
+const getMsg=()=>messaging||(messaging=getMessaging(app));
+window._push=PUSH_SUPPORTED?{
+  // register() returns the existing sw.js registration, so the token belongs to our own service worker
+  getToken:async()=>getToken(getMsg(),{vapidKey:VAPID_KEY,serviceWorkerRegistration:await navigator.serviceWorker.register("sw.js")}),
+  deleteToken:()=>deleteToken(getMsg())
+}:null;
 window.dispatchEvent(new Event("fb-ready"));
 </script>
 <style>
@@ -273,6 +286,25 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ann-x{position:absolute;top:4px;right:4px;width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:8px}
 .ann-item{padding:14px 0;border-bottom:1px solid var(--border)}
 .ann-item:last-child{border-bottom:none}
+/* Message alerts: Discover card and the Edit Profile switch */
+.push-card{margin:0 16px 12px;background:var(--white);border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:14px;padding:12px 14px}
+.push-card-title{font-size:14px;font-weight:800;color:var(--text)}
+.push-card-text{font-size:13px;color:var(--text);line-height:1.45;margin-top:4px}
+.push-steps{margin:6px 0 0 18px;padding:0;font-size:13px;line-height:1.6;color:var(--text)}
+.push-note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
+.push-actions{display:flex;gap:8px;margin-top:10px}
+.push-actions .btn-sm{flex:1}
+.push-help{font-size:12px;color:var(--text);margin-top:8px;line-height:1.45}
+.push-help:empty{display:none}
+.push-row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;color:var(--text);margin-top:4px}
+.push-switch{position:relative;width:46px;height:28px;border-radius:14px;border:none;background:var(--border);cursor:pointer;flex-shrink:0;transition:background .2s;padding:0}
+.push-switch[aria-checked="true"]{background:var(--navy)}
+.push-switch .push-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.push-switch[aria-checked="true"] .push-knob{transform:translateX(18px)}
+.push-switch:disabled{opacity:.6}
+.push-status{margin-top:4px}
+.push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
+.push-status-row span:last-child{color:var(--muted);font-weight:600;text-align:right}
 .form-label{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:14px}
 .form-label:first-of-type{margin-top:0}
 .form-inp{width:100%;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;color:var(--text);background:#F9FAFB;transition:border-color .2s}
@@ -524,6 +556,17 @@ function clip(s,max){
 function parseTicketHash(hash){
   const m=/^#t=(GABS[A-Za-z0-9-]{6,60})$/i.exec(typeof hash==="string"?hash:"");
   return m?m[1].toUpperCase():"";
+}
+
+// The app icon badge number: an integer from 0 to 99 (a larger count shows 99); anything else is 0
+function clampBadge(n){
+  return Number.isInteger(n)?Math.min(99,Math.max(0,n)):0;
+}
+
+// An alert's chat link (#chat=<participant id>): the id, or "" for anything else
+function parseChatHash(hash){
+  const m=/^#chat=([A-Za-z0-9_-]{1,64})$/.exec(typeof hash==="string"?hash:"");
+  return m?m[1]:"";
 }
 // END safe-helpers
 
@@ -864,6 +907,20 @@ function downloadMeetingICS(id){
   const m=myMeetings.find(x=>x.id===id);
   if(m&&m.meeting)generateICS(m.meeting,me.name,m.otherParticipant.name);
 }
+// Open a chat from an alert (#chat= link or the service worker's open-chat message), like an inbox row,
+// once the participants list has arrived (waiting up to 10 seconds)
+function openChatWhenReady(id){
+  if(!id)return;
+  const t0=Date.now();
+  const tick=()=>{
+    if(!me)return;
+    const p=participants.find(x=>x.id===id);
+    if(p){openThread(p);return;}
+    if(!participantsLoaded&&Date.now()-t0<10000){setTimeout(tick,250);return;}
+    showToast("Profile not available.");
+  };
+  tick();
+}
 function showToast(msg){
   document.querySelector(".toast")?.remove();
   const t=document.createElement("div");
@@ -887,6 +944,8 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("click",e=>{
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(pv){openProfileFrom(pv);return;}
+  const pb=e.target&&e.target.closest&&e.target.closest("[data-push]");
+  if(pb){handlePushAction(pb);return;}
   const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
   if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
@@ -1091,6 +1150,8 @@ function showEditProfile(){
     <textarea class="form-inp" id="ep-bio" rows="3" maxlength="200" placeholder="${esc(bioPlaceholder())}" style="resize:none;line-height:1.5">${esc(me.bio||"")}</textarea>
     <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
     <div id="ep-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">${(me.bio||"").length} / 200</div>
+    ${pushSectionHTML()}
+    ${pushStatusHTML()}
     <div id="ep-feedback"></div>
     <div class="btn-row" style="margin-top:18px">
       <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
@@ -1099,6 +1160,7 @@ function showEditProfile(){
     <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
   </div>`;
   document.body.appendChild(ov);
+  loadPushStatus();
 
   if(window._fb&&me.id){
     const fbs=window._fb;
@@ -1188,6 +1250,8 @@ function showEditProfile(){
 
   document.getElementById("ep-logout").onclick=async()=>{
     ov.remove();
+    await pushSignOut();
+    resetAppBadge();
     stopMessageListeners();
     if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
     me=null;localStorage.removeItem("gabs_me");
@@ -1337,6 +1401,7 @@ function renderDiscover(){
       <div class="page-title">Discover</div>
       <div class="page-sub">${discSubText()}</div>
     </div>
+    <div id="push-wrap">${pushCardHTML()}</div>
     <div id="ann-wrap">${annCardHTML()}</div>
     <div class="search-wrap">
       <div class="search-box">
@@ -1625,6 +1690,7 @@ function startMessageListeners(){
   if(msgListenersStarted||!me||!window._fb)return;
   msgListenersStarted=true;
   startAnnouncementListener();
+  refreshPushToken();
   const fb=window._fb,myId=me.id;
   const msgs=fb.collectionGroup(fb.db,"messages");
   const inboxQ=fb.query(msgs,fb.where("participants","array-contains",myId),fb.orderBy("ts","desc"),fb.limit(400));
@@ -1762,6 +1828,303 @@ function startAnnouncementListener(){
   });
   annTimer=setInterval(refreshAnnouncements,60000);
 }
+// ── Message alerts (web push) ───────────────────────────────────────────────
+// window._push is null where push is unsupported; then only the iPhone/iPad Home Screen guide can show.
+// Never logs tokens. Notification.requestPermission() runs only from a tap on "Turn on" or the switch.
+const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, or the ms until which Not now hides the card
+const PUSH_TOKEN_KEY="gabs_push_tok";       // the token last registered from this device
+const PUSH_TOKEN_AT_KEY="gabs_push_tok_at"; // when it was last registered (ms)
+const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the switch was turned off
+const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
+const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
+const PUSH_LAST_TEST_KEY="gabs_push_last_test"; // the result of the last "Send me a test alert"
+const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REREGISTER_MS=3*24*60*60*1000;
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
+const lsDel=k=>{try{localStorage.removeItem(k);}catch(e){}};
+const PUSH_UA=navigator.userAgent||"";
+const isIOSDevice=/iPhone|iPad|iPod/.test(PUSH_UA)||(/Macintosh/.test(PUSH_UA)&&navigator.maxTouchPoints>1);
+const pushPlatform=()=>isIOSDevice?"ios":/Android/i.test(PUSH_UA)?"android":"desktop";
+const isStandalone=()=>navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);
+// iPhone/iPad in the browser: alerts need the Home Screen app, so show the guide instead
+const needsHomeScreen=()=>isIOSDevice&&!isStandalone();
+// "guide": iOS browser tab, always the Home Screen guide (PushManager is missing there by design);
+// "push": installed iOS app or any other device with push support; "none": nothing push-related
+const pushMode=()=>needsHomeScreen()?"guide":window._push?"push":"none";
+const pushGranted=()=>pushMode()==="push"&&Notification.permission==="granted";
+const pushIsOn=()=>pushGranted()&&lsGet(PUSH_MUTED_KEY)!=="1";
+function pushCardDue(){
+  if(!me)return false;
+  const mode=pushMode();
+  if(mode==="guide")return Date.now()>(Number(lsGet(PUSH_GUIDE_KEY))||0);
+  if(mode==="none"||pushGranted())return false;
+  const v=lsGet(PUSH_ASKED_KEY);
+  if(!v)return true;
+  if(v==="done")return false;
+  return Date.now()>(Number(v)||0);
+}
+function pushCardHTML(){
+  if(!pushCardDue())return"";
+  if(pushMode()==="guide")return`<div class="push-card" role="region" aria-label="Message alerts">
+    <div class="push-card-title">🔔 Get message alerts: add GABS Connect to your Home Screen</div>
+    ${iosGuideHTML()}
+    <div class="push-actions"><button class="btn-outline btn-sm" data-push="guide-later">Not now</button></div>
+  </div>`;
+  return`<div class="push-card" role="region" aria-label="Message alerts">
+    <div class="push-card-title">🔔 Turn on message alerts?</div>
+    <div class="push-card-text">We'll let you know when someone writes to you.</div>
+    <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
+    ${installButtonHTML()}
+    <div class="push-help" id="push-card-help" role="status"></div>
+  </div>`;
+}
+// Two variants by user agent: Safari (no CriOS, EdgiOS or FxiOS token) adds to the Home Screen directly;
+// every other iPhone/iPad browser copies the link and continues in Safari
+const isIOSSafari=()=>!/CriOS|EdgiOS|FxiOS/.test(PUSH_UA);
+function iosGuideHTML(){
+  const safari=isIOSSafari();
+  const steps=safari
+    ?["Tap the Share button (a square with an arrow).","Scroll down and tap Add to Home Screen.","Tap Add."]
+    :["Tap Copy link below.","Open Safari and paste the link.","Tap Share, then Add to Home Screen, then Add."];
+  return`${safari?"":`<div class="push-card-text">Message alerts on iPhone need Safari for one step.</div>`}
+    <ol class="push-steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
+    ${safari?"":`<div class="push-actions"><button class="btn-navy btn-sm" data-push="copy" style="color:#fff">Copy link</button></div>
+    <input class="form-inp" data-copy-box readonly value="${esc(location.origin)}" aria-label="Link to open in Safari" style="margin-top:8px" hidden/>`}
+    <div class="push-note">Then open GABS Connect from the new icon and sign in there. Message alerts only work from the icon. Needs iOS 16.4 or later.</div>`;
+}
+// Edit Profile's "How to get message alerts on iPhone": the same guide in a sheet
+function showIosGuideSheet(){
+  document.getElementById("ios-guide")?.remove();
+  const ov=makeOv(true);ov.id="ios-guide";
+  ov.innerHTML=`<div class="sheet pop" role="dialog" aria-modal="true" aria-labelledby="ios-guide-title" style="max-width:420px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="sheet-title" id="ios-guide-title" style="margin:0">Message alerts on iPhone</div>
+      <button class="btn-outline btn-sm" id="ios-guide-close">Close</button>
+    </div>
+    ${iosGuideHTML()}
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById("ios-guide-close").onclick=()=>ov.remove();
+  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+}
+// Copy link; without clipboard access, show the address next to the button, selected for copying by hand
+async function copyAppLink(btn){
+  try{
+    await navigator.clipboard.writeText(location.origin);
+    showToast("Link copied. Paste it into Safari.");
+  }catch(e){
+    const box=btn&&btn.closest(".push-card,.sheet")?.querySelector("[data-copy-box]");
+    if(box){box.hidden=false;box.focus();box.select();}
+  }
+}
+// Android and desktop: alerts work in a normal tab, so installing is never asked for. When the browser
+// offers it (beforeinstallprompt), an optional "Install app" button appears; it never fires on iOS.
+let installPromptEvent=null;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPromptEvent=e;syncInstallButtons();});
+window.addEventListener("appinstalled",()=>{installPromptEvent=null;syncInstallButtons();});
+const installButtonHTML=()=>`<button type="button" class="btn-outline btn-sm" data-push="install" style="margin-top:10px"${installPromptEvent?"":" hidden"}>⬇ Install app</button>`;
+function syncInstallButtons(){
+  document.querySelectorAll('[data-push="install"]').forEach(b=>{b.hidden=!installPromptEvent;});
+}
+async function promptInstall(){
+  const ev=installPromptEvent;
+  if(!ev)return;
+  installPromptEvent=null; // a prompt can only be shown once
+  syncInstallButtons();
+  try{await ev.prompt();await ev.userChoice;}catch(e){}
+}
+function refreshPushCard(){
+  const h=pushCardHTML();
+  patchHTML(document.getElementById("push-wrap"),h,h);
+}
+function pushSectionHTML(){
+  const mode=pushMode();
+  if(mode==="none")return"";
+  if(mode==="guide")return`<div class="form-label">Message alerts</div>
+    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get message alerts on iPhone</button>`;
+  const on=pushIsOn();
+  return`<div class="form-label">Message alerts</div>
+    <div class="push-row"><span id="push-switch-label">Alerts for new messages</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
+    <div class="push-note">Alerts show only the sender's name, never the message.</div>
+    <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
+    ${installButtonHTML()}
+    <div class="push-help" id="push-ep-help" role="status"></div>`;
+}
+function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
+function syncPushSwitch(){
+  document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(pushIsOn())));
+}
+const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
+// Why alerts cannot work, in plain words, by the step that fails
+const PUSH_REASON={
+  notInstalled:"Not installed on iPhone: add GABS Connect to your Home Screen and open it from the icon. Tap \"How to get message alerts on iPhone\" above.",
+  unsupported:"Unsupported browser: this browser cannot show message alerts.",
+  denied:()=>isIOSDevice
+    ?"Permission denied: alerts are blocked for GABS Connect."
+    :"Permission denied: tap the lock icon in the address bar, then Notifications, then Allow.",
+  token:"Token failed: this browser could not create an address for alerts. Please try again, or close and reopen the app.",
+  signedOut:"Server refused: please sign in again."
+};
+function pushServerReason(e){
+  const code=String((e&&e.code)||"");
+  if(code.endsWith("resource-exhausted"))return"Server refused: too many attempts. Please try again in an hour.";
+  if(code.endsWith("unauthenticated"))return PUSH_REASON.signedOut;
+  return"Server refused: the alert service could not be reached. Please try again later.";
+}
+// Permission (asked only from a tap), token, registration, unmute. "" when all worked, otherwise the reason.
+async function runPushSetup(){
+  const mode=pushMode();
+  if(mode==="guide")return PUSH_REASON.notInstalled;
+  if(mode==="none")return PUSH_REASON.unsupported;
+  if(!window._fn||!me)return PUSH_REASON.signedOut;
+  let perm=Notification.permission;
+  if(perm!=="granted"){try{perm=await Notification.requestPermission();}catch(e){perm="denied";}}
+  if(perm!=="granted")return PUSH_REASON.denied();
+  let token=null;
+  try{token=await window._push.getToken();}catch(e){}
+  if(!token)return PUSH_REASON.token;
+  try{
+    await callFn("registerPushToken",{token,platform:pushPlatform()});
+    await callFn("setPushMuted",{muted:false});
+  }catch(e){return pushServerReason(e);}
+  lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
+  return"";
+}
+// Edit Profile "Alerts status": always shown, whatever the device supports
+let pushRegText="checking…";
+function pushStatusRowsHTML(){
+  const perm=pushMode()!=="push"||!("Notification"in window)?"unsupported"
+    :Notification.permission==="granted"?"granted":Notification.permission==="denied"?"denied":"not asked";
+  const rows=[
+    ["Permission",perm],
+    ["App installed",isStandalone()?"yes":"no"],
+    ["This device registered",pushRegText],
+    ["Icon number supported","setAppBadge"in navigator?"yes":"no"],
+    ["Last test",lsGet(PUSH_LAST_TEST_KEY)||"none yet"]
+  ];
+  return rows.map(([k,v])=>`<div class="push-status-row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+}
+// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts
+const pushDebug=()=>lsGet("gabs_debug")==="1";
+function pushStatusHTML(){
+  if(!pushDebug())return"";
+  return`<div class="form-label">Alerts status</div>
+    <div class="push-status" id="push-status">${pushStatusRowsHTML()}</div>
+    <button type="button" class="btn-outline btn-sm" data-push="fix" style="margin-top:10px">Fix alerts</button>
+    <div class="push-help" id="push-fix-help" role="status"></div>`;
+}
+function renderPushStatus(){
+  const box=document.getElementById("push-status");
+  if(box)box.innerHTML=pushStatusRowsHTML();
+}
+// "This device registered": the server has tokens for this participant and this device has one stored
+async function loadPushStatus(){
+  if(!pushDebug())return;
+  if(pushMode()!=="push"||!window._fn||!me){pushRegText="no";renderPushStatus();return;}
+  pushRegText="checking…";renderPushStatus();
+  try{
+    const res=await callFn("pushStatus",{});
+    const d=(res&&res.data)||{};
+    pushRegText=d.tokens>0&&lsGet(PUSH_TOKEN_KEY)?"yes":"no";
+  }catch(e){pushRegText="unknown";}
+  renderPushStatus();
+}
+// "Turn on" and switch On: permission (from this tap), token, register, unmute
+// When setup fails, the help line says which step failed (runPushSetup's reason)
+async function enablePush(helpId){
+  const problem=await runPushSetup();
+  if(document.getElementById("push-status"))loadPushStatus();
+  if(problem){setPushHelp(helpId,problem);return false;}
+  setPushHelp(helpId,"");
+  showToast("Message alerts are on.");
+  return true;
+}
+const PUSH_TEST_FAILED="We couldn't reach this phone. Your messages are still safe in the app.";
+const pushTestStamp=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+let pushBusy=false;
+async function handlePushAction(btn){
+  const act=btn.dataset.push;
+  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
+  if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
+  if(act==="guide"){showIosGuideSheet();return;}
+  if(act==="copy"){copyAppLink(btn);return;}
+  if(act==="install"){promptInstall();return;}
+  if(pushBusy||!me)return;
+  pushBusy=true;btn.disabled=true;
+  try{
+    if(act==="fix"){
+      setPushHelp("push-fix-help","Checking…");
+      lsSet(PUSH_ASKED_KEY,"done");
+      const problem=await runPushSetup();
+      setPushHelp("push-fix-help",problem||"All set: this device is registered for message alerts. You can send a test alert.");
+      syncPushSwitch();refreshPushCard();
+      await loadPushStatus();
+    }else if(act==="on"){
+      lsSet(PUSH_ASKED_KEY,"done");
+      if(await enablePush("push-card-help"))refreshPushCard();
+    }else if(act==="toggle"){
+      if(pushIsOn()){
+        try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-ep-help","");}
+        catch(e){setPushHelp("push-ep-help","Couldn't turn off alerts. Please try again.");}
+      }else{
+        lsSet(PUSH_ASKED_KEY,"done");
+        await enablePush("push-ep-help");
+        refreshPushCard();
+      }
+      syncPushSwitch();
+    }else if(act==="test"){
+      setPushHelp("push-ep-help","Sending…");
+      let last;
+      try{
+        const res=await callFn("sendTestPush",{});
+        if(res&&res.data&&res.data.sent>0){
+          setPushHelp("push-ep-help","Sent. It can take a few seconds.");
+          last="sent";
+        }else{
+          setPushHelp("push-ep-help",PUSH_TEST_FAILED);
+          last="no device registered";
+        }
+      }catch(e){
+        setPushHelp("push-ep-help",PUSH_TEST_FAILED);
+        last="failed";
+      }
+      lsSet(PUSH_LAST_TEST_KEY,`${last} (${pushTestStamp()})`);
+      renderPushStatus();
+    }
+  }finally{pushBusy=false;btn.disabled=false;}
+}
+// Every app open with a participant session and permission granted (and after the service worker
+// reports a new subscription): get the token, and register it when it changed or was registered more
+// than 3 days ago. Fails quietly, with nothing in the console.
+let pushRefreshing=null;
+function refreshPushToken(){
+  if(!pushGranted()||!window._fn||!me)return Promise.resolve();
+  if(pushRefreshing)return pushRefreshing;
+  pushRefreshing=(async()=>{
+    try{
+      const token=await window._push.getToken();
+      if(!token)return;
+      const fresh=Date.now()-(Number(lsGet(PUSH_TOKEN_AT_KEY))||0)<PUSH_REREGISTER_MS;
+      if(token===lsGet(PUSH_TOKEN_KEY)&&fresh)return;
+      await callFn("registerPushToken",{token,platform:pushPlatform()});
+      lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));
+    }catch(e){}
+  })().finally(()=>{pushRefreshing=null;});
+  return pushRefreshing;
+}
+// Sign-out (while still signed in): unregister this device, delete the token, clear the local flags
+async function pushSignOut(){
+  const token=lsGet(PUSH_TOKEN_KEY);
+  if(window._push&&(token||pushGranted())){
+    const work=(async()=>{
+      if(token&&window._fn){try{await callFn("unregisterPushToken",{token});}catch(e){}}
+      try{await window._push.deleteToken();}catch(e){}
+    })();
+    // Never hold up sign-out for long on a bad connection
+    await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
+  }
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
+}
 function stopAnnouncementListener(){
   annStarted=false;
   if(annStop){annStop();annStop=null;}
@@ -1792,6 +2155,40 @@ function updateMsgBadge(){
     if(!b){b=document.createElement("div");b.className="nav-badge";nav.appendChild(b);}
     if(b.textContent!==String(count))b.textContent=count;
   });
+  syncAppBadge(count);
+}
+
+// Unread conversations outside the tab bar: page title, app icon badge and the service worker's counter.
+// Every API is optional and nothing here may throw.
+const BASE_TITLE=document.title;
+let lastAppBadge=-1; // -1: not yet sent, so the next update always goes through
+// Back in the app: alerts already shown are stale, so close them, then resend the real unread count
+// (the service worker raised its own counter for each alert)
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState!=="visible"||!me)return;
+  try{
+    const reg="serviceWorker"in navigator?await navigator.serviceWorker.getRegistration():null;
+    if(reg&&typeof reg.getNotifications==="function")(await reg.getNotifications()).forEach(n=>n.close());
+  }catch(e){}
+  lastAppBadge=-1;
+  try{updateMsgBadge();}catch(e){}
+});
+function syncAppBadge(count){
+  const n=clampBadge(count);
+  const title=count>0?`(${count}) GABS Connect`:BASE_TITLE;
+  if(document.title!==title)document.title=title;
+  if(n===lastAppBadge)return;
+  lastAppBadge=n;
+  try{
+    if(n>0){if("setAppBadge"in navigator)navigator.setAppBadge(n).catch(()=>{});}
+    else if("clearAppBadge"in navigator)navigator.clearAppBadge().catch(()=>{});
+  }catch(e){}
+  try{navigator.serviceWorker?.controller?.postMessage({type:"badge-set",n});}catch(e){}
+}
+// Sign-out: no badge, the original title, and the service worker's counter back to 0
+function resetAppBadge(){
+  lastAppBadge=-1;
+  syncAppBadge(0);
 }
 
 // ── Thread ─────────────────────────────────────────────────────────────────
@@ -3188,6 +3585,7 @@ async function boot(){
     showAdmin();return;
   }
   // Sign-in link (#t=<reference>): read it once and clear it from the address bar right away
+  const chatLinkId=parseChatHash(window.location.hash); // #chat=<id> from an alert; cleared with the line below
   const linkRef=parseTicketHash(window.location.hash);
   history.replaceState(null,"",location.pathname+location.search);
   const linkIgnored=()=>{if(linkRef)showToast("You're already signed in. Sign out first to use a different link.");};
@@ -3217,7 +3615,7 @@ async function boot(){
     if(!snap.empty){
       me=normParticipant({id:delegateUid,...snap.docs[0].data()});
       localStorage.setItem("gabs_me",JSON.stringify(me));
-      renderApp();startMessageListeners();linkIgnored();return;
+      renderApp();startMessageListeners();linkIgnored();openChatWhenReady(chatLinkId);return;
     }
   }
   me=null;localStorage.removeItem("gabs_me");
@@ -3238,6 +3636,15 @@ else{
 
 const qs=document.createElement("script");qs.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";document.head.appendChild(qs);
 if("serviceWorker"in navigator){
+  // Tapping an alert while the app is open: the service worker posts the alert's url
+  navigator.serviceWorker.addEventListener("message",e=>{
+    const d=e.data;
+    if(d&&d.type==="push-resubscribe"){if(me)refreshPushToken();return;}
+    if(!d||d.type!=="open-chat"||typeof d.url!=="string")return;
+    let hash="";try{hash=new URL(d.url,location.origin).hash;}catch(err){}
+    const id=parseChatHash(hash);
+    if(id&&me)openChatWhenReady(id);
+  });
   navigator.serviceWorker.register("sw.js").then(reg=>{
     document.addEventListener("visibilitychange",()=>{if(!document.hidden)reg.update().catch(()=>{});});
   }).catch(()=>{});
