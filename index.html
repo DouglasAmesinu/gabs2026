@@ -313,6 +313,14 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .set-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .set-link{display:flex;align-items:center;width:100%;min-height:44px;padding:0;background:none;border:none;border-bottom:1px solid var(--border);font-size:14px;font-weight:600;color:var(--navy);text-align:left;text-decoration:none;cursor:pointer;touch-action:manipulation}
 .set-text-btn{display:inline-block;background:none;border:none;padding:10px 0;margin-right:16px;min-height:44px;font-size:13px;font-weight:700;color:var(--navy);text-decoration:underline;cursor:pointer;touch-action:manipulation}
+/* Settings profile strip: avatar, name, company · country, Edit › */
+.set-prof{display:flex;align-items:center;gap:12px;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-top:8px}
+.set-prof-av{width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block}
+.set-prof-ini{background:var(--navy);color:#fff;border:3px solid var(--gold);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800}
+.set-prof-txt{flex:1;min-width:0}
+.set-prof-name{font-size:15px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-prof-sub{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-prof-edit{flex-shrink:0;min-height:44px;padding:0 4px;background:none;border:none;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation}
 .set-foot{text-align:center;font-size:11px;color:var(--muted);margin-top:18px}
 .push-status{margin-top:4px}
 .push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
@@ -2288,6 +2296,19 @@ function settingsAppHTML(){
   return`<div class="set-sec" data-app-install${installPromptEvent&&!isStandalone()?"":" hidden"}><div class="form-label">App</div>
     <button type="button" class="set-link" data-push="install">Install app</button></div>`;
 }
+// Profile strip at the top of Settings: only "Edit ›" is tappable
+function settingsProfileHTML(){
+  if(!me)return"";
+  const photo=safePhoto(me.photoURL);
+  const av=photo
+    ?`<img class="set-prof-av" src="${esc(photo)}" width="48" height="48" decoding="async" alt=""/>`
+    :`<div class="set-prof-av set-prof-ini" aria-hidden="true">${esc(initials(me.name||"?"))}</div>`;
+  const sub=[me.company,me.country].map(s=>typeof s==="string"?s.trim():"").filter(Boolean).join(" · ");
+  return`<div class="set-prof">${av}
+    <div class="set-prof-txt"><div class="set-prof-name">${esc(me.name||"")}</div>${sub?`<div class="set-prof-sub">${esc(sub)}</div>`:""}</div>
+    <button type="button" class="set-prof-edit" data-settings="edit">Edit ›</button>
+  </div>`;
+}
 let settingsKeyHandler=null;
 function showSettings(){
   closeSettings(false);
@@ -2297,6 +2318,7 @@ function showSettings(){
       <div class="sheet-title" id="settings-title" style="margin:0">Settings</div>
       <button type="button" class="btn-outline btn-sm" data-settings="close" aria-label="Close settings">✕</button>
     </div>
+    ${settingsProfileHTML()}
     <div class="set-sec"><div class="form-label">Notifications</div>
       <div id="set-alerts">${settingsAlertsHTML()}</div>
       ${pushStatusHTML()}
@@ -2337,6 +2359,8 @@ function handleSettingsAction(el){
   const act=el.dataset.settings;
   if(act==="open"){showSettings();return;}
   if(act==="close"){closeSettings();return;}
+  // The same Edit Profile the bottom bar opens
+  if(act==="edit"){closeSettings(false);showEditProfile();return;}
   if(act==="support"){openMailLink(mailtoLink({to:supportAddress(),subject:"GABS Connect support"}));return;}
   if(act==="delete"){
     openMailLink(mailtoLink({
