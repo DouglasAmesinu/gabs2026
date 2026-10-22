@@ -15,10 +15,10 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor };`)();
 }
 
-const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash } = loadHelpers();
+const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -252,6 +252,62 @@ test("isAnnouncementsHash is true only for exactly #announcements", () => {
   assert.equal(isAnnouncementsHash("#chat=abc"), false);
   assert.equal(isAnnouncementsHash(""), false);
   assert.equal(isAnnouncementsHash(undefined), false);
+});
+
+// A message that should sound: everything set, from someone else, long after the last sound
+const SOUND = { soundOn: true, visible: true, isFirstSnapshot: false, fromId: "u2", myId: "u1", chatOpenWithSender: false, nowMs: 100000, lastPlayedMs: 0, minGapMs: 2000 };
+
+test("soundFor: ding outside the chat, tick in the open chat with the sender", () => {
+  assert.equal(soundFor(SOUND), "ding");
+  assert.equal(soundFor({ ...SOUND, chatOpenWithSender: true }), "tick");
+  assert.equal(soundFor({ ...SOUND, chatOpenWithSender: "yes" }), "ding", "only true means the chat is open");
+});
+
+test("soundFor: silent when sound is off or missing", () => {
+  assert.equal(soundFor({ ...SOUND, soundOn: false }), null);
+  assert.equal(soundFor({ ...SOUND, soundOn: undefined }), null);
+  assert.equal(soundFor({ ...SOUND, soundOn: "1" }), null);
+});
+
+test("soundFor: silent when the page is not visible or visibility is unknown", () => {
+  assert.equal(soundFor({ ...SOUND, visible: false }), null);
+  assert.equal(soundFor({ ...SOUND, visible: undefined }), null);
+});
+
+test("soundFor: silent for a first snapshot (history) or when that is unknown", () => {
+  assert.equal(soundFor({ ...SOUND, isFirstSnapshot: true }), null);
+  assert.equal(soundFor({ ...SOUND, isFirstSnapshot: undefined }), null);
+});
+
+test("soundFor: silent for my own message", () => {
+  assert.equal(soundFor({ ...SOUND, fromId: "u1" }), null);
+  assert.equal(soundFor({ ...SOUND, fromId: "u1", chatOpenWithSender: true }), null);
+});
+
+test("soundFor: an announcement (no fromId) still sounds; missing myId is not 'own'", () => {
+  assert.equal(soundFor({ ...SOUND, fromId: undefined }), "ding");
+  assert.equal(soundFor({ ...SOUND, fromId: undefined, myId: undefined }), "ding");
+  assert.equal(soundFor({ ...SOUND, fromId: "", myId: "" }), "ding");
+  assert.equal(soundFor({ ...SOUND, myId: undefined }), "ding");
+});
+
+test("soundFor: at most one sound per minGapMs", () => {
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 98001 }), null, "1999 ms after the last sound");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 98000 }), "ding", "exactly 2000 ms");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 99000, minGapMs: 500 }), "ding");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: 98001, minGapMs: undefined }), null, "default gap is 2000");
+});
+
+test("soundFor: a missing last sound means none yet; a missing clock means silence", () => {
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: undefined }), "ding");
+  assert.equal(soundFor({ ...SOUND, lastPlayedMs: null }), "ding");
+  assert.equal(soundFor({ ...SOUND, nowMs: undefined }), null);
+  assert.equal(soundFor({ ...SOUND, nowMs: NaN }), null);
+});
+
+test("soundFor: no argument or an empty object is silent", () => {
+  assert.equal(soundFor(), null);
+  assert.equal(soundFor({}), null);
 });
 
 test("isAnnouncementsHash refuses near misses and non-strings", () => {

@@ -573,6 +573,18 @@ function parseChatHash(hash){
 function isAnnouncementsHash(hash){
   return hash==="#announcements";
 }
+
+// In-app sound for something that just arrived: "tick" in the open chat with its sender, "ding" anywhere
+// else, null for silence (sound off, page not visible, history from a first snapshot, own message, or less
+// than minGapMs, default 2000, since the last sound). Unknown or missing values err towards silence.
+function soundFor({soundOn,visible,isFirstSnapshot,fromId,myId,chatOpenWithSender,nowMs,lastPlayedMs,minGapMs}={}){
+  if(soundOn!==true||visible!==true||isFirstSnapshot!==false)return null;
+  if(typeof fromId==="string"&&fromId!==""&&fromId===myId)return null;
+  if(!Number.isFinite(nowMs))return null;
+  const gap=Number.isFinite(minGapMs)?minGapMs:2000;
+  if(Number.isFinite(lastPlayedMs)&&nowMs-lastPlayedMs<gap)return null;
+  return chatOpenWithSender===true?"tick":"ding";
+}
 // END safe-helpers
 
 
@@ -1625,6 +1637,47 @@ function bindInboxRows(){
   document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=e=>{if(e.target.closest("[data-profile-id]"))return;const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
 }
 
+// ── In-app sound (Web Audio, no audio files) ────────────────────────────────
+// Browsers only allow audio after a user gesture, so the one AudioContext is created on the first one
+let chimeCtx=null,chimeLastMs=0;
+function unlockChime(){
+  if(chimeCtx)return;
+  try{const AC=window.AudioContext||window.webkitAudioContext;if(AC)chimeCtx=new AC();}catch(e){}
+}
+["touchstart","click","keydown"].forEach(t=>document.addEventListener(t,unlockChime,{once:true,passive:true,capture:true}));
+// One sine tone with a 10 ms attack and a short exponential decay
+function chimeTone(freq,start,dur,peak){
+  const ctx=chimeCtx,osc=ctx.createOscillator(),g=ctx.createGain();
+  osc.type="sine";osc.frequency.setValueAtTime(freq,start);
+  g.gain.setValueAtTime(0.0001,start);
+  g.gain.linearRampToValueAtTime(peak,start+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+  osc.connect(g);g.connect(ctx.destination);
+  osc.start(start);osc.stop(start+dur+0.02);
+}
+// "ding": 880 Hz for 110 ms then 1320 Hz for 150 ms; "tick": 660 Hz for 70 ms. Never throws.
+function playChime(kind){
+  try{
+    if(!chimeCtx)return;
+    if(chimeCtx.state==="suspended")chimeCtx.resume().catch(()=>{});
+    const t=chimeCtx.currentTime+0.01;
+    if(kind==="ding"){chimeTone(880,t,0.11,0.15);chimeTone(1320,t+0.11,0.15,0.15);}
+    else if(kind==="tick")chimeTone(660,t,0.07,0.08);
+  }catch(e){}
+}
+// Decide with soundFor and play; o carries isFirstSnapshot, fromId and chatOpenWithSender
+function chimeFor(o){
+  try{
+    const now=Date.now();
+    const kind=soundFor({soundOn:soundIsOn(),visible:!document.hidden,myId:me&&me.id,nowMs:now,lastPlayedMs:chimeLastMs,minGapMs:2000,...o});
+    if(!kind)return;
+    chimeLastMs=now;
+    playChime(kind);
+  }catch(e){}
+}
+// Sound setting (Edit Profile): on unless turned off
+const soundIsOn=()=>{try{return localStorage.getItem("gabs_sound")!=="0";}catch(e){return true;}};
+
 let notifBuf={},notifTimer=null,notifEl=null;
 let notifAnn=null; // an announcement shown in the banner instead of messages
 function notifText(){
@@ -1657,6 +1710,7 @@ function notifyIncoming(p,d){
 function showAnnouncementBanner(a){
   notifBuf={};notifAnn=a;
   showNotifBanner();
+  chimeFor({isFirstSnapshot:false,chatOpenWithSender:false});
 }
 function hideNotifBanner(){
   if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}
@@ -1721,6 +1775,8 @@ function startMessageListeners(){
         if(dd.fromId===myId)return;
         const p=participants.find(x=>x.id===otherParticipantId(dd.participants,myId));
         if(p)notifyIncoming(p,dd);
+        // The open chat with this sender plays its own "tick" (initThread)
+        if(activeThreadId!==dd.fromId)chimeFor({isFirstSnapshot:first,fromId:dd.fromId,chatOpenWithSender:false});
       });
     }
     const next=buildInbox(snap.docs.map(d=>d.data()),myId);
@@ -2307,7 +2363,15 @@ function initThread(p){
   const tid2=tid(me.id,p.id);
   const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
   clearTimeout(threadRenderTimer);
+  let firstSnap=true;
   threadUnsub=fb.onSnapshot(q,snap=>{
+    const wasFirst=firstSnap;firstSnap=false;
+    if(!wasFirst&&activeThreadId===p.id){
+      snap.docChanges().forEach(ch=>{
+        const fromId=ch.type==="added"&&ch.doc.data().fromId;
+        if(fromId===p.id)chimeFor({isFirstSnapshot:false,fromId,chatOpenWithSender:true});
+      });
+    }
     threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
     clearTimeout(threadRenderTimer);
     threadRenderTimer=setTimeout(()=>{
