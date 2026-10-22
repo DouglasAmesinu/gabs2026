@@ -358,6 +358,8 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .btn-gold[aria-disabled="true"]{background:#9CA3AF;opacity:1;cursor:not-allowed;pointer-events:auto}
 .consent-hint{text-align:center;color:var(--muted);font-size:12px;margin-top:8px}
 .privacy-link-wrap{text-align:center;font-size:12px;margin-top:14px}
+/* Edit Profile: a tap target of at least 44px */
+.privacy-link.tap44{display:inline-flex;align-items:center;min-height:44px;padding:0 12px}
 .gap10{gap:10px}
 </style>
 </head>
@@ -1185,7 +1187,7 @@ function showEditProfile(){
       <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
       <button class="btn-navy" id="ep-save" style="color:#fff">Save changes</button>
     </div>
-    <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
+    <div class="privacy-link-wrap"><a class="privacy-link tap44" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
   </div>`;
   document.body.appendChild(ov);
   loadPushStatus();
@@ -1277,6 +1279,7 @@ function showEditProfile(){
   });
 
   document.getElementById("ep-logout").onclick=async()=>{
+    if(!confirm("Sign out? You will need your ticket reference or your personal link to sign back in."))return;
     ov.remove();
     await pushSignOut();
     resetAppBadge();
@@ -2058,7 +2061,7 @@ function pushSectionHTML(){
   const on=pushIsOn();
   return`<div class="form-label">Alerts</div>
     <div class="push-row"><span id="push-switch-label">Alerts for messages and announcements</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
-    <div class="push-note">Alerts show only the sender's name for messages, and the title for announcements. Never the message.</div>
+    <div class="push-note">Alerts show the sender's name for messages and the title for announcements, never the message itself.</div>
     ${soundRowHTML()}
     <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
     ${installButtonHTML()}
