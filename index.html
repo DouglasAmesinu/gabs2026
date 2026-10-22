@@ -294,6 +294,10 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .push-note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
 .push-actions{display:flex;gap:8px;margin-top:10px}
 .push-actions .btn-sm{flex:1}
+/* Discover "Turn on alerts?": one compact row */
+.push-card-row{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.push-card-row .push-card-title{flex:1;min-width:0}
+.push-card-row .btn-sm{flex:none;padding:8px 12px}
 .push-help{font-size:12px;color:var(--text);margin-top:8px;line-height:1.45}
 .push-help:empty{display:none}
 .push-row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;color:var(--text);margin-top:4px}
@@ -1907,6 +1911,8 @@ function pushCardDue(){
   const mode=pushMode();
   if(mode==="guide")return Date.now()>(Number(lsGet(PUSH_GUIDE_KEY))||0);
   if(mode==="none"||pushGranted())return false;
+  // Blocked in the browser: asking again cannot work, so the card never shows
+  if(Notification.permission==="denied")return false;
   const v=lsGet(PUSH_ASKED_KEY);
   if(!v)return true;
   if(v==="done")return false;
@@ -1919,12 +1925,9 @@ function pushCardHTML(){
     ${iosGuideHTML()}
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="guide-later">Not now</button></div>
   </div>`;
-  return`<div class="push-card" role="region" aria-label="Alerts">
+  return`<div class="push-card push-card-row" role="region" aria-label="Alerts">
     <div class="push-card-title">🔔 Turn on alerts?</div>
-    <div class="push-card-text">We'll let you know when someone writes to you and when the organisers post an announcement.</div>
-    <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
-    ${installButtonHTML()}
-    <div class="push-help" id="push-card-help" role="status"></div>
+    <button class="btn-outline btn-sm" data-push="later">Later</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button>
   </div>`;
 }
 // Two variants by user agent: Safari (no CriOS, EdgiOS or FxiOS token) adds to the Home Screen directly;
@@ -1971,7 +1974,6 @@ async function copyAppLink(btn){
 let installPromptEvent=null;
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPromptEvent=e;syncInstallButtons();});
 window.addEventListener("appinstalled",()=>{installPromptEvent=null;syncInstallButtons();});
-const installButtonHTML=()=>`<button type="button" class="btn-outline btn-sm" data-push="install" style="margin-top:10px"${installPromptEvent?"":" hidden"}>⬇ Install app</button>`;
 function syncInstallButtons(){
   document.querySelectorAll('[data-push="install"]').forEach(b=>{b.hidden=!installPromptEvent;});
   // Settings "App" section: only while the browser offers installing and the app is not installed
@@ -1987,6 +1989,31 @@ async function promptInstall(){
 function refreshPushCard(){
   const h=pushCardHTML();
   patchHTML(document.getElementById("push-wrap"),h,h);
+}
+// "Turn on" and "Later": the card fades out at once (150 ms), without waiting for anything
+function fadeOutPushCard(){
+  const card=document.querySelector("#push-wrap .push-card");
+  if(!card){refreshPushCard();return;}
+  card.style.transition="opacity .15s";
+  card.style.opacity="0";
+  card.style.pointerEvents="none";
+  setTimeout(refreshPushCard,150);
+}
+const PUSH_CARD_FAILED="We couldn't turn on alerts. You can try again in Settings.";
+// Discover card "Turn on": the card is already gone; permission, token and registration run in the
+// background. A failure keeps the card away for 14 days (the Settings switch still works).
+function turnOnFromCard(){
+  if(pushBusy||!me)return;
+  pushBusy=true;
+  lsSet(PUSH_ASKED_KEY,"done");
+  // runPushSetup asks for permission before its first await, so the request still comes from this tap
+  const setup=runPushSetup();
+  fadeOutPushCard();
+  setup.catch(()=>PUSH_CARD_FAILED).then(problem=>{
+    if(problem){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));showToast(PUSH_CARD_FAILED);}
+    else showToast("Alerts are on.");
+    if(document.getElementById("push-status"))loadPushStatus();
+  }).finally(()=>{pushBusy=false;syncPushSwitch();});
 }
 function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
 function syncPushSwitch(){
@@ -2084,7 +2111,8 @@ const pushTestStamp=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:
 let pushBusy=false;
 async function handlePushAction(btn){
   const act=btn.dataset.push;
-  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
+  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));fadeOutPushCard();return;}
+  if(act==="on"){turnOnFromCard();return;}
   if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
   if(act==="guide"){showIosGuideSheet();return;}
   if(act==="copy"){copyAppLink(btn);return;}
@@ -2100,9 +2128,6 @@ async function handlePushAction(btn){
       setPushHelp("push-fix-help",problem||"All set: this device is registered for alerts. You can send a test alert.");
       syncPushSwitch();refreshPushCard();
       await loadPushStatus();
-    }else if(act==="on"){
-      lsSet(PUSH_ASKED_KEY,"done");
-      if(await enablePush("push-card-help"))refreshPushCard();
     }else if(act==="toggle"){
       if(pushIsOn()){
         try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-set-help","");}
