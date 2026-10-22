@@ -286,7 +286,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ann-x{position:absolute;top:4px;right:4px;width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:8px}
 .ann-item{padding:14px 0;border-bottom:1px solid var(--border)}
 .ann-item:last-child{border-bottom:none}
-/* Message alerts: Discover card and the Edit Profile switch */
+/* Alerts: Discover card and the Settings switches */
 .push-card{margin:0 16px 12px;background:var(--white);border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:14px;padding:12px 14px}
 .push-card-title{font-size:14px;font-weight:800;color:var(--text)}
 .push-card-text{font-size:13px;color:var(--text);line-height:1.45;margin-top:4px}
@@ -1217,17 +1217,12 @@ function showEditProfile(){
     <textarea class="form-inp" id="ep-bio" rows="3" maxlength="200" placeholder="${esc(bioPlaceholder())}" style="resize:none;line-height:1.5">${esc(me.bio||"")}</textarea>
     <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
     <div id="ep-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">${(me.bio||"").length} / 200</div>
-    ${pushSectionHTML()}
-    ${pushStatusHTML()}
     <div id="ep-feedback"></div>
     <div class="btn-row" style="margin-top:18px">
-      <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
       <button class="btn-navy" id="ep-save" style="color:#fff">Save changes</button>
     </div>
-    <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
   </div>`;
   document.body.appendChild(ov);
-  loadPushStatus();
 
   if(window._fb&&me.id){
     const fbs=window._fb;
@@ -1315,10 +1310,6 @@ function showEditProfile(){
     }
   });
 
-  document.getElementById("ep-logout").onclick=async()=>{
-    ov.remove();
-    await signOutNow();
-  };
 
   document.getElementById("ep-save").onclick=async()=>{
     const salutation=document.getElementById("ep-salutation")?.value||"";
@@ -1950,7 +1941,7 @@ function iosGuideHTML(){
     <input class="form-inp" data-copy-box readonly value="${esc(location.origin)}" aria-label="Link to open in Safari" style="margin-top:8px" hidden/>`}
     <div class="push-note">Then open GABS Connect from the new icon and sign in there. Alerts only work from the icon. Needs iOS 16.4 or later.</div>`;
 }
-// Edit Profile's "How to get alerts on iPhone": the same guide in a sheet
+// Settings' "How to get alerts on iPhone" and "Add to Home Screen": the same guide in a sheet
 function showIosGuideSheet(){
   document.getElementById("ios-guide")?.remove();
   const ov=makeOv(true);ov.id="ios-guide";
@@ -1997,19 +1988,6 @@ function refreshPushCard(){
   const h=pushCardHTML();
   patchHTML(document.getElementById("push-wrap"),h,h);
 }
-function pushSectionHTML(){
-  const mode=pushMode();
-  if(mode==="none")return"";
-  if(mode==="guide")return`<div class="form-label">Alerts</div>
-    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get alerts on iPhone</button>`;
-  const on=pushIsOn();
-  return`<div class="form-label">Alerts</div>
-    <div class="push-row"><span id="push-switch-label">Alerts for messages and announcements</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
-    <div class="push-note">Alerts show only the sender's name for messages, and the title for announcements. Never the message.</div>
-    <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
-    ${installButtonHTML()}
-    <div class="push-help" id="push-ep-help" role="status"></div>`;
-}
 function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
 function syncPushSwitch(){
   document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(pushIsOn())));
@@ -2052,7 +2030,7 @@ async function runPushSetup(){
   lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
   return"";
 }
-// Edit Profile "Alerts status": always shown, whatever the device supports
+// Settings "Alerts status" (debug only): shown whatever the device supports
 let pushRegText="checking…";
 function pushStatusRowsHTML(){
   const perm=pushMode()!=="push"||!("Notification"in window)?"unsupported"
@@ -2066,7 +2044,7 @@ function pushStatusRowsHTML(){
   ];
   return rows.map(([k,v])=>`<div class="push-status-row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
 }
-// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts (Edit Profile and Settings)
+// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts in Settings
 const pushDebug=()=>lsGet("gabs_debug")==="1";
 function pushStatusHTML(){
   if(!pushDebug())return"";
@@ -2127,28 +2105,28 @@ async function handlePushAction(btn){
       if(await enablePush("push-card-help"))refreshPushCard();
     }else if(act==="toggle"){
       if(pushIsOn()){
-        try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-ep-help","");}
-        catch(e){setPushHelp("push-ep-help","Couldn't turn off alerts. Please try again.");}
+        try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-set-help","");}
+        catch(e){setPushHelp("push-set-help","Couldn't turn off alerts. Please try again.");}
       }else{
         lsSet(PUSH_ASKED_KEY,"done");
-        await enablePush("push-ep-help");
+        await enablePush("push-set-help");
         refreshPushCard();
       }
       syncPushSwitch();
     }else if(act==="test"){
-      setPushHelp("push-ep-help","Sending…");
+      setPushHelp("push-set-help","Sending…");
       let last;
       try{
         const res=await callFn("sendTestPush",{});
         if(res&&res.data&&res.data.sent>0){
-          setPushHelp("push-ep-help","Sent. It can take a few seconds.");
+          setPushHelp("push-set-help","Sent. It can take a few seconds.");
           last="sent";
         }else{
-          setPushHelp("push-ep-help",PUSH_TEST_FAILED);
+          setPushHelp("push-set-help",PUSH_TEST_FAILED);
           last="no device registered";
         }
       }catch(e){
-        setPushHelp("push-ep-help",PUSH_TEST_FAILED);
+        setPushHelp("push-set-help",PUSH_TEST_FAILED);
         last="failed";
       }
       lsSet(PUSH_LAST_TEST_KEY,`${last} (${pushTestStamp()})`);
@@ -2180,7 +2158,7 @@ function settingsAlertsState(){
 function settingsSwitchHTML(id,label,sub,checked,act,disabled){
   return`<div class="push-row"><div><div id="${id}">${esc(label)}</div><div class="set-sub">${esc(sub)}</div></div><button type="button" class="push-switch" role="switch" aria-checked="${checked}" aria-labelledby="${id}" data-push="${act}"${disabled?" disabled":""}><span class="push-knob"></span></button></div>`;
 }
-// The alerts switch reuses handlePushAction ("toggle", "test", "guide"); help text goes to #push-ep-help
+// The alerts switch reuses handlePushAction ("toggle", "test", "guide"); help text goes to #push-set-help
 function settingsAlertsHTML(){
   const st=settingsAlertsState();
   let alerts;
@@ -2192,7 +2170,7 @@ function settingsAlertsHTML(){
   return`${alerts}
     <div style="margin-top:12px">${settingsSwitchHTML("set-sound-label","Sound in the app","A short sound while the app is open",soundIsOn(),"sound",false)}</div>
     ${st==="push"?`<button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:12px">Send me a test alert</button>`:""}
-    <div class="push-help" id="push-ep-help" role="status"></div>`;
+    <div class="push-help" id="push-set-help" role="status"></div>`;
 }
 // "App": Install app only while the browser offers it; Add to Home Screen on a non-installed iPhone/iPad
 function settingsAppHTML(){
