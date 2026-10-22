@@ -2036,15 +2036,30 @@ function turnOnFromCard(){
     if(document.getElementById("push-status"))loadPushStatus();
   }).finally(()=>{pushBusy=false;syncPushSwitch();});
 }
+// "Sound in the app" switch (gabs_sound): shown under the alerts switch, or alone where alerts are unavailable
+function soundRowHTML(){
+  return`<div class="push-row" style="margin-top:12px"><span id="sound-switch-label">Sound in the app</span><button type="button" class="push-switch" role="switch" aria-checked="${soundIsOn()}" aria-labelledby="sound-switch-label" data-push="sound"><span class="push-knob"></span></button></div>
+    <div class="push-note">A short sound when a message or announcement arrives while the app is open.</div>`;
+}
+// Turning it On plays the ding once; this tap is a user gesture, so audio is allowed
+function toggleSound(){
+  const on=!soundIsOn();
+  lsSet("gabs_sound",on?"1":"0");
+  document.querySelectorAll('[data-push="sound"]').forEach(sw=>sw.setAttribute("aria-checked",String(on)));
+  if(on){unlockChime();playChime("ding");}
+}
 function pushSectionHTML(){
   const mode=pushMode();
-  if(mode==="none")return"";
+  if(mode==="none")return`<div class="form-label">Sound</div>
+    ${soundRowHTML()}`;
   if(mode==="guide")return`<div class="form-label">Alerts</div>
-    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get alerts on iPhone</button>`;
+    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get alerts on iPhone</button>
+    ${soundRowHTML()}`;
   const on=pushIsOn();
   return`<div class="form-label">Alerts</div>
     <div class="push-row"><span id="push-switch-label">Alerts for messages and announcements</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
     <div class="push-note">Alerts show only the sender's name for messages, and the title for announcements. Never the message.</div>
+    ${soundRowHTML()}
     <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
     ${installButtonHTML()}
     <div class="push-help" id="push-ep-help" role="status"></div>`;
@@ -2145,6 +2160,7 @@ async function handlePushAction(btn){
   const act=btn.dataset.push;
   if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));fadeOutPushCard();return;}
   if(act==="on"){turnOnFromCard();return;}
+  if(act==="sound"){toggleSound();return;}
   if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
   if(act==="guide"){showIosGuideSheet();return;}
   if(act==="copy"){copyAppLink(btn);return;}
