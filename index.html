@@ -282,6 +282,14 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ios-home .sheet{max-height:calc(90vh - var(--ios-gap))}
 .ios-home .notif-banner{margin-top:var(--ios-gap)}
 .ios-home .update-banner{border-top:var(--ios-gap) solid #1B3A6B}
+/* Slimmer bottom bar, only with both classes (iPhone Home Screen app, page shorter than the screen):
+   about 30px shorter. The avatar's size is inline, hence !important. */
+html.ios-home.ios-low #profile-bar{padding-top:10px;padding-bottom:14px}
+html.ios-home.ios-low #profile-bar .profile-info{min-height:36px}
+html.ios-home.ios-low #profile-bar .profile-name{font-size:12px}
+html.ios-home.ios-low #profile-bar .av{width:28px!important;height:28px!important;font-size:10px!important}
+html.ios-home.ios-low #profile-bar .settings-pill{min-height:36px;padding:0 13px;gap:5px;font-size:12px}
+html.ios-home.ios-low #profile-bar .settings-pill svg{width:15px;height:15px}
 .sheet-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px}
 .sheet-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
 /* Announcements: plain text, line breaks kept with pre-line */
@@ -432,9 +440,18 @@ function applyIosGap(){
   const root=document.documentElement;
   root.style.setProperty("--ios-gap",iosGapPx+"px");
   root.classList.toggle("ios-home",iosGapPx>0);
+  applyLowBar();
 }
 applyIosGap();
 window.addEventListener("orientationchange",applyIosGap);
+// With "ios-home" only: a page at least 20px shorter than the screen gets the slimmer bottom bar ("ios-low")
+function applyLowBar(){
+  const root=document.documentElement;
+  const low=lowerBarFor({isHome:root.classList.contains("ios-home"),screenH:screen.height,innerH:window.innerHeight});
+  root.classList.toggle("ios-low",low);
+}
+window.addEventListener("resize",applyLowBar);
+window.addEventListener("orientationchange",applyLowBar);
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const NAVY="#1B3A6B",STEEL="#5B9BB5",GOLD="#C49A2A";
@@ -448,7 +465,7 @@ const VENUES=["Cabana Ground Floor","Cabana First Floor","Garden","TeamGermany L
 const EMAILJS_SERVICE_ID="service_3aowa2a";
 const EMAILJS_TEMPLATE_ID="template_gec29jf";
 const EMAILJS_PUBLIC_KEY="huiBQHmiagJi1-OhRcupX";
-const SALUTATIONS=["Mr","Mrs","Ms","Dr","Prof","Prof Dr","Eng","Ambassador","Hon","Rev","Other"];
+const SALUTATIONS=["Mr","Mrs","Ms","Dr","Prof","Prof Dr","Ing","Ambassador","Hon","Rev","Other"];
 const PARTICIPANT_TYPES=["Participant","Delegate","Exhibitor","Startup","Speaker","Organiser","Media","Other"];
 const SECTORS=["Agriculture","Consulting","Construction","Design & Creative","Energy","Finance","Government & Politics","Healthcare","Human Resources","Logistics","Manufacturing","Media","Mining","Real Estate","Technology","Trade","Other"];
 const COUNTRIES=["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","DR Congo","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe","Other"];
@@ -699,6 +716,12 @@ function gapFor({isIPhone,isStandalone,stored,defaultPx}={}){
   const s=typeof stored==="number"?String(stored):stored;
   if(typeof s==="string"&&/^\s*-?\d+\s*$/.test(s))return clamp(parseInt(s,10));
   return Number.isFinite(defaultPx)?clamp(Math.round(defaultPx)):0;
+}
+
+// True only for a Home Screen app (isHome) whose page is at least 20px shorter than the screen.
+function lowerBarFor({isHome,screenH,innerH}={}){
+  if(isHome!==true||!Number.isFinite(screenH)||!Number.isFinite(innerH))return false;
+  return screenH-innerH>=20;
 }
 // END safe-helpers
 
@@ -1278,6 +1301,7 @@ function showEditProfile(opts){
     <div class="form-label">Salutation *</div>
     <select class="form-inp" id="ep-salutation">
       <option value="">-- Select --</option>
+      ${me.salutation&&!SALUTATIONS.includes(me.salutation)?`<option value="${esc(me.salutation)}" selected>${esc(me.salutation)}</option>`:""}
       ${SALUTATIONS.map(s=>`<option value="${esc(s)}"${me.salutation===s?" selected":""}>${esc(s)}</option>`).join("")}
     </select>
     <div class="form-label">Participant Type *</div>
@@ -2311,7 +2335,7 @@ async function handlePushAction(btn){
 }
 
 // ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
-const APP_VERSION=22; // Must match CACHE_NAME in sw.js: update them together on every release
+const APP_VERSION=23; // Must match CACHE_NAME in sw.js: update them together on every release
 // Put together at runtime so the addresses never appear whole in the source
 const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
 const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
