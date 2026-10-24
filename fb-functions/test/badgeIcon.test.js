@@ -43,11 +43,12 @@ test("every showNotification call uses /badge-96.png as its badge", () => {
   assert.ok(all.length > 0 && all.every(v => v === `'${BADGE}'`), `all badge options: ${all.join(", ")}`);
 });
 
-test("CACHE_NAME is gabs2026-v24 and APP_VERSION is 24", () => {
+test("CACHE_NAME is gabs2026-v followed by APP_VERSION", () => {
   const sw = read("sw.js").toString("utf8");
   const html = read("index.html").toString("utf8");
-  assert.match(sw, /^const CACHE_NAME='gabs2026-v24';/m);
   const v = html.match(/const APP_VERSION=(\d+);/);
   assert.ok(v, "APP_VERSION not found in index.html");
-  assert.equal(Number(v[1]), 24);
+  const c = sw.match(/^const CACHE_NAME='([^']*)';/m);
+  assert.ok(c, "CACHE_NAME not found in sw.js");
+  assert.equal(c[1], `gabs2026-v${v[1]}`);
 });
