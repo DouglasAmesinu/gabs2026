@@ -2611,7 +2611,8 @@ async function registerPushAtSignIn(){
     lsDel(PUSH_MUTED_KEY);
   }catch(e){}
 }
-// Sign-out (while still signed in): unregister this device, delete the token, clear the local flags
+// Sign-out (while still signed in): unregister this device, delete the token, clear the local flags;
+// the next sign-in registers again
 async function pushSignOut(){
   const token=lsGet(PUSH_TOKEN_KEY);
   if(window._push&&(token||pushGranted())){
@@ -2623,6 +2624,7 @@ async function pushSignOut(){
     await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
   }
   [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
+  pushSignInDone=false;
 }
 function stopAnnouncementListener(){
   annStarted=false;
