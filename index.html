@@ -273,6 +273,15 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ov.ctr{align-items:center;padding:20px}
 .sheet{background:var(--white);border-radius:24px 24px 16px 16px;width:100%;max-width:480px;padding:24px;box-shadow:0 -4px 30px rgba(0,0,0,.15);animation:slideUp .25s ease;max-height:90vh;overflow-y:auto}
 .sheet.pop{border-radius:20px;animation:popIn .22s ease}
+/* iPhone Home Screen app only (html.ios-home, set by applyIosGap): --ios-gap is extra space below the blurred
+   top of the screen, added on top of the existing padding. Without the class none of these rules apply. */
+.ios-home #bottom-nav{border-top:var(--ios-gap) solid var(--white)}
+.ios-home .entry-hero{padding-top:calc(28px + var(--ios-gap))}
+.ios-home .ov{padding-top:calc(10px + var(--ios-gap))}
+.ios-home .ov.ctr{padding-top:calc(20px + var(--ios-gap))}
+.ios-home .sheet{max-height:calc(90vh - var(--ios-gap))}
+.ios-home .notif-banner{margin-top:var(--ios-gap)}
+.ios-home .update-banner{border-top:var(--ios-gap) solid #1B3A6B}
 .sheet-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px}
 .sheet-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
 /* Announcements: plain text, line breaks kept with pre-line */
@@ -1852,6 +1861,7 @@ function showNotifBanner(){
   const first=!notifEl;
   if(first){
     notifEl=document.createElement("div");
+    notifEl.className="notif-banner";
     notifEl.style.cssText="position:fixed;left:10px;right:10px;top:calc(8px + env(safe-area-inset-top,0px));z-index:450;background:#1B3A6B;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;border-left:4px solid #C49A2A;max-width:480px;margin:0 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     notifEl.onclick=()=>{
       if(notifAnn){hideNotifBanner();showAnnouncementsSheet();return;}
@@ -4074,6 +4084,7 @@ if("serviceWorker"in navigator){
       if(cur!==base&&cur!=="|"){
         shown=true;
         const b=document.createElement("div");
+        b.className="update-banner";
         b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:500;background:#1B3A6B;color:#fff;text-align:center;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));font-size:14px;font-weight:700;cursor:pointer";
         b.textContent="🔄 A new version is available — tap to refresh";
         b.onclick=()=>location.reload();
