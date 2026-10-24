@@ -2085,11 +2085,12 @@ function startAnnouncementListener(){
 const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, or the ms until which Not now hides the card
 const PUSH_TOKEN_KEY="gabs_push_tok";       // the token last registered from this device
 const PUSH_TOKEN_AT_KEY="gabs_push_tok_at"; // when it was last registered (ms)
+const PUSH_REG_AT_KEY="gabs_push_reg_at";   // when registerPushToken last succeeded from this device (ms)
 const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the Notifications switch was turned off (server muted)
 const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
 const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
 const PUSH_LAST_TEST_KEY="gabs_push_last_test"; // the result of the last "Send me a test alert"
-const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REREGISTER_MS=3*24*60*60*1000;
+const PUSH_LATER_MS=14*24*60*60*1000;
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
 const lsDel=k=>{try{localStorage.removeItem(k);}catch(e){}};
@@ -2257,7 +2258,7 @@ async function runPushSetup(){
     await callFn("registerPushToken",{token,platform:pushPlatform()});
     await callFn("setPushMuted",{muted:false});
   }catch(e){return pushServerReason(e);}
-  lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
+  lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsSet(PUSH_REG_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
   return"";
 }
 // Settings "Alerts status" (debug only): shown whatever the device supports
@@ -2582,22 +2583,30 @@ function handleSettingsAction(el){
     signOutNow();
   }
 }
-// Every app open with a participant session and permission granted (and after the service worker
-// reports a new subscription): get the token, and register it when it changed or was registered more
-// than 3 days ago (force: register whatever the age). Fails quietly, with nothing in the console.
+// App open with a participant session, back in front, and after the service worker reports a new
+// subscription: when shouldRefreshPush allows it (at most every 10 minutes), get the token and register
+// it again whatever this device has stored, so a registration the server lost repairs itself
+// (force, at sign-in: register whenever permission is granted). Fails quietly, with nothing in the
+// console and no retry; gabs_push_reg_at is written only after a successful call.
 // Resolves true when this device is registered with the current token, otherwise false.
 let pushRefreshing=null;
 function refreshPushToken(force=false){
-  if(!pushGranted()||!window._fn||!me)return Promise.resolve(false);
+  if(!window._fn||!me)return Promise.resolve(false);
   if(pushRefreshing)return pushRefreshing;
+  if(force){
+    if(!pushGranted())return Promise.resolve(false);
+  }else{
+    const mode=pushMode(),lastAt=lsGet(PUSH_REG_AT_KEY);
+    if(!shouldRefreshPush({supported:mode==="push",permission:mode==="push"?Notification.permission:"unsupported",soundOn:soundIsOn(),
+      iosNotInstalled:mode==="guide",lastAtMs:lastAt?Number(lastAt):undefined,nowMs:Date.now()}))return Promise.resolve(false);
+  }
   pushRefreshing=(async()=>{
     try{
       const token=await window._push.getToken();
       if(!token)return false;
-      const fresh=Date.now()-(Number(lsGet(PUSH_TOKEN_AT_KEY))||0)<PUSH_REREGISTER_MS;
-      if(!force&&token===lsGet(PUSH_TOKEN_KEY)&&fresh)return true;
       await callFn("registerPushToken",{token,platform:pushPlatform()});
-      lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));
+      const now=String(Date.now());
+      lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,now);lsSet(PUSH_REG_AT_KEY,now);
       return true;
     }catch(e){return false;}
   })().finally(()=>{pushRefreshing=null;});
@@ -2631,7 +2640,7 @@ async function pushSignOut(){
     // Never hold up sign-out for long on a bad connection
     await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
   }
-  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_REG_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
   pushSignInDone=false;
 }
 function stopAnnouncementListener(){
@@ -2672,9 +2681,10 @@ function updateMsgBadge(){
 const BASE_TITLE=document.title;
 let lastAppBadge=-1; // -1: not yet sent, so the next update always goes through
 // Back in the app: alerts already shown are stale, so close them, then resend the real unread count
-// (the service worker raised its own counter for each alert)
+// (the service worker raised its own counter for each alert). Also repairs this device's alert registration.
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState!=="visible"||!me)return;
+  refreshPushToken();
   try{
     const reg="serviceWorker"in navigator?await navigator.serviceWorker.getRegistration():null;
     if(reg&&typeof reg.getNotifications==="function")(await reg.getNotifications()).forEach(n=>n.close());
