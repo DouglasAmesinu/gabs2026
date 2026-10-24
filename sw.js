@@ -53,7 +53,7 @@ self.addEventListener('message',e=>{
 // Only same-origin paths; anything else opens the app's start page
 const safePath=u=>typeof u==='string'&&u.startsWith('/')&&!u.startsWith('//')?u:'/';
 // Shown whenever an alert's payload cannot be read or lacks its fields: a push must always show something
-const genericAlert=()=>({body:'You have a new message',tag:'gabs-generic',renotify:true,data:{url:'/'},icon:PUSH_ICON,badge:'/badge-96.png'});
+const genericAlert=()=>({body:'You have a new message',tag:'gabs-generic',renotify:true,data:{url:'/'},icon:PUSH_ICON,badge:'/badge-96.png',vibrate:[150,80,150]});
 self.addEventListener('push',e=>{
   e.waitUntil((async()=>{
     let title='GABS Connect',opts=genericAlert(),announcement=false;
@@ -65,7 +65,7 @@ self.addEventListener('push',e=>{
       if(d&&str(d.body)&&str(d.tag)){
         title=str(d.title)||'GABS Connect';
         // renotify with the tag: a newer alert from the same sender replaces the old one and still sounds
-        opts={body:str(d.body),tag:str(d.tag),renotify:true,data:{url:safePath(d.url)},icon:PUSH_ICON,badge:'/badge-96.png'};
+        opts={body:str(d.body),tag:str(d.tag),renotify:true,data:{url:safePath(d.url)},icon:PUSH_ICON,badge:'/badge-96.png',vibrate:[150,80,150]};
       }
     }catch(err){}
     try{
