@@ -282,6 +282,14 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ios-home .sheet{max-height:calc(90vh - var(--ios-gap))}
 .ios-home .notif-banner{margin-top:var(--ios-gap)}
 .ios-home .update-banner{border-top:var(--ios-gap) solid #1B3A6B}
+/* Slimmer bottom bar, only with both classes (iPhone Home Screen app, page shorter than the screen):
+   about 30px shorter. The avatar's size is inline, hence !important. */
+html.ios-home.ios-low #profile-bar{padding-top:10px;padding-bottom:14px}
+html.ios-home.ios-low #profile-bar .profile-info{min-height:36px}
+html.ios-home.ios-low #profile-bar .profile-name{font-size:12px}
+html.ios-home.ios-low #profile-bar .av{width:28px!important;height:28px!important;font-size:10px!important}
+html.ios-home.ios-low #profile-bar .settings-pill{min-height:36px;padding:0 13px;gap:5px;font-size:12px}
+html.ios-home.ios-low #profile-bar .settings-pill svg{width:15px;height:15px}
 .sheet-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px}
 .sheet-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
 /* Announcements: plain text, line breaks kept with pre-line */
@@ -435,6 +443,14 @@ function applyIosGap(){
 }
 applyIosGap();
 window.addEventListener("orientationchange",applyIosGap);
+// A Home Screen app whose page is at least 20px shorter than the screen gets the slimmer bottom bar ("ios-low")
+function applyLowBar(){
+  const low=lowerBarFor({isHome:isIPhone&&isHomeScreenApp(),screenH:screen.height,innerH:window.innerHeight});
+  document.documentElement.classList.toggle("ios-low",low);
+}
+applyLowBar();
+window.addEventListener("resize",applyLowBar);
+window.addEventListener("orientationchange",applyLowBar);
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const NAVY="#1B3A6B",STEEL="#5B9BB5",GOLD="#C49A2A";
@@ -699,6 +715,12 @@ function gapFor({isIPhone,isStandalone,stored,defaultPx}={}){
   const s=typeof stored==="number"?String(stored):stored;
   if(typeof s==="string"&&/^\s*-?\d+\s*$/.test(s))return clamp(parseInt(s,10));
   return Number.isFinite(defaultPx)?clamp(Math.round(defaultPx)):0;
+}
+
+// True only for a Home Screen app (isHome) whose page is at least 20px shorter than the screen.
+function lowerBarFor({isHome,screenH,innerH}={}){
+  if(isHome!==true||!Number.isFinite(screenH)||!Number.isFinite(innerH))return false;
+  return screenH-innerH>=20;
 }
 // END safe-helpers
 
