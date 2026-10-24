@@ -2044,57 +2044,18 @@ const isStandalone=()=>navigator.standalone===true||!!(window.matchMedia&&window
 // ── Safe areas ─────────────────────────────────────────────────────────────
 // A hidden probe reads env(safe-area-inset-top); topInsetFor adds the iPhone Home Screen fallback.
 // --safe-top is set in px (never below the measured env value) at start-up, on resize and on rotation.
-let safeTopInfo={envPx:0,px:0,bottomPx:0};
+let safeTopInfo={envPx:0,px:0};
 function applySafeTop(){
   try{
     const probe=document.createElement("div");
-    probe.style.cssText="position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)";
+    probe.style.cssText="position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px)";
     document.body.appendChild(probe);
-    const cs=getComputedStyle(probe);
-    const envPx=parseFloat(cs.paddingTop)||0,bottomPx=parseFloat(cs.paddingBottom)||0;
+    const envPx=parseFloat(getComputedStyle(probe).paddingTop)||0;
     probe.remove();
     const px=Math.max(envPx,topInsetFor({envPx,isIOS:isIOSDevice,isStandalone:isStandalone(),screenH:screen.height,innerH:window.innerHeight}));
-    safeTopInfo={envPx,px,bottomPx};
+    safeTopInfo={envPx,px};
     document.documentElement.style.setProperty("--safe-top",px+"px");
   }catch(e){}
-  renderDebugReadout();
-}
-// Debug readout (gabs_debug === "1"): safe areas, standalone and sizes only, no personal data.
-// Switched on by opening the app with #debug, or toggled by tapping the Settings version line 5 times.
-const DEBUG_KEY="gabs_debug";
-function safeTopRule(){
-  const{envPx,px}=safeTopInfo;
-  if(envPx>0)return"env";
-  if(px===47)return"fallback 47";
-  if(px===20)return"fallback 20";
-  return"none";
-}
-function renderDebugReadout(){
-  try{
-    let el=document.getElementById("debug-readout");
-    if(lsGet(DEBUG_KEY)!=="1"){if(el)el.remove();return;}
-    if(!el){
-      el=document.createElement("div");el.id="debug-readout";el.setAttribute("aria-hidden","true");
-      el.style.cssText="position:fixed;left:6px;bottom:calc(30px + var(--safe-bottom));z-index:650;background:rgba(17,24,39,.85);color:#fff;font:10px/1.35 ui-monospace,Menlo,monospace;padding:3px 6px;border-radius:5px;pointer-events:none;max-width:calc(100vw - 12px)";
-      document.body.appendChild(el);
-    }
-    const{px,bottomPx}=safeTopInfo;
-    el.textContent=`safe-top ${px}px · safe-bottom ${bottomPx}px · standalone ${isStandalone()?"yes":"no"} · inner ${window.innerHeight} · screen ${screen.height} · rule ${safeTopRule()}`;
-  }catch(e){}
-}
-if(location.hash==="#debug"){lsSet(DEBUG_KEY,"1");history.replaceState(null,"",location.pathname+location.search);}
-let debugTaps=0,debugTapTimer=null;
-// Settings version line: five taps within 3 seconds toggle the readout
-function countDebugTap(){
-  debugTaps++;
-  clearTimeout(debugTapTimer);
-  debugTapTimer=setTimeout(()=>{debugTaps=0;},3000);
-  if(debugTaps<5)return;
-  debugTaps=0;
-  const on=lsGet(DEBUG_KEY)!=="1";
-  if(on)lsSet(DEBUG_KEY,"1");else lsDel(DEBUG_KEY);
-  renderDebugReadout();
-  showToast(on?"Debug readout on.":"Debug readout off.");
 }
 applySafeTop();
 window.addEventListener("resize",applySafeTop);
@@ -2482,7 +2443,7 @@ function showSettings(){
       </div>
     </div>
     <button type="button" class="set-signout" data-settings="signout">${setSvg("signout")}Sign out</button>
-    <div class="set-foot" data-settings="version">GABS Connect · version ${esc(String(APP_VERSION))}</div>
+    <div class="set-foot">GABS Connect · version ${esc(String(APP_VERSION))}</div>
   </div>`;
   ov.addEventListener("click",e=>{if(e.target===ov)closeSettings();});
   // Escape closes Settings only when nothing (such as the iPhone guide) is open on top of it
@@ -2521,7 +2482,6 @@ function handleSettingsAction(el){
     }));
     return;
   }
-  if(act==="version"){countDebugTap();return;}
   if(act==="signout"){
     if(!confirm("Sign out? You will need your ticket reference or your personal link to sign back in."))return;
     closeSettings(false);
