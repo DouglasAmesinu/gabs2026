@@ -729,6 +729,14 @@ function lowerBarFor({isHome,screenH,innerH}={}){
 function shouldRegisterAtSignIn({supported,permission,soundOn,iosNotInstalled,alreadyDone}={}){
   return supported===true&&permission==="granted"&&soundOn===true&&iosNotInstalled===false&&alreadyDone===false;
 }
+
+// Register again (app open, back in front, new subscription): same conditions as at sign-in, and at
+// least minGapMs since the last successful registration. A missing (or unreadable) lastAtMs counts as never.
+function shouldRefreshPush({supported,permission,soundOn,iosNotInstalled,lastAtMs,nowMs,minGapMs=600000}={}){
+  if(supported!==true||permission!=="granted"||soundOn!==true||iosNotInstalled!==false)return false;
+  if(!Number.isFinite(nowMs)||!Number.isFinite(minGapMs))return false;
+  return!Number.isFinite(lastAtMs)||nowMs-lastAtMs>=minGapMs;
+}
 // END safe-helpers
 
 
