@@ -286,7 +286,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .ann-x{position:absolute;top:4px;right:4px;width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:8px}
 .ann-item{padding:14px 0;border-bottom:1px solid var(--border)}
 .ann-item:last-child{border-bottom:none}
-/* Message alerts: Discover card and the Edit Profile switch */
+/* Alerts: Discover card and the Settings switches */
 .push-card{margin:0 16px 12px;background:var(--white);border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:14px;padding:12px 14px}
 .push-card-title{font-size:14px;font-weight:800;color:var(--text)}
 .push-card-text{font-size:13px;color:var(--text);line-height:1.45;margin-top:4px}
@@ -294,6 +294,10 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .push-note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
 .push-actions{display:flex;gap:8px;margin-top:10px}
 .push-actions .btn-sm{flex:1}
+/* Discover "Turn on alerts?": one compact row */
+.push-card-row{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.push-card-row .push-card-title{flex:1;min-width:0}
+.push-card-row .btn-sm{flex:none;padding:8px 12px}
 .push-help{font-size:12px;color:var(--text);margin-top:8px;line-height:1.45}
 .push-help:empty{display:none}
 .push-row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;color:var(--text);margin-top:4px}
@@ -302,6 +306,47 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .push-switch .push-knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
 .push-switch[aria-checked="true"] .push-knob{transform:translateX(18px)}
 .push-switch:disabled{opacity:.6}
+/* Settings: the gear in the bottom bar and the sheet's rows */
+/* Bottom bar: avatar and name (opens Settings) and the navy Settings pill, which never shrinks */
+.settings-pill{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 16px;border:none;border-radius:999px;background:var(--navy);color:#fff;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;touch-action:manipulation}
+.settings-pill svg{width:18px;height:18px}
+/* Settings soft cards: grey sheet, one white card per group, 52px rows with a 38px icon tile */
+.set-sheet{background:#F4F6FA}
+.set-sec{margin-top:18px}
+.set-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);margin:0 4px 8px}
+.set-card{background:var(--white);border:1px solid #E5E7EB;border-radius:16px;overflow:hidden}
+.set-row{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 14px;background:none;border:none;text-align:left;text-decoration:none;color:var(--text);font:inherit}
+.set-row+.set-row{border-top:1px solid #E5E7EB}
+.set-row-link{cursor:pointer;touch-action:manipulation}
+.set-row-txt{flex:1;min-width:0}
+.set-row-label{display:block;font-size:14px;font-weight:700;color:var(--text)}
+.set-row-sub{display:block;font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.set-tile{width:38px;height:38px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.set-tile svg{width:20px;height:20px}
+.t-bell{background:#E4EBF6;color:var(--navy)}
+.t-down{background:#DBEAFE;color:#1D4ED8}
+.t-mail{background:#DCFCE7;color:#166534}
+.t-lock{background:#EDE9FE;color:#6D28D9}
+.t-trash{background:#FEE2E2;color:#B91C1C}
+.set-chev{flex-shrink:0;color:var(--muted)}
+.set-extra{padding:0 14px 10px 64px}
+.set-extra:empty{display:none}
+.set-card .push-help{margin:0;padding:0 14px 10px 64px}
+.set-card .push-help:empty{display:none}
+.set-text-btn{display:inline-block;background:none;border:none;padding:10px 0;margin-right:16px;min-height:44px;font-size:13px;font-weight:700;color:var(--navy);text-decoration:underline;cursor:pointer;touch-action:manipulation}
+.set-signout{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;margin-top:18px;background:var(--white);border:1.5px solid var(--red);border-radius:16px;font-size:14px;font-weight:700;color:var(--red);cursor:pointer;touch-action:manipulation}
+.set-signout svg{width:20px;height:20px}
+/* Settings profile strip: avatar, name, company · country, Edit › */
+.set-prof{min-height:56px;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;gap:12px;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-top:8px}
+.set-prof-av{width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block}
+.set-prof-ini{background:var(--navy);color:#fff;border:3px solid var(--gold);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800}
+.set-prof-txt{flex:1;min-width:0}
+.set-prof-name{font-size:15px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-prof-sub{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-prof-edit{flex-shrink:0;white-space:nowrap;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation}
+/* Edit Profile opened from Settings: the way back */
+.ep-back{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;margin:-10px 0 2px -4px;background:none;border:none;font-size:14px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation}
+.set-foot{text-align:center;font-size:11px;color:#4B5563;margin-top:18px}
 .push-status{margin-top:4px}
 .push-status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border)}
 .push-status-row span:last-child{color:var(--muted);font-weight:600;text-align:right}
@@ -324,10 +369,9 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .btn-row{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:18px}
 
 /* ── Profile footer ── */
-#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-b));flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
-.profile-info{display:flex;align-items:center;gap:9px}
-.profile-name{font-size:13px;font-weight:700;color:var(--text)}
-.edit-profile-btn{font-size:12px;font-weight:600;color:var(--steel);cursor:pointer;touch-action:manipulation;padding:6px 0}
+#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-b));flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.profile-info{display:flex;align-items:center;gap:9px;flex:1;min-width:0;min-height:44px;cursor:pointer;touch-action:manipulation;border-radius:12px}
+.profile-name{font-size:13px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Logos footer ── */
 .sp-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--steel);margin:18px 2px 10px}
@@ -572,6 +616,52 @@ function parseChatHash(hash){
 // An announcement alert's link: true only for exactly "#announcements"
 function isAnnouncementsHash(hash){
   return hash==="#announcements";
+}
+
+// In-app sound for something that just arrived: "tick" in the open chat with its sender, "ding" anywhere
+// else, null for silence (sound off, page not visible, history from a first snapshot, own message, or less
+// than minGapMs, default 2000, since the last sound). Unknown or missing values err towards silence.
+function soundFor({soundOn,visible,isFirstSnapshot,fromId,myId,chatOpenWithSender,nowMs,lastPlayedMs,minGapMs}={}){
+  if(soundOn!==true||visible!==true||isFirstSnapshot!==false)return null;
+  if(typeof fromId==="string"&&fromId!==""&&fromId===myId)return null;
+  if(!Number.isFinite(nowMs))return null;
+  const gap=Number.isFinite(minGapMs)?minGapMs:2000;
+  if(Number.isFinite(lastPlayedMs)&&nowMs-lastPlayedMs<gap)return null;
+  return chatOpenWithSender===true?"tick":"ding";
+}
+
+// The Settings "Notifications" switch: the line under it and which extra buttons show.
+// on: the switch (sound in the app); registered: this device has an unmuted push registration.
+function notifLine({permission,supported,iosNotInstalled,registered,on}={}){
+  const r=(line,showAllow=false,showTest=false)=>({line,showAllow,showTest});
+  if(on!==true)return r("Off. No sound and no alerts.");
+  if(permission==="granted"&&registered===true)return r("Sound in the app and alerts on this device",false,true);
+  // "default": never asked; "granted" without a registration (setup failed): asking again sets it up
+  if((permission==="default"||permission==="granted")&&supported===true&&iosNotInstalled!==true)
+    return r("Sound in the app. Turn on alerts for when the app is closed.",true,false);
+  if(permission==="denied")return r("Sound in the app. Alerts outside the app are blocked in this browser.");
+  if(iosNotInstalled===true)return r("Sound in the app. Alerts outside the app need the app on your Home Screen.");
+  return r("Sound in the app.");
+}
+
+// The Settings profile card's muted line: "company · country", empty or non-string parts left out,
+// spaces trimmed and collapsed. Plain text: esc() is applied where it is rendered.
+function profileLine({company,country}={}){
+  const part=v=>typeof v==="string"?v.replace(/\s+/g," ").trim():"";
+  return[part(company),part(country)].filter(Boolean).join(" · ");
+}
+
+// A mailto: link, or "" when "to" is not a plain address. CR and LF are removed from to, cc and subject
+// (no header injection); cc, subject and body are added only when present, each encodeURIComponent'd.
+function mailtoLink({to,cc,subject,body}={}){
+  const line=v=>typeof v==="string"?v.replace(/[\r\n]/g,""):"";
+  const addr=line(to);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr))return"";
+  const at=addr.indexOf("@");
+  const params=[["cc",line(cc)],["subject",line(subject)],["body",typeof body==="string"?body:""]]
+    .filter(([,v])=>v!=="")
+    .map(([k,v])=>k+"="+encodeURIComponent(v));
+  return"mailto:"+encodeURIComponent(addr.slice(0,at))+"@"+encodeURIComponent(addr.slice(at+1))+(params.length?"?"+params.join("&"):"");
 }
 // END safe-helpers
 
@@ -952,6 +1042,9 @@ function openProfileFrom(el){
 }
 document.addEventListener("keydown",e=>{
   if(e.key!=="Enter"&&e.key!==" ")return;
+  // role="button" blocks for Settings (the bar's avatar and name, the profile card): Enter and Space
+  const sb=e.target&&e.target.closest&&e.target.closest('[role="button"][data-settings]');
+  if(sb){e.preventDefault();handleSettingsAction(sb);return;}
   const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(!el)return;
   e.preventDefault();openProfileFrom(el);
@@ -962,6 +1055,8 @@ document.addEventListener("click",e=>{
   if(pv){openProfileFrom(pv);return;}
   const pb=e.target&&e.target.closest&&e.target.closest("[data-push]");
   if(pb){handlePushAction(pb);return;}
+  const sb=e.target&&e.target.closest&&e.target.closest("[data-settings]");
+  if(sb){handleSettingsAction(sb);return;}
   const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
   if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
@@ -1046,7 +1141,6 @@ function renderApp(){
   const tc=document.getElementById("tab-content");if(tc)renderSigs.set(tc,tabHTML);
   bindBottomNav();
   bindTab();
-  bindProfileBar();
   if(!privateEmailLoaded&&me&&window._fb){
     privateEmailLoaded=true;
     const fbs=window._fb;
@@ -1085,26 +1179,44 @@ function bindBottomNav(){
 function renderProfileBar(){
   if(!me)return"";
   return`<div id="profile-bar">
-    <div class="profile-info">
+    <div class="profile-info" role="button" tabindex="0" aria-label="Open settings" data-settings="open">
       ${avHTML(me.av||initials(me.name||"?"),32,me.photoURL)}
       <span class="profile-name">${me.salutation?esc(me.salutation)+". ":""}${esc(me.name)}</span>
     </div>
-    <span class="edit-profile-btn" id="edit-profile-btn">✎ Edit Profile</span>
+    <button type="button" class="settings-pill" id="settings-btn" data-settings="open">${setSvg("gear")}<span>Settings</span></button>
   </div>`;
 }
 
-
-
-function bindProfileBar(){
-  document.getElementById("edit-profile-btn")?.addEventListener("click",showEditProfile);
+// Sign out on this device: alerts token, badge, listeners, auth session, cached data, then the entry screen
+async function signOutNow(){
+  await pushSignOut();
+  resetAppBadge();
+  stopMessageListeners();
+  if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
+  me=null;localStorage.removeItem("gabs_me");
+  readThreadIds=new Set();
+  stopParticipantListener();participants=[];
+  stopAnnouncementListener();
+  localStorage.removeItem("gabs_read");
+  showEntry();
 }
 
-function showEditProfile(){
+// The bottom bar alone, re-rendered with the current name and photo (the tab underneath is left alone)
+function refreshProfileBar(){
+  const bar=document.getElementById("profile-bar");
+  if(bar)bar.outerHTML=renderProfileBar();
+}
+// opts.fromSettings: opened from the Settings profile card. Then "‹ Settings", Close, the backdrop, Escape,
+// the phone's back gesture and a successful save all return to Settings (Settings is closed meanwhile,
+// so the two never stack). A history entry makes the back gesture work; every return goes through it.
+function showEditProfile(opts){
+  const fromSettings=!!opts&&opts.fromSettings===true;
   const ov=makeOv(true);
   const epPtypeCustom=!!me.ptype&&!PARTICIPANT_TYPES.includes(me.ptype);
   const epPtypeSel=epPtypeCustom?"Other":(me.ptype||"");
   const epPtypeOther=epPtypeCustom?me.ptype:"";
   ov.innerHTML=`<div class="sheet pop" style="max-width:440px">
+    ${fromSettings?`<button type="button" class="ep-back" id="ep-back">‹ Settings</button>`:""}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div class="sheet-title">Edit Profile</div>
       <button class="btn-outline btn-sm" id="ep-close">Close</button>
@@ -1166,17 +1278,12 @@ function showEditProfile(){
     <textarea class="form-inp" id="ep-bio" rows="3" maxlength="200" placeholder="${esc(bioPlaceholder())}" style="resize:none;line-height:1.5">${esc(me.bio||"")}</textarea>
     <div style="font-size:12px;color:var(--steel);font-weight:600;margin-top:6px">✦ Participants with a bio get significantly better AI matches</div>
     <div id="ep-bio-count" style="text-align:right;font-size:11px;color:var(--muted);margin-top:4px">${(me.bio||"").length} / 200</div>
-    ${pushSectionHTML()}
-    ${pushStatusHTML()}
     <div id="ep-feedback"></div>
     <div class="btn-row" style="margin-top:18px">
-      <button class="btn-outline" id="ep-logout" style="color:var(--red);border-color:#FECACA;font-size:12px">Sign out</button>
       <button class="btn-navy" id="ep-save" style="color:#fff">Save changes</button>
     </div>
-    <div class="privacy-link-wrap"><a class="privacy-link" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
   </div>`;
   document.body.appendChild(ov);
-  loadPushStatus();
 
   if(window._fb&&me.id){
     const fbs=window._fb;
@@ -1188,7 +1295,28 @@ function showEditProfile(){
     }).catch(()=>{});
   }
 
-  document.getElementById("ep-close").onclick=()=>ov.remove();
+  let epKeyHandler=null;
+  const backToSettings=()=>{
+    if(epKeyHandler){document.removeEventListener("keydown",epKeyHandler);epKeyHandler=null;}
+    ov.remove();
+    refreshProfileBar();
+    showSettings();
+  };
+  // Close: from Settings, step back through history (popstate then returns); otherwise as before
+  const closeEp=()=>{if(fromSettings)history.back();else ov.remove();};
+  if(fromSettings){
+    history.pushState({gabsEditProfile:true},"");
+    window.addEventListener("popstate",backToSettings,{once:true});
+    epKeyHandler=e=>{
+      if(e.key!=="Escape")return;
+      const top=[...document.querySelectorAll(".ov")].pop();
+      if(top===ov){e.preventDefault();closeEp();}
+    };
+    document.addEventListener("keydown",epKeyHandler);
+    document.getElementById("ep-back").onclick=closeEp;
+    document.getElementById("ep-back").focus();
+  }
+  document.getElementById("ep-close").onclick=closeEp;
   document.querySelectorAll("#ep-interests .interest-chip").forEach(chip=>{
     chip.onclick=()=>chip.classList.toggle("sel");
   });
@@ -1197,7 +1325,7 @@ function showEditProfile(){
   if(epBio&&epBioCount){
     epBio.oninput=()=>{epBioCount.textContent=`${epBio.value.length} / 200`;epBioCount.style.color=epBio.value.length>180?"var(--red)":"var(--muted)";};
   }
-  ov.addEventListener("click",e=>{if(e.target===ov)ov.remove();});
+  ov.addEventListener("click",e=>{if(e.target===ov)closeEp();});
 
   document.getElementById("ep-sector")?.addEventListener("change",e=>{
     const otherInp=document.getElementById("ep-sector-other");
@@ -1264,19 +1392,6 @@ function showEditProfile(){
     }
   });
 
-  document.getElementById("ep-logout").onclick=async()=>{
-    ov.remove();
-    await pushSignOut();
-    resetAppBadge();
-    stopMessageListeners();
-    if(window._auth){try{await window._auth.signOut(window._auth.auth);}catch(e){}}
-    me=null;localStorage.removeItem("gabs_me");
-    readThreadIds=new Set();
-    stopParticipantListener();participants=[];
-    stopAnnouncementListener();
-    localStorage.removeItem("gabs_read");
-    showEntry();
-  };
 
   document.getElementById("ep-save").onclick=async()=>{
     const salutation=document.getElementById("ep-salutation")?.value||"";
@@ -1325,7 +1440,9 @@ function showEditProfile(){
       // Refresh the profile bar name display
       const pname=document.querySelector(".profile-name");
       if(pname)pname.textContent=(me.salutation?me.salutation+". ":"")+me.name;
-      setTimeout(()=>ov.remove(),1200);
+      // From Settings: straight back to it, with the profile card and the bar showing the new values
+      if(fromSettings){showToast("Profile saved.");closeEp();}
+      else setTimeout(()=>ov.remove(),1200);
     }catch(e){
       if(fb)fb.innerHTML=`<div class="err-msg">Update failed. Try again.</div>`;
       if(btn){btn.disabled=false;btn.textContent="Save changes";}
@@ -1625,6 +1742,45 @@ function bindInboxRows(){
   document.querySelectorAll(".inbox-row").forEach(row=>row.onclick=e=>{if(e.target.closest("[data-profile-id]"))return;const p=participants.find(x=>x.id===row.dataset.id);if(p)openThread(p);});
 }
 
+// ── In-app sound (Web Audio, no audio files) ────────────────────────────────
+// Browsers only allow audio after a user gesture, so the one AudioContext is created on the first one
+let chimeCtx=null,chimeLastMs=0;
+function unlockChime(){
+  if(chimeCtx)return;
+  try{const AC=window.AudioContext||window.webkitAudioContext;if(AC)chimeCtx=new AC();}catch(e){}
+}
+["touchstart","click","keydown"].forEach(t=>document.addEventListener(t,unlockChime,{once:true,passive:true,capture:true}));
+// One sine tone with a 10 ms attack and a short exponential decay
+function chimeTone(freq,start,dur,peak){
+  const ctx=chimeCtx,osc=ctx.createOscillator(),g=ctx.createGain();
+  osc.type="sine";osc.frequency.setValueAtTime(freq,start);
+  g.gain.setValueAtTime(0.0001,start);
+  g.gain.linearRampToValueAtTime(peak,start+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+  osc.connect(g);g.connect(ctx.destination);
+  osc.start(start);osc.stop(start+dur+0.02);
+}
+// "ding": 880 Hz for 110 ms then 1320 Hz for 150 ms; "tick": 660 Hz for 70 ms. Never throws.
+function playChime(kind){
+  try{
+    if(!chimeCtx)return;
+    if(chimeCtx.state==="suspended")chimeCtx.resume().catch(()=>{});
+    const t=chimeCtx.currentTime+0.01;
+    if(kind==="ding"){chimeTone(880,t,0.11,0.15);chimeTone(1320,t+0.11,0.15,0.15);}
+    else if(kind==="tick")chimeTone(660,t,0.07,0.08);
+  }catch(e){}
+}
+// Decide with soundFor and play; o carries isFirstSnapshot, fromId and chatOpenWithSender
+function chimeFor(o){
+  try{
+    const now=Date.now();
+    const kind=soundFor({soundOn:soundIsOn(),visible:!document.hidden,myId:me&&me.id,nowMs:now,lastPlayedMs:chimeLastMs,minGapMs:2000,...o});
+    if(!kind)return;
+    chimeLastMs=now;
+    playChime(kind);
+  }catch(e){}
+}
+
 let notifBuf={},notifTimer=null,notifEl=null;
 let notifAnn=null; // an announcement shown in the banner instead of messages
 function notifText(){
@@ -1657,6 +1813,7 @@ function notifyIncoming(p,d){
 function showAnnouncementBanner(a){
   notifBuf={};notifAnn=a;
   showNotifBanner();
+  chimeFor({isFirstSnapshot:false,chatOpenWithSender:false});
 }
 function hideNotifBanner(){
   if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}
@@ -1721,6 +1878,8 @@ function startMessageListeners(){
         if(dd.fromId===myId)return;
         const p=participants.find(x=>x.id===otherParticipantId(dd.participants,myId));
         if(p)notifyIncoming(p,dd);
+        // The open chat with this sender plays its own "tick" (initThread)
+        if(activeThreadId!==dd.fromId)chimeFor({isFirstSnapshot:first,fromId:dd.fromId,chatOpenWithSender:false});
       });
     }
     const next=buildInbox(snap.docs.map(d=>d.data()),myId);
@@ -1850,7 +2009,7 @@ function startAnnouncementListener(){
 const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, or the ms until which Not now hides the card
 const PUSH_TOKEN_KEY="gabs_push_tok";       // the token last registered from this device
 const PUSH_TOKEN_AT_KEY="gabs_push_tok_at"; // when it was last registered (ms)
-const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the switch was turned off
+const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the Notifications switch was turned off (server muted)
 const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
 const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
 const PUSH_LAST_TEST_KEY="gabs_push_last_test"; // the result of the last "Send me a test alert"
@@ -1868,12 +2027,15 @@ const needsHomeScreen=()=>isIOSDevice&&!isStandalone();
 // "push": installed iOS app or any other device with push support; "none": nothing push-related
 const pushMode=()=>needsHomeScreen()?"guide":window._push?"push":"none";
 const pushGranted=()=>pushMode()==="push"&&Notification.permission==="granted";
-const pushIsOn=()=>pushGranted()&&lsGet(PUSH_MUTED_KEY)!=="1";
 function pushCardDue(){
   if(!me)return false;
   const mode=pushMode();
   if(mode==="guide")return Date.now()>(Number(lsGet(PUSH_GUIDE_KEY))||0);
   if(mode==="none"||pushGranted())return false;
+  // Blocked in the browser: asking again cannot work, so the card never shows
+  if(Notification.permission==="denied")return false;
+  // Already registered on this device: nothing to turn on
+  if(hasPushToken())return false;
   const v=lsGet(PUSH_ASKED_KEY);
   if(!v)return true;
   if(v==="done")return false;
@@ -1886,12 +2048,9 @@ function pushCardHTML(){
     ${iosGuideHTML()}
     <div class="push-actions"><button class="btn-outline btn-sm" data-push="guide-later">Not now</button></div>
   </div>`;
-  return`<div class="push-card" role="region" aria-label="Alerts">
-    <div class="push-card-title">🔔 Turn on alerts?</div>
-    <div class="push-card-text">We'll let you know when someone writes to you and when the organisers post an announcement.</div>
-    <div class="push-actions"><button class="btn-outline btn-sm" data-push="later">Not now</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button></div>
-    ${installButtonHTML()}
-    <div class="push-help" id="push-card-help" role="status"></div>
+  return`<div class="push-card push-card-row" role="region" aria-label="Alerts">
+    <div class="push-card-title">🔔 Turn on notifications?</div>
+    <button class="btn-outline btn-sm" data-push="later">Later</button><button class="btn-navy btn-sm" data-push="on" style="color:#fff">Turn on</button>
   </div>`;
 }
 // Two variants by user agent: Safari (no CriOS, EdgiOS or FxiOS token) adds to the Home Screen directly;
@@ -1908,7 +2067,7 @@ function iosGuideHTML(){
     <input class="form-inp" data-copy-box readonly value="${esc(location.origin)}" aria-label="Link to open in Safari" style="margin-top:8px" hidden/>`}
     <div class="push-note">Then open GABS Connect from the new icon and sign in there. Alerts only work from the icon. Needs iOS 16.4 or later.</div>`;
 }
-// Edit Profile's "How to get alerts on iPhone": the same guide in a sheet
+// Settings' "How to get alerts on iPhone" and "Add to Home Screen": the same guide in a sheet
 function showIosGuideSheet(){
   document.getElementById("ios-guide")?.remove();
   const ov=makeOv(true);ov.id="ios-guide";
@@ -1938,9 +2097,10 @@ async function copyAppLink(btn){
 let installPromptEvent=null;
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPromptEvent=e;syncInstallButtons();});
 window.addEventListener("appinstalled",()=>{installPromptEvent=null;syncInstallButtons();});
-const installButtonHTML=()=>`<button type="button" class="btn-outline btn-sm" data-push="install" style="margin-top:10px"${installPromptEvent?"":" hidden"}>⬇ Install app</button>`;
 function syncInstallButtons(){
   document.querySelectorAll('[data-push="install"]').forEach(b=>{b.hidden=!installPromptEvent;});
+  // Settings "App" section: only while the browser offers installing and the app is not installed
+  document.querySelectorAll("[data-app-install]").forEach(s=>{s.hidden=!installPromptEvent||isStandalone();});
 }
 async function promptInstall(){
   const ev=installPromptEvent;
@@ -1953,22 +2113,40 @@ function refreshPushCard(){
   const h=pushCardHTML();
   patchHTML(document.getElementById("push-wrap"),h,h);
 }
-function pushSectionHTML(){
-  const mode=pushMode();
-  if(mode==="none")return"";
-  if(mode==="guide")return`<div class="form-label">Alerts</div>
-    <button type="button" class="btn-outline btn-sm" data-push="guide" style="margin-top:4px">How to get alerts on iPhone</button>`;
-  const on=pushIsOn();
-  return`<div class="form-label">Alerts</div>
-    <div class="push-row"><span id="push-switch-label">Alerts for messages and announcements</span><button type="button" class="push-switch" role="switch" aria-checked="${on}" aria-labelledby="push-switch-label" data-push="toggle"><span class="push-knob"></span></button></div>
-    <div class="push-note">Alerts show only the sender's name for messages, and the title for announcements. Never the message.</div>
-    <button type="button" class="btn-outline btn-sm" data-push="test" style="margin-top:10px">Send me a test alert</button>
-    ${installButtonHTML()}
-    <div class="push-help" id="push-ep-help" role="status"></div>`;
+// "Turn on" and "Later": the card fades out at once (150 ms), without waiting for anything
+function fadeOutPushCard(){
+  const card=document.querySelector("#push-wrap .push-card");
+  if(!card){refreshPushCard();return;}
+  card.style.transition="opacity .15s";
+  card.style.opacity="0";
+  card.style.pointerEvents="none";
+  setTimeout(refreshPushCard,150);
+}
+const PUSH_CARD_FAILED="We couldn't turn on alerts. You can try again in Settings.";
+// Discover card "Turn on": notifications (sound) on, the card is already gone; permission, token and
+// registration run in the background. A failure keeps the card away for 14 days (Settings still works).
+function turnOnFromCard(){
+  if(pushBusy||!me)return;
+  pushBusy=true;
+  lsSet(SOUND_KEY,"1");
+  lsSet(PUSH_ASKED_KEY,"done");
+  // runPushSetup asks for permission before its first await, so the request still comes from this tap
+  const setup=runPushSetup();
+  fadeOutPushCard();
+  setup.catch(()=>PUSH_CARD_FAILED).then(problem=>{
+    if(problem){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));showToast(PUSH_CARD_FAILED);}
+    else showToast("Notifications are on.");
+    if(document.getElementById("push-status"))loadPushStatus();
+  }).finally(()=>{pushBusy=false;syncPushSwitch();});
 }
 function setPushHelp(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
 function syncPushSwitch(){
-  document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(pushIsOn())));
+  document.querySelectorAll('[data-push="toggle"]').forEach(sw=>sw.setAttribute("aria-checked",String(soundIsOn())));
+  const n=notifLine(notifInputs());
+  const line=document.getElementById("set-notif-line");
+  if(line)line.textContent=n.line;
+  const acts=document.getElementById("set-notif-actions");
+  if(acts)patchHTML(acts,notifActionsHTML(n),notifActionsHTML(n));
 }
 const callFn=(name,data)=>window._fn.httpsCallable(name)(data);
 // Why alerts cannot work, in plain words, by the step that fails
@@ -2006,7 +2184,7 @@ async function runPushSetup(){
   lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
   return"";
 }
-// Edit Profile "Alerts status": always shown, whatever the device supports
+// Settings "Alerts status" (debug only): shown whatever the device supports
 let pushRegText="checking…";
 function pushStatusRowsHTML(){
   const perm=pushMode()!=="push"||!("Notification"in window)?"unsupported"
@@ -2020,7 +2198,7 @@ function pushStatusRowsHTML(){
   ];
   return rows.map(([k,v])=>`<div class="push-status-row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
 }
-// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts
+// Debug only (localStorage.gabs_debug === "1"): the Alerts status block and Fix alerts in Settings
 const pushDebug=()=>lsGet("gabs_debug")==="1";
 function pushStatusHTML(){
   if(!pushDebug())return"";
@@ -2045,22 +2223,13 @@ async function loadPushStatus(){
   }catch(e){pushRegText="unknown";}
   renderPushStatus();
 }
-// "Turn on" and switch On: permission (from this tap), token, register, unmute
-// When setup fails, the help line says which step failed (runPushSetup's reason)
-async function enablePush(helpId){
-  const problem=await runPushSetup();
-  if(document.getElementById("push-status"))loadPushStatus();
-  if(problem){setPushHelp(helpId,problem);return false;}
-  setPushHelp(helpId,"");
-  showToast("Alerts are on.");
-  return true;
-}
 const PUSH_TEST_FAILED="We couldn't reach this phone. Your messages are still safe in the app.";
 const pushTestStamp=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
 let pushBusy=false;
 async function handlePushAction(btn){
   const act=btn.dataset.push;
-  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));refreshPushCard();return;}
+  if(act==="later"){lsSet(PUSH_ASKED_KEY,String(Date.now()+PUSH_LATER_MS));fadeOutPushCard();return;}
+  if(act==="on"){turnOnFromCard();return;}
   if(act==="guide-later"){lsSet(PUSH_GUIDE_KEY,String(Date.now()+PUSH_GUIDE_LATER_MS));refreshPushCard();return;}
   if(act==="guide"){showIosGuideSheet();return;}
   if(act==="copy"){copyAppLink(btn);return;}
@@ -2075,39 +2244,210 @@ async function handlePushAction(btn){
       setPushHelp("push-fix-help",problem||"All set: this device is registered for alerts. You can send a test alert.");
       syncPushSwitch();refreshPushCard();
       await loadPushStatus();
-    }else if(act==="on"){
-      lsSet(PUSH_ASKED_KEY,"done");
-      if(await enablePush("push-card-help"))refreshPushCard();
     }else if(act==="toggle"){
-      if(pushIsOn()){
-        try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");setPushHelp("push-ep-help","");}
-        catch(e){setPushHelp("push-ep-help","Couldn't turn off alerts. Please try again.");}
-      }else{
-        lsSet(PUSH_ASKED_KEY,"done");
-        await enablePush("push-ep-help");
-        refreshPushCard();
-      }
-      syncPushSwitch();
+      await toggleNotifications();
+    }else if(act==="allow"){
+      setPushHelp("push-set-help","");
+      lsSet(PUSH_ASKED_KEY,"done");
+      await allowAlertsNow();
     }else if(act==="test"){
-      setPushHelp("push-ep-help","Sending…");
+      setPushHelp("push-set-help","Sending…");
       let last;
       try{
         const res=await callFn("sendTestPush",{});
         if(res&&res.data&&res.data.sent>0){
-          setPushHelp("push-ep-help","Sent. It can take a few seconds.");
+          setPushHelp("push-set-help","Sent. It can take a few seconds.");
           last="sent";
         }else{
-          setPushHelp("push-ep-help",PUSH_TEST_FAILED);
+          setPushHelp("push-set-help",PUSH_TEST_FAILED);
           last="no device registered";
         }
       }catch(e){
-        setPushHelp("push-ep-help",PUSH_TEST_FAILED);
+        setPushHelp("push-set-help",PUSH_TEST_FAILED);
         last="failed";
       }
       lsSet(PUSH_LAST_TEST_KEY,`${last} (${pushTestStamp()})`);
       renderPushStatus();
     }
   }finally{pushBusy=false;btn.disabled=false;}
+}
+
+// ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
+const APP_VERSION=19; // Must match CACHE_NAME in sw.js: update them together on every release
+// Put together at runtime so the addresses never appear whole in the source
+const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
+const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
+// "Sound in the app": on unless turned off ("0" or "1")
+const SOUND_KEY="gabs_sound";
+const soundIsOn=()=>lsGet(SOUND_KEY)!=="0";
+// This device has a push registration (a stored token) that is not muted
+const hasPushToken=()=>pushMode()==="push"&&!!lsGet(PUSH_TOKEN_KEY);
+function notifInputs(){
+  const mode=pushMode();
+  return{
+    permission:mode==="push"?Notification.permission:"unsupported",
+    supported:mode==="push",
+    iosNotInstalled:mode==="guide",
+    registered:hasPushToken()&&lsGet(PUSH_MUTED_KEY)!=="1",
+    on:soundIsOn(),
+  };
+}
+// Permission (from the current tap), token and registration. A denial shows only the switch's line;
+// other failures also go to the help line. Never turns the switch off.
+async function allowAlertsNow(){
+  const problem=await runPushSetup();
+  setPushHelp("push-set-help",problem&&Notification.permission!=="denied"?problem:"");
+  syncPushSwitch();refreshPushCard();
+  if(document.getElementById("push-status"))loadPushStatus();
+  return problem;
+}
+// The one "Notifications" switch. Off: no sound, and alerts muted on the server when registered.
+// On: sound (the ding plays once), unmuted, and alerts set up from this tap when never asked.
+async function toggleNotifications(){
+  const on=!soundIsOn();
+  lsSet(SOUND_KEY,on?"1":"0");
+  setPushHelp("push-set-help","");
+  if(!on){
+    syncPushSwitch();
+    if(hasPushToken()){
+      try{await callFn("setPushMuted",{muted:true});lsSet(PUSH_MUTED_KEY,"1");}
+      catch(e){setPushHelp("push-set-help","Couldn't turn off alerts. Please try again.");}
+    }
+    syncPushSwitch();
+    return;
+  }
+  unlockChime();playChime("ding");
+  const mode=pushMode();
+  // requestPermission must run before any await so it still counts as this tap
+  if(mode==="push"&&Notification.permission==="default"){
+    lsSet(PUSH_ASKED_KEY,"done");
+    await allowAlertsNow();
+    return;
+  }
+  syncPushSwitch();
+  if(hasPushToken()){
+    try{await callFn("setPushMuted",{muted:false});lsDel(PUSH_MUTED_KEY);}
+    catch(e){setPushHelp("push-set-help","Couldn't turn on alerts. Please try again.");}
+  }
+  syncPushSwitch();
+}
+function notifActionsHTML(n){
+  return(n.showAllow?`<button type="button" class="set-text-btn" data-push="allow">Allow alerts</button>`:"")
+    +(n.showTest?`<button type="button" class="set-text-btn" data-push="test">Send me a test alert</button>`:"");
+}
+// Hand-written 24x24 icons (stroke currentColor) for the Settings rows
+const SET_ICON_PATHS={
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  down:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  signout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  chevron:'<path d="M9 6l6 6-6 6"/>',
+  gear:'<path d="M19.3 9.9L21.8 10.2L21.8 13.8L19.3 14.1L18.7 15.7L20.2 17.7L17.7 20.2L15.7 18.7L14.1 19.3L13.8 21.8L10.2 21.8L9.9 19.3L8.3 18.7L6.3 20.2L3.8 17.7L5.3 15.7L4.7 14.1L2.2 13.8L2.2 10.2L4.7 9.9L5.3 8.3L3.8 6.3L6.3 3.8L8.3 5.3L9.9 4.7L10.2 2.2L13.8 2.2L14.1 4.7L15.7 5.3L17.7 3.8L20.2 6.3L18.7 8.3Z"/><circle cx="12" cy="12" r="3"/>',
+};
+const setSvg=(name,cls="")=>`<svg${cls?` class="${cls}"`:""} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SET_ICON_PATHS[name]}</svg>`;
+const setTile=(name,tone)=>`<span class="set-tile ${tone}" aria-hidden="true">${setSvg(name)}</span>`;
+// A tappable row: icon tile, label, chevron. attrs carries the data-* (or href) of the existing handler.
+const setLinkRow=(tag,attrs,icon,tone,label)=>
+  `<${tag} class="set-row set-row-link" ${attrs}>${setTile(icon,tone)}<span class="set-row-txt"><span class="set-row-label">${esc(label)}</span></span>${setSvg("chevron","set-chev")}</${tag}>`;
+// One switch through handlePushAction ("toggle", "allow", "test"); help text goes to #push-set-help
+function settingsAlertsHTML(){
+  const n=notifLine(notifInputs());
+  return`<div class="set-row">${setTile("bell","t-bell")}
+      <div class="set-row-txt"><div class="set-row-label" id="set-notif-label">Notifications</div><div class="set-row-sub" id="set-notif-line">${esc(n.line)}</div></div>
+      <button type="button" class="push-switch" role="switch" aria-checked="${soundIsOn()}" aria-labelledby="set-notif-label" aria-describedby="set-notif-line" data-push="toggle"><span class="push-knob"></span></button>
+    </div>
+    <div id="set-notif-actions" class="set-extra">${notifActionsHTML(n)}</div>
+    <div class="push-help" id="push-set-help" role="status"></div>`;
+}
+// "App": Install app only while the browser offers it; Add to Home Screen on a non-installed iPhone/iPad
+function settingsAppHTML(){
+  if(needsHomeScreen())return`<div class="set-sec"><div class="set-label">App</div>
+    <div class="set-card">${setLinkRow("button",'type="button" data-push="guide"',"down","t-down","Add to Home Screen")}</div></div>`;
+  return`<div class="set-sec" data-app-install${installPromptEvent&&!isStandalone()?"":" hidden"}><div class="set-label">App</div>
+    <div class="set-card">${setLinkRow("button",'type="button" data-push="install"',"down","t-down","Install app")}</div></div>`;
+}
+// Profile card at the top of Settings: the whole card is one button that opens Edit Profile
+function settingsProfileHTML(){
+  if(!me)return"";
+  const photo=safePhoto(me.photoURL);
+  const av=photo
+    ?`<img class="set-prof-av" src="${esc(photo)}" width="48" height="48" decoding="async" alt=""/>`
+    :`<div class="set-prof-av set-prof-ini" aria-hidden="true">${esc(initials(me.name||"?"))}</div>`;
+  const sub=profileLine(me);
+  return`<div class="set-prof" id="set-prof" role="button" tabindex="0" aria-label="Edit your profile" data-settings="edit">${av}
+    <div class="set-prof-txt"><div class="set-prof-name">${esc(me.name||"")}</div>${sub?`<div class="set-prof-sub">${esc(sub)}</div>`:""}</div>
+    <span class="set-prof-edit" aria-hidden="true">Edit profile ›</span>
+  </div>`;
+}
+let settingsKeyHandler=null;
+function showSettings(){
+  closeSettings(false);
+  const ov=makeOv(false);ov.id="settings-sheet";
+  ov.innerHTML=`<div class="sheet set-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" style="padding-bottom:calc(22px + var(--safe-b))">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="sheet-title" id="settings-title" style="margin:0">Settings</div>
+      <button type="button" class="btn-outline btn-sm" data-settings="close" aria-label="Close settings">✕</button>
+    </div>
+    ${settingsProfileHTML()}
+    <div class="set-sec"><div class="set-label">Notifications</div>
+      <div class="set-card" id="set-alerts">${settingsAlertsHTML()}</div>
+      ${pushStatusHTML()}
+    </div>
+    ${settingsAppHTML()}
+    <div class="set-sec"><div class="set-label">Help and privacy</div>
+      <div class="set-card">
+        ${setLinkRow("button",'type="button" data-settings="support"',"mail","t-mail","Contact support")}
+        ${setLinkRow("a",'href="/privacy" target="_blank" rel="noopener noreferrer"',"lock","t-lock","Privacy notice")}
+        ${setLinkRow("button",'type="button" data-settings="delete"',"trash","t-trash","Ask us to delete my data")}
+      </div>
+    </div>
+    <button type="button" class="set-signout" data-settings="signout">${setSvg("signout")}Sign out</button>
+    <div class="set-foot">GABS Connect · version ${esc(String(APP_VERSION))}</div>
+  </div>`;
+  ov.addEventListener("click",e=>{if(e.target===ov)closeSettings();});
+  // Escape closes Settings only when nothing (such as the iPhone guide) is open on top of it
+  settingsKeyHandler=e=>{
+    if(e.key!=="Escape")return;
+    const top=[...document.querySelectorAll(".ov")].pop();
+    if(top===ov){e.preventDefault();closeSettings();}
+  };
+  document.addEventListener("keydown",settingsKeyHandler);
+  document.body.appendChild(ov);
+  ov.querySelector('[data-settings="close"]').focus();
+  loadPushStatus();
+}
+// Removes only the sheet: the screen underneath (scroll, chat draft, listeners) is left as it was
+function closeSettings(restoreFocus=true){
+  if(settingsKeyHandler){document.removeEventListener("keydown",settingsKeyHandler);settingsKeyHandler=null;}
+  const ov=document.getElementById("settings-sheet");
+  if(!ov)return;
+  ov.remove();
+  if(restoreFocus)document.getElementById("settings-btn")?.focus({preventScroll:true});
+}
+const openMailLink=link=>{if(link)window.location.href=link;};
+function handleSettingsAction(el){
+  const act=el.dataset.settings;
+  if(act==="open"){showSettings();return;}
+  if(act==="close"){closeSettings();return;}
+  // The same Edit Profile the bottom bar opens
+  if(act==="edit"){closeSettings(false);showEditProfile({fromSettings:true});return;}
+  if(act==="support"){openMailLink(mailtoLink({to:supportAddress(),subject:"GABS Connect support"}));return;}
+  if(act==="delete"){
+    openMailLink(mailtoLink({
+      to:deletionAddress(),
+      cc:supportAddress(),
+      subject:"GABS Connect: please delete my data",
+      body:"Please delete my GABS Connect profile and data.\n\nMy name:\nMy ticket reference (optional):",
+    }));
+    return;
+  }
+  if(act==="signout"){
+    if(!confirm("Sign out? You will need your ticket reference or your personal link to sign back in."))return;
+    closeSettings(false);
+    signOutNow();
+  }
 }
 // Every app open with a participant session and permission granted (and after the service worker
 // reports a new subscription): get the token, and register it when it changed or was registered more
@@ -2282,7 +2622,15 @@ function initThread(p){
   const tid2=tid(me.id,p.id);
   const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
   clearTimeout(threadRenderTimer);
+  let firstSnap=true;
   threadUnsub=fb.onSnapshot(q,snap=>{
+    const wasFirst=firstSnap;firstSnap=false;
+    if(!wasFirst&&activeThreadId===p.id){
+      snap.docChanges().forEach(ch=>{
+        const fromId=ch.type==="added"&&ch.doc.data().fromId;
+        if(fromId===p.id)chimeFor({isFirstSnapshot:false,fromId,chatOpenWithSender:true});
+      });
+    }
     threadMessages=snap.docs.map(d=>({id:d.id,...d.data()}));
     clearTimeout(threadRenderTimer);
     threadRenderTimer=setTimeout(()=>{
