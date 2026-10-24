@@ -440,15 +440,16 @@ function applyIosGap(){
   const root=document.documentElement;
   root.style.setProperty("--ios-gap",iosGapPx+"px");
   root.classList.toggle("ios-home",iosGapPx>0);
+  applyLowBar();
 }
 applyIosGap();
 window.addEventListener("orientationchange",applyIosGap);
-// A Home Screen app whose page is at least 20px shorter than the screen gets the slimmer bottom bar ("ios-low")
+// With "ios-home" only: a page at least 20px shorter than the screen gets the slimmer bottom bar ("ios-low")
 function applyLowBar(){
-  const low=lowerBarFor({isHome:isIPhone&&isHomeScreenApp(),screenH:screen.height,innerH:window.innerHeight});
-  document.documentElement.classList.toggle("ios-low",low);
+  const root=document.documentElement;
+  const low=lowerBarFor({isHome:root.classList.contains("ios-home"),screenH:screen.height,innerH:window.innerHeight});
+  root.classList.toggle("ios-low",low);
 }
-applyLowBar();
 window.addEventListener("resize",applyLowBar);
 window.addEventListener("orientationchange",applyLowBar);
 
