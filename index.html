@@ -723,6 +723,12 @@ function lowerBarFor({isHome,screenH,innerH}={}){
   if(isHome!==true||!Number.isFinite(screenH)||!Number.isFinite(innerH))return false;
   return screenH-innerH>=20;
 }
+
+// Register for alerts right after a sign-in: only with push support, permission granted, sound on,
+// not an iPhone/iPad browser tab, and not already done for this session.
+function shouldRegisterAtSignIn({supported,permission,soundOn,iosNotInstalled,alreadyDone}={}){
+  return supported===true&&permission==="granted"&&soundOn===true&&iosNotInstalled===false&&alreadyDone===false;
+}
 // END safe-helpers
 
 
@@ -2570,22 +2576,40 @@ function handleSettingsAction(el){
 }
 // Every app open with a participant session and permission granted (and after the service worker
 // reports a new subscription): get the token, and register it when it changed or was registered more
-// than 3 days ago. Fails quietly, with nothing in the console.
+// than 3 days ago (force: register whatever the age). Fails quietly, with nothing in the console.
+// Resolves true when this device is registered with the current token, otherwise false.
 let pushRefreshing=null;
-function refreshPushToken(){
-  if(!pushGranted()||!window._fn||!me)return Promise.resolve();
+function refreshPushToken(force=false){
+  if(!pushGranted()||!window._fn||!me)return Promise.resolve(false);
   if(pushRefreshing)return pushRefreshing;
   pushRefreshing=(async()=>{
     try{
       const token=await window._push.getToken();
-      if(!token)return;
+      if(!token)return false;
       const fresh=Date.now()-(Number(lsGet(PUSH_TOKEN_AT_KEY))||0)<PUSH_REREGISTER_MS;
-      if(token===lsGet(PUSH_TOKEN_KEY)&&fresh)return;
+      if(!force&&token===lsGet(PUSH_TOKEN_KEY)&&fresh)return true;
       await callFn("registerPushToken",{token,platform:pushPlatform()});
       lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));
-    }catch(e){}
+      return true;
+    }catch(e){return false;}
   })().finally(()=>{pushRefreshing=null;});
   return pushRefreshing;
+}
+// Right after a participant signs in (ticket reference, sign-in link or registration): register this
+// device without waiting for a reload, and unmute it. Once per session start; never blocks sign-in.
+let pushSignInDone=false;
+async function registerPushAtSignIn(){
+  try{
+    const mode=pushMode();
+    if(!shouldRegisterAtSignIn({supported:mode==="push",permission:mode==="push"?Notification.permission:"unsupported",
+      soundOn:soundIsOn(),iosNotInstalled:mode==="guide",alreadyDone:pushSignInDone}))return;
+    pushSignInDone=true;
+    // A refresh already running (it does not force) finishes first
+    if(pushRefreshing)await pushRefreshing;
+    if(!await refreshPushToken(true))return;
+    await callFn("setPushMuted",{muted:false});
+    lsDel(PUSH_MUTED_KEY);
+  }catch(e){}
 }
 // Sign-out (while still signed in): unregister this device, delete the token, clear the local flags
 async function pushSignOut(){
@@ -3490,7 +3514,7 @@ function showEntry(opts){
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
         // Draw the app under the entry screen right away (lists stream in with their placeholders), then fade the entry out
-        renderApp();startMessageListeners();
+        renderApp();registerPushAtSignIn();startMessageListeners();
         const tVis=performance.now();
         el.style.pointerEvents="none";el.style.opacity="0";el.style.transition="opacity .3s";
         setTimeout(()=>el.remove(),300);
@@ -3644,7 +3668,7 @@ function showEntry(opts){
         // Enter at once, drawing the app under the fading entry screen; only a failed
         // photo upload keeps the form up long enough to read its message
         const enter=()=>{
-          renderApp();startMessageListeners();
+          renderApp();registerPushAtSignIn();startMessageListeners();
           const entryEl=document.getElementById("entry");
           if(entryEl){entryEl.style.pointerEvents="none";entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>entryEl.remove(),350);}
         };

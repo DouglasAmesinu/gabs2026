@@ -15,11 +15,11 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
-  profileLine, gapFor, lowerBarFor } = loadHelpers();
+  profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -468,6 +468,47 @@ test("lowerBarFor: missing values give false", () => {
   assert.equal(lowerBarFor({ isHome: true }), false);
   assert.equal(lowerBarFor({ ...BAR, screenH: undefined }), false);
   assert.equal(lowerBarFor({ ...BAR, innerH: NaN }), false);
+});
+
+// A participant who just signed in on a device that can receive alerts, with permission and sound on
+const SIGNIN = { supported: true, permission: "granted", soundOn: true, iosNotInstalled: false, alreadyDone: false };
+
+test("shouldRegisterAtSignIn: everything in place gives true", () => {
+  assert.equal(shouldRegisterAtSignIn(SIGNIN), true);
+});
+
+test("shouldRegisterAtSignIn: no push support gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, supported: false }), false);
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, supported: "yes" }), false);
+});
+
+test("shouldRegisterAtSignIn: permission not granted gives false", () => {
+  for (const permission of ["default", "denied", "unsupported", "GRANTED", ""]) {
+    assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, permission }), false, permission);
+  }
+});
+
+test("shouldRegisterAtSignIn: sound (the Notifications switch) off gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, soundOn: false }), false);
+});
+
+test("shouldRegisterAtSignIn: an iPhone/iPad not installed on the Home Screen gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, iosNotInstalled: true }), false);
+});
+
+test("shouldRegisterAtSignIn: already done for this session gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, alreadyDone: true }), false);
+});
+
+test("shouldRegisterAtSignIn: missing values give false", () => {
+  assert.equal(shouldRegisterAtSignIn(), false);
+  assert.equal(shouldRegisterAtSignIn({}), false);
+  for (const k of Object.keys(SIGNIN)) {
+    const o = { ...SIGNIN };
+    delete o[k];
+    assert.equal(shouldRegisterAtSignIn(o), false, `without ${k}`);
+  }
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, iosNotInstalled: null }), false, "iosNotInstalled null");
 });
 
 const TO = "help" + "@" + "example.org";
