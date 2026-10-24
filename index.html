@@ -39,7 +39,7 @@ window.GABS_ENV=IS_LIVE?"live":"staging";
 if(!IS_LIVE){
   const sb=document.createElement("div");
   sb.textContent="STAGING";
-  sb.style.cssText="position:fixed;left:6px;bottom:6px;z-index:600;background:rgba(220,38,38,.65);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 7px;border-radius:5px;pointer-events:none";
+  sb.style.cssText="position:fixed;left:6px;bottom:calc(6px + var(--safe-bottom));z-index:600;background:rgba(220,38,38,.65);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 7px;border-radius:5px;pointer-events:none";
   document.body.appendChild(sb);
 }
 const app=initializeApp(firebaseConfig);
@@ -95,6 +95,9 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 
 /* ── Entry Screen ── */
 #entry{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--navy);overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Where dvh exists the screen is at least the visible viewport tall, so no page grey shows below the card.
+   No vh fallback: on mobile browsers 100vh is taller than the visible area and would move the layout. */
+@supports (min-height:100dvh){#entry{min-height:100dvh}}
 .entry-hero{padding:calc(28px + var(--safe-top)) 22px 16px;flex-shrink:0}
 .entry-eyebrow-left{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
 .entry-eyebrow-right{color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.04em}
@@ -104,7 +107,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .entry-title{color:var(--white);font-size:26px;font-weight:800;line-height:1.15;margin-bottom:6px}
 .entry-title-gold{color:var(--gold)}
 .entry-sub{color:rgba(255,255,255,.55);font-size:14px;line-height:1.5;margin-top:8px;max-width:320px;margin-bottom:0}
-.entry-card{background:var(--white);border-radius:28px 28px 0 0;padding:28px 22px 32px;overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.entry-card{background:var(--white);border-radius:28px 28px 0 0;padding:28px 22px calc(32px + var(--safe-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
 .entry-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin-bottom:10px}
 .entry-input{width:100%;padding:16px 18px;border:1.5px solid var(--border);border-radius:14px;font-size:16px;color:var(--text);background:#F9FAFB;font-weight:500;transition:all .2s;letter-spacing:.04em}
 .entry-input:focus{border-color:var(--navy);background:var(--white);box-shadow:0 0 0 3px rgba(27,58,107,.08)}
@@ -272,7 +275,9 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 
 /* ── Overlays ── */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(4px);padding:10px;padding-top:calc(10px + var(--safe-top))}
-.ov.ctr{align-items:center;padding:20px;padding-top:calc(20px + var(--safe-top))}
+.ov.ctr{align-items:center;padding:20px;padding-top:calc(20px + var(--safe-top));padding-bottom:calc(20px + var(--safe-bottom))}
+/* Bottom sheets clear the home indicator (sheets with their own padding-bottom keep theirs) */
+.ov:not(.ctr)>.sheet{padding-bottom:calc(24px + var(--safe-bottom))}
 .sheet{background:var(--white);border-radius:24px 24px 16px 16px;width:100%;max-width:480px;padding:24px;box-shadow:0 -4px 30px rgba(0,0,0,.15);animation:slideUp .25s ease;max-height:calc(90vh - var(--safe-top));overflow-y:auto}
 .sheet.pop{border-radius:20px;animation:popIn .22s ease}
 .sheet-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px}
@@ -372,7 +377,7 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .btn-row{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:18px}
 
 /* ── Profile footer ── */
-#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-b));flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+#profile-bar{background:var(--white);border-top:1px solid var(--border);padding:8px 16px calc(6px + var(--safe-bottom));flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:12px}
 .profile-info{display:flex;align-items:center;gap:9px;flex:1;min-width:0;min-height:44px;cursor:pointer;touch-action:manipulation;border-radius:12px}
 .profile-name{font-size:13px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
