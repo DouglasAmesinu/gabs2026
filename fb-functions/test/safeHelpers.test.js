@@ -15,11 +15,11 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, topInsetFor };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
-  profileLine } = loadHelpers();
+  profileLine, topInsetFor } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -399,6 +399,49 @@ test("profileLine returns hostile text unchanged (esc is applied when rendering)
   const evil = '<img src=x onerror="alert(1)">';
   assert.equal(profileLine({ company: evil, country: "<b>GH</b>" }), evil + " · <b>GH</b>");
   assert.equal(esc(profileLine({ company: evil })), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+});
+
+// A standalone (Home Screen) notched iPhone whose page covers the whole screen
+const INSET = { envPx: 0, isIOS: true, isStandalone: true, screenH: 844, innerH: 844 };
+
+test("topInsetFor: a reported env value above 0 always wins", () => {
+  assert.equal(topInsetFor({ ...INSET, envPx: 59 }), 59);
+  assert.equal(topInsetFor({ envPx: 24 }), 24, "even without the other details");
+  assert.equal(topInsetFor({ ...INSET, envPx: 20, isIOS: false }), 20);
+});
+
+test("topInsetFor: env 0 on a standalone notched iPhone covering the screen gives 47", () => {
+  assert.equal(topInsetFor(INSET), 47);
+  assert.equal(topInsetFor({ ...INSET, screenH: 812, innerH: 800 }), 47, "812 tall, gap under 20");
+});
+
+test("topInsetFor: the same iPhone with the page below the status bar (innerH 797) gives 0", () => {
+  assert.equal(topInsetFor({ ...INSET, innerH: 797 }), 0);
+  assert.equal(topInsetFor({ ...INSET, innerH: 824 }), 0, "a gap of exactly 20 is not under 20");
+});
+
+test("topInsetFor: a standalone small iPhone (667 tall) covering the screen gives 20", () => {
+  assert.equal(topInsetFor({ ...INSET, screenH: 667, innerH: 667 }), 20);
+  assert.equal(topInsetFor({ ...INSET, screenH: 667, innerH: 647 }), 0, "status bar outside the page");
+  assert.equal(topInsetFor({ ...INSET, screenH: 667, innerH: 657 }), 0, "a gap of exactly 10 is not under 10");
+});
+
+test("topInsetFor: not iOS gives 0", () => {
+  assert.equal(topInsetFor({ ...INSET, isIOS: false }), 0);
+});
+
+test("topInsetFor: not standalone (a Safari tab) gives 0", () => {
+  assert.equal(topInsetFor({ ...INSET, isStandalone: false }), 0);
+});
+
+test("topInsetFor: missing or odd values give 0", () => {
+  assert.equal(topInsetFor(), 0);
+  assert.equal(topInsetFor({}), 0);
+  assert.equal(topInsetFor({ isIOS: true, isStandalone: true }), 0, "no screen sizes");
+  assert.equal(topInsetFor({ ...INSET, screenH: undefined }), 0);
+  assert.equal(topInsetFor({ ...INSET, innerH: NaN }), 0);
+  assert.equal(topInsetFor({ ...INSET, envPx: -5, isIOS: "yes" }), 0);
+  assert.equal(topInsetFor({ ...INSET, envPx: NaN }), 47, "an unreadable env value counts as 0");
 });
 
 const TO = "help" + "@" + "example.org";

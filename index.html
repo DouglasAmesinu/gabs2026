@@ -71,7 +71,10 @@ window.dispatchEvent(new Event("fb-ready"));
   --navy:#1B3A6B;--steel:#5B9BB5;--gold:#C49A2A;--light:#F0F4F8;
   --white:#ffffff;--text:#1a1a2e;--muted:#6B7280;--border:#E5E7EB;
   --green:#16A34A;--red:#DC2626;--orange:#EA580C;
-  --safe-b:env(safe-area-inset-bottom,0px);
+  /* Safe areas: --safe-top is replaced in px at start-up by applySafeTop() (topInsetFor) */
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-b:var(--safe-bottom);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
@@ -662,6 +665,18 @@ function mailtoLink({to,cc,subject,body}={}){
     .filter(([,v])=>v!=="")
     .map(([k,v])=>k+"="+encodeURIComponent(v));
   return"mailto:"+encodeURIComponent(addr.slice(0,at))+"@"+encodeURIComponent(addr.slice(at+1))+(params.length?"?"+params.join("&"):"");
+}
+
+// The top safe area in px. env(safe-area-inset-top) when the browser reports it; otherwise, in an iPhone
+// Home Screen app whose page covers the whole screen (some iOS versions report 0 there), the status bar
+// height: 47 on notched iPhones (screen height 812 or more), 20 on smaller ones. 0 everywhere else.
+function topInsetFor({envPx,isIOS,isStandalone,screenH,innerH}={}){
+  if(Number.isFinite(envPx)&&envPx>0)return envPx;
+  if(isIOS!==true||isStandalone!==true||!Number.isFinite(screenH)||!Number.isFinite(innerH))return 0;
+  const gap=screenH-innerH;
+  if(screenH>=812&&gap<20)return 47;
+  if(screenH<812&&gap<10)return 20;
+  return 0;
 }
 // END safe-helpers
 
@@ -2021,6 +2036,25 @@ const PUSH_UA=navigator.userAgent||"";
 const isIOSDevice=/iPhone|iPad|iPod/.test(PUSH_UA)||(/Macintosh/.test(PUSH_UA)&&navigator.maxTouchPoints>1);
 const pushPlatform=()=>isIOSDevice?"ios":/Android/i.test(PUSH_UA)?"android":"desktop";
 const isStandalone=()=>navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);
+// ── Safe areas ─────────────────────────────────────────────────────────────
+// A hidden probe reads env(safe-area-inset-top); topInsetFor adds the iPhone Home Screen fallback.
+// --safe-top is set in px (never below the measured env value) at start-up, on resize and on rotation.
+let safeTopInfo={envPx:0,px:0};
+function applySafeTop(){
+  try{
+    const probe=document.createElement("div");
+    probe.style.cssText="position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px)";
+    document.body.appendChild(probe);
+    const envPx=parseFloat(getComputedStyle(probe).paddingTop)||0;
+    probe.remove();
+    const px=Math.max(envPx,topInsetFor({envPx,isIOS:isIOSDevice,isStandalone:isStandalone(),screenH:screen.height,innerH:window.innerHeight}));
+    safeTopInfo={envPx,px};
+    document.documentElement.style.setProperty("--safe-top",px+"px");
+  }catch(e){}
+}
+applySafeTop();
+window.addEventListener("resize",applySafeTop);
+window.addEventListener("orientationchange",()=>setTimeout(applySafeTop,250));
 // iPhone/iPad in the browser: alerts need the Home Screen app, so show the guide instead
 const needsHomeScreen=()=>isIOSDevice&&!isStandalone();
 // "guide": iOS browser tab, always the Home Screen guide (PushManager is missing there by design);
