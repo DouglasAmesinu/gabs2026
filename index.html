@@ -2091,6 +2091,9 @@ const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iP
 const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
 const PUSH_LAST_TEST_KEY="gabs_push_last_test"; // the result of the last "Send me a test alert"
 const PUSH_LATER_MS=14*24*60*60*1000;
+// For the debug panel only, in memory (set by refreshPushToken): the last attempt {at, ok, code} and the
+// last skip {at, reason}. Error codes and fixed reasons only, never a token or personal data.
+let pushLastReg=null,pushLastSkip=null;
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
 const lsDel=k=>{try{localStorage.removeItem(k);}catch(e){}};
@@ -2543,6 +2546,7 @@ function renderGapPanel(){
   el.innerHTML=`<div>iPhone Home Screen: ${home?"yes":"no"}</div>
     <div>Gap: ${iosGapPx} px${home?"":` (setting ${gapSetting()} px, applied only there)`}</div>
     <div>Existing top inset: ${existingTopInsetPx()} px</div>
+    <div>${esc(pushDebugLine())}</div>
     <div style="display:flex;gap:4px;margin-top:5px">${btn("-5","-5")}${btn("-1","-1")}${btn("1","+1")}${btn("5","+5")}${btn("reset","Reset")}</div>`;
 }
 renderGapPanel();
@@ -2590,27 +2594,46 @@ function handleSettingsAction(el){
 // console and no retry; gabs_push_reg_at is written only after a successful call.
 // Resolves true when this device is registered with the current token, otherwise false.
 let pushRefreshing=null;
+const pushErrCode=e=>{const c=String((e&&e.code)||"error");return/^[a-z0-9/_-]{1,60}$/i.test(c)?c:"error";};
+function notePushReg(reg,skip){
+  if(reg){pushLastReg={at:Date.now(),...reg};pushLastSkip=null;}
+  if(skip)pushLastSkip={at:Date.now(),reason:skip};
+  renderGapPanel();
+}
 function refreshPushToken(force=false){
-  if(!window._fn||!me)return Promise.resolve(false);
+  if(!window._fn||!me){notePushReg(null,"signed out");return Promise.resolve(false);}
   if(pushRefreshing)return pushRefreshing;
   if(force){
-    if(!pushGranted())return Promise.resolve(false);
+    if(!pushGranted()){notePushReg(null,"permission not granted");return Promise.resolve(false);}
   }else{
     const mode=pushMode(),lastAt=lsGet(PUSH_REG_AT_KEY);
-    if(!shouldRefreshPush({supported:mode==="push",permission:mode==="push"?Notification.permission:"unsupported",soundOn:soundIsOn(),
-      iosNotInstalled:mode==="guide",lastAtMs:lastAt?Number(lastAt):undefined,nowMs:Date.now()}))return Promise.resolve(false);
+    const perm=mode==="push"?Notification.permission:"unsupported";
+    if(!shouldRefreshPush({supported:mode==="push",permission:perm,soundOn:soundIsOn(),
+      iosNotInstalled:mode==="guide",lastAtMs:lastAt?Number(lastAt):undefined,nowMs:Date.now()})){
+      notePushReg(null,mode==="guide"?"iPhone not installed":mode!=="push"?"unsupported":perm!=="granted"?"permission "+perm
+        :!soundIsOn()?"notifications off":"registered under 10 min ago");
+      return Promise.resolve(false);
+    }
   }
   pushRefreshing=(async()=>{
     try{
       const token=await window._push.getToken();
-      if(!token)return false;
+      if(!token){notePushReg({ok:false,code:"no-token"});return false;}
       await callFn("registerPushToken",{token,platform:pushPlatform()});
       const now=String(Date.now());
       lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,now);lsSet(PUSH_REG_AT_KEY,now);
+      notePushReg({ok:true});
       return true;
-    }catch(e){return false;}
+    }catch(e){notePushReg({ok:false,code:pushErrCode(e)});return false;}
   })().finally(()=>{pushRefreshing=null;});
   return pushRefreshing;
+}
+// Debug panel line: "Push: last register HH:MM, ok" (or "failed (code)"), "skipped (reason)" or "never"
+function pushDebugLine(){
+  const hhmm=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+  const reg=pushLastReg?`last register ${hhmm(pushLastReg.at)}, ${pushLastReg.ok?"ok":`failed (${pushLastReg.code})`}`:"";
+  const skip=pushLastSkip?`skipped (${pushLastSkip.reason})`:"";
+  return"Push: "+([reg,skip].filter(Boolean).join("; ")||"never");
 }
 // Right after a participant signs in (ticket reference, sign-in link or registration): register this
 // device without waiting for a reload, and unmute it. Once per session start; never blocks sign-in.
