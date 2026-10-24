@@ -15,11 +15,11 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
-  profileLine } = loadHelpers();
+  profileLine, gapFor } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -399,6 +399,46 @@ test("profileLine returns hostile text unchanged (esc is applied when rendering)
   const evil = '<img src=x onerror="alert(1)">';
   assert.equal(profileLine({ company: evil, country: "<b>GH</b>" }), evil + " · <b>GH</b>");
   assert.equal(esc(profileLine({ company: evil })), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+});
+
+// An iPhone running the app from the Home Screen
+const HOME = { isIPhone: true, isStandalone: true, stored: null, defaultPx: 40 };
+
+test("gapFor: iPhone Home Screen app with nothing stored gives the default 40", () => {
+  assert.equal(gapFor(HOME), 40);
+  assert.equal(gapFor({ ...HOME, stored: undefined }), 40);
+});
+
+test("gapFor: a stored whole number is used", () => {
+  assert.equal(gapFor({ ...HOME, stored: "60" }), 60);
+  assert.equal(gapFor({ ...HOME, stored: "0" }), 0);
+});
+
+test("gapFor: a stored value that does not parse gives the default", () => {
+  assert.equal(gapFor({ ...HOME, stored: "abc" }), 40);
+  assert.equal(gapFor({ ...HOME, stored: "" }), 40);
+});
+
+test("gapFor: stored values are clamped to 0..120", () => {
+  assert.equal(gapFor({ ...HOME, stored: "-5" }), 0);
+  assert.equal(gapFor({ ...HOME, stored: "500" }), 120);
+});
+
+test("gapFor: not an iPhone gives 0", () => {
+  assert.equal(gapFor({ ...HOME, isIPhone: false }), 0);
+  assert.equal(gapFor({ ...HOME, isIPhone: false, stored: "60" }), 0);
+});
+
+test("gapFor: an iPhone in a browser tab (not standalone) gives 0", () => {
+  assert.equal(gapFor({ ...HOME, isStandalone: false }), 0);
+  assert.equal(gapFor({ ...HOME, isStandalone: false, stored: "60" }), 0);
+});
+
+test("gapFor: missing values give 0", () => {
+  assert.equal(gapFor(), 0);
+  assert.equal(gapFor({}), 0);
+  assert.equal(gapFor({ isIPhone: true }), 0);
+  assert.equal(gapFor({ isIPhone: true, isStandalone: true }), 0, "no stored value and no default");
 });
 
 const TO = "help" + "@" + "example.org";

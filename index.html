@@ -410,6 +410,23 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 <div id="loader"><div class="spin"></div><div style="color:rgba(255,255,255,.4);font-size:12px;margin-top:14px;letter-spacing:2px;font-weight:600">GABS 2026</div></div>
 <div id="app" style="display:none"></div>
 <script>
+// ── iPhone Home Screen top gap ─────────────────────────────────────────────
+// Runs first, before anything is drawn: iOS blurs the top of the screen in a Home Screen app, so
+// --ios-gap adds white space below it. 0px and no "ios-home" class everywhere else (gapFor is hoisted).
+const IOS_GAP_DEFAULT=40,GAP_KEY="gabs_gap";
+const isIPhone=/iPhone/.test(navigator.userAgent);
+const isHomeScreenApp=()=>navigator.standalone===true||!!(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);
+const readStoredGap=()=>{try{return localStorage.getItem(GAP_KEY);}catch(e){return null;}};
+let iosGapPx=0;
+function applyIosGap(){
+  iosGapPx=gapFor({isIPhone,isStandalone:isHomeScreenApp(),stored:readStoredGap(),defaultPx:IOS_GAP_DEFAULT});
+  const root=document.documentElement;
+  root.style.setProperty("--ios-gap",iosGapPx+"px");
+  root.classList.toggle("ios-home",iosGapPx>0);
+}
+applyIosGap();
+window.addEventListener("orientationchange",applyIosGap);
+
 // ── Constants ──────────────────────────────────────────────────────────────
 const NAVY="#1B3A6B",STEEL="#5B9BB5",GOLD="#C49A2A";
 const APP_URL="https://www.gabsconnect.com/";
@@ -663,6 +680,16 @@ function mailtoLink({to,cc,subject,body}={}){
     .filter(([,v])=>v!=="")
     .map(([k,v])=>k+"="+encodeURIComponent(v));
   return"mailto:"+encodeURIComponent(addr.slice(0,at))+"@"+encodeURIComponent(addr.slice(at+1))+(params.length?"?"+params.join("&"):"");
+}
+
+// The extra top gap in px for an iPhone Home Screen app: 0 unless isIPhone and isStandalone are both true;
+// then the stored value (a whole number, clamped to 0..120) when it parses, else defaultPx.
+function gapFor({isIPhone,isStandalone,stored,defaultPx}={}){
+  if(isIPhone!==true||isStandalone!==true)return 0;
+  const clamp=n=>Math.min(120,Math.max(0,n));
+  const s=typeof stored==="number"?String(stored):stored;
+  if(typeof s==="string"&&/^\s*-?\d+\s*$/.test(s))return clamp(parseInt(s,10));
+  return Number.isFinite(defaultPx)?clamp(Math.round(defaultPx)):0;
 }
 // END safe-helpers
 
