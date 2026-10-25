@@ -723,6 +723,20 @@ function lowerBarFor({isHome,screenH,innerH}={}){
   if(isHome!==true||!Number.isFinite(screenH)||!Number.isFinite(innerH))return false;
   return screenH-innerH>=20;
 }
+
+// Register for alerts right after a sign-in: only with push support, permission granted, sound on,
+// not an iPhone/iPad browser tab, and not already done for this session.
+function shouldRegisterAtSignIn({supported,permission,soundOn,iosNotInstalled,alreadyDone}={}){
+  return supported===true&&permission==="granted"&&soundOn===true&&iosNotInstalled===false&&alreadyDone===false;
+}
+
+// Register again (app open, back in front, new subscription): same conditions as at sign-in, and at
+// least minGapMs since the last successful registration. A missing (or unreadable) lastAtMs counts as never.
+function shouldRefreshPush({supported,permission,soundOn,iosNotInstalled,lastAtMs,nowMs,minGapMs=600000}={}){
+  if(supported!==true||permission!=="granted"||soundOn!==true||iosNotInstalled!==false)return false;
+  if(!Number.isFinite(nowMs)||!Number.isFinite(minGapMs))return false;
+  return!Number.isFinite(lastAtMs)||nowMs-lastAtMs>=minGapMs;
+}
 // END safe-helpers
 
 
@@ -2071,11 +2085,15 @@ function startAnnouncementListener(){
 const PUSH_ASKED_KEY="gabs_push_asked";     // "done" once Turn on was tapped, or the ms until which Not now hides the card
 const PUSH_TOKEN_KEY="gabs_push_tok";       // the token last registered from this device
 const PUSH_TOKEN_AT_KEY="gabs_push_tok_at"; // when it was last registered (ms)
+const PUSH_REG_AT_KEY="gabs_push_reg_at";   // when registerPushToken last succeeded from this device (ms)
 const PUSH_MUTED_KEY="gabs_push_muted";     // "1" after the Notifications switch was turned off (server muted)
 const PUSH_GUIDE_KEY="gabs_push_guide_until"; // ms until which the dismissed iPhone/iPad guide card stays hidden
 const PUSH_GUIDE_LATER_MS=7*24*60*60*1000;
 const PUSH_LAST_TEST_KEY="gabs_push_last_test"; // the result of the last "Send me a test alert"
-const PUSH_LATER_MS=14*24*60*60*1000,PUSH_REREGISTER_MS=3*24*60*60*1000;
+const PUSH_LATER_MS=14*24*60*60*1000;
+// For the debug panel only, in memory (set by refreshPushToken): the last attempt {at, ok, code} and the
+// last skip {at, reason}. Error codes and fixed reasons only, never a token or personal data.
+let pushLastReg=null,pushLastSkip=null;
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
 const lsDel=k=>{try{localStorage.removeItem(k);}catch(e){}};
@@ -2243,7 +2261,7 @@ async function runPushSetup(){
     await callFn("registerPushToken",{token,platform:pushPlatform()});
     await callFn("setPushMuted",{muted:false});
   }catch(e){return pushServerReason(e);}
-  lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
+  lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));lsSet(PUSH_REG_AT_KEY,String(Date.now()));lsDel(PUSH_MUTED_KEY);
   return"";
 }
 // Settings "Alerts status" (debug only): shown whatever the device supports
@@ -2335,7 +2353,7 @@ async function handlePushAction(btn){
 }
 
 // ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
-const APP_VERSION=24; // Must match CACHE_NAME in sw.js: update them together on every release
+const APP_VERSION=26; // Must match CACHE_NAME in sw.js: update them together on every release
 // Put together at runtime so the addresses never appear whole in the source
 const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
 const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
@@ -2528,6 +2546,7 @@ function renderGapPanel(){
   el.innerHTML=`<div>iPhone Home Screen: ${home?"yes":"no"}</div>
     <div>Gap: ${iosGapPx} px${home?"":` (setting ${gapSetting()} px, applied only there)`}</div>
     <div>Existing top inset: ${existingTopInsetPx()} px</div>
+    <div>${esc(pushDebugLine())}</div>
     <div style="display:flex;gap:4px;margin-top:5px">${btn("-5","-5")}${btn("-1","-1")}${btn("1","+1")}${btn("5","+5")}${btn("reset","Reset")}</div>`;
 }
 renderGapPanel();
@@ -2568,26 +2587,72 @@ function handleSettingsAction(el){
     signOutNow();
   }
 }
-// Every app open with a participant session and permission granted (and after the service worker
-// reports a new subscription): get the token, and register it when it changed or was registered more
-// than 3 days ago. Fails quietly, with nothing in the console.
+// App open with a participant session, back in front, and after the service worker reports a new
+// subscription: when shouldRefreshPush allows it (at most every 10 minutes), get the token and register
+// it again whatever this device has stored, so a registration the server lost repairs itself
+// (force, at sign-in: register whenever permission is granted). Fails quietly, with nothing in the
+// console and no retry; gabs_push_reg_at is written only after a successful call.
+// Resolves true when this device is registered with the current token, otherwise false.
 let pushRefreshing=null;
-function refreshPushToken(){
-  if(!pushGranted()||!window._fn||!me)return Promise.resolve();
+const pushErrCode=e=>{const c=String((e&&e.code)||"error");return/^[a-z0-9/_-]{1,60}$/i.test(c)?c:"error";};
+function notePushReg(reg,skip){
+  if(reg){pushLastReg={at:Date.now(),...reg};pushLastSkip=null;}
+  if(skip)pushLastSkip={at:Date.now(),reason:skip};
+  renderGapPanel();
+}
+function refreshPushToken(force=false){
+  if(!window._fn||!me){notePushReg(null,"signed out");return Promise.resolve(false);}
   if(pushRefreshing)return pushRefreshing;
+  if(force){
+    if(!pushGranted()){notePushReg(null,"permission not granted");return Promise.resolve(false);}
+  }else{
+    const mode=pushMode(),lastAt=lsGet(PUSH_REG_AT_KEY);
+    const perm=mode==="push"?Notification.permission:"unsupported";
+    if(!shouldRefreshPush({supported:mode==="push",permission:perm,soundOn:soundIsOn(),
+      iosNotInstalled:mode==="guide",lastAtMs:lastAt?Number(lastAt):undefined,nowMs:Date.now()})){
+      notePushReg(null,mode==="guide"?"iPhone not installed":mode!=="push"?"unsupported":perm!=="granted"?"permission "+perm
+        :!soundIsOn()?"notifications off":"registered under 10 min ago");
+      return Promise.resolve(false);
+    }
+  }
   pushRefreshing=(async()=>{
     try{
       const token=await window._push.getToken();
-      if(!token)return;
-      const fresh=Date.now()-(Number(lsGet(PUSH_TOKEN_AT_KEY))||0)<PUSH_REREGISTER_MS;
-      if(token===lsGet(PUSH_TOKEN_KEY)&&fresh)return;
+      if(!token){notePushReg({ok:false,code:"no-token"});return false;}
       await callFn("registerPushToken",{token,platform:pushPlatform()});
-      lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,String(Date.now()));
-    }catch(e){}
+      const now=String(Date.now());
+      lsSet(PUSH_TOKEN_KEY,token);lsSet(PUSH_TOKEN_AT_KEY,now);lsSet(PUSH_REG_AT_KEY,now);
+      notePushReg({ok:true});
+      return true;
+    }catch(e){notePushReg({ok:false,code:pushErrCode(e)});return false;}
   })().finally(()=>{pushRefreshing=null;});
   return pushRefreshing;
 }
-// Sign-out (while still signed in): unregister this device, delete the token, clear the local flags
+// Debug panel line: "Push: last register HH:MM, ok" (or "failed (code)"), "skipped (reason)" or "never"
+function pushDebugLine(){
+  const hhmm=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+  const reg=pushLastReg?`last register ${hhmm(pushLastReg.at)}, ${pushLastReg.ok?"ok":`failed (${pushLastReg.code})`}`:"";
+  const skip=pushLastSkip?`skipped (${pushLastSkip.reason})`:"";
+  return"Push: "+([reg,skip].filter(Boolean).join("; ")||"never");
+}
+// Right after a participant signs in (ticket reference, sign-in link or registration): register this
+// device without waiting for a reload, and unmute it. Once per session start; never blocks sign-in.
+let pushSignInDone=false;
+async function registerPushAtSignIn(){
+  try{
+    const mode=pushMode();
+    if(!shouldRegisterAtSignIn({supported:mode==="push",permission:mode==="push"?Notification.permission:"unsupported",
+      soundOn:soundIsOn(),iosNotInstalled:mode==="guide",alreadyDone:pushSignInDone}))return;
+    pushSignInDone=true;
+    // A refresh already running (it does not force) finishes first
+    if(pushRefreshing)await pushRefreshing;
+    if(!await refreshPushToken(true))return;
+    await callFn("setPushMuted",{muted:false});
+    lsDel(PUSH_MUTED_KEY);
+  }catch(e){}
+}
+// Sign-out (while still signed in): unregister this device, delete the token, clear the local flags;
+// the next sign-in registers again
 async function pushSignOut(){
   const token=lsGet(PUSH_TOKEN_KEY);
   if(window._push&&(token||pushGranted())){
@@ -2598,7 +2663,8 @@ async function pushSignOut(){
     // Never hold up sign-out for long on a bad connection
     await Promise.race([work,new Promise(r=>setTimeout(r,4000))]);
   }
-  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
+  [PUSH_ASKED_KEY,PUSH_TOKEN_KEY,PUSH_TOKEN_AT_KEY,PUSH_REG_AT_KEY,PUSH_MUTED_KEY,PUSH_GUIDE_KEY,PUSH_LAST_TEST_KEY].forEach(lsDel);
+  pushSignInDone=false;
 }
 function stopAnnouncementListener(){
   annStarted=false;
@@ -2638,9 +2704,10 @@ function updateMsgBadge(){
 const BASE_TITLE=document.title;
 let lastAppBadge=-1; // -1: not yet sent, so the next update always goes through
 // Back in the app: alerts already shown are stale, so close them, then resend the real unread count
-// (the service worker raised its own counter for each alert)
+// (the service worker raised its own counter for each alert). Also repairs this device's alert registration.
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState!=="visible"||!me)return;
+  refreshPushToken();
   try{
     const reg="serviceWorker"in navigator?await navigator.serviceWorker.getRegistration():null;
     if(reg&&typeof reg.getNotifications==="function")(await reg.getNotifications()).forEach(n=>n.close());
@@ -3490,7 +3557,7 @@ function showEntry(opts){
         localStorage.setItem("gabs_me",JSON.stringify(me));
         if(!participants.find(p=>p.id===me.id))participants.push({...me});
         // Draw the app under the entry screen right away (lists stream in with their placeholders), then fade the entry out
-        renderApp();startMessageListeners();
+        renderApp();registerPushAtSignIn();startMessageListeners();
         const tVis=performance.now();
         el.style.pointerEvents="none";el.style.opacity="0";el.style.transition="opacity .3s";
         setTimeout(()=>el.remove(),300);
@@ -3644,7 +3711,7 @@ function showEntry(opts){
         // Enter at once, drawing the app under the fading entry screen; only a failed
         // photo upload keeps the form up long enough to read its message
         const enter=()=>{
-          renderApp();startMessageListeners();
+          renderApp();registerPushAtSignIn();startMessageListeners();
           const entryEl=document.getElementById("entry");
           if(entryEl){entryEl.style.pointerEvents="none";entryEl.style.opacity="0";entryEl.style.transition="opacity .3s";setTimeout(()=>entryEl.remove(),350);}
         };

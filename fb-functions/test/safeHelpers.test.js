@@ -15,11 +15,11 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
-  profileLine, gapFor, lowerBarFor } = loadHelpers();
+  profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -468,6 +468,105 @@ test("lowerBarFor: missing values give false", () => {
   assert.equal(lowerBarFor({ isHome: true }), false);
   assert.equal(lowerBarFor({ ...BAR, screenH: undefined }), false);
   assert.equal(lowerBarFor({ ...BAR, innerH: NaN }), false);
+});
+
+// A participant who just signed in on a device that can receive alerts, with permission and sound on
+const SIGNIN = { supported: true, permission: "granted", soundOn: true, iosNotInstalled: false, alreadyDone: false };
+
+test("shouldRegisterAtSignIn: everything in place gives true", () => {
+  assert.equal(shouldRegisterAtSignIn(SIGNIN), true);
+});
+
+test("shouldRegisterAtSignIn: no push support gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, supported: false }), false);
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, supported: "yes" }), false);
+});
+
+test("shouldRegisterAtSignIn: permission not granted gives false", () => {
+  for (const permission of ["default", "denied", "unsupported", "GRANTED", ""]) {
+    assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, permission }), false, permission);
+  }
+});
+
+test("shouldRegisterAtSignIn: sound (the Notifications switch) off gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, soundOn: false }), false);
+});
+
+test("shouldRegisterAtSignIn: an iPhone/iPad not installed on the Home Screen gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, iosNotInstalled: true }), false);
+});
+
+test("shouldRegisterAtSignIn: already done for this session gives false", () => {
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, alreadyDone: true }), false);
+});
+
+test("shouldRegisterAtSignIn: missing values give false", () => {
+  assert.equal(shouldRegisterAtSignIn(), false);
+  assert.equal(shouldRegisterAtSignIn({}), false);
+  for (const k of Object.keys(SIGNIN)) {
+    const o = { ...SIGNIN };
+    delete o[k];
+    assert.equal(shouldRegisterAtSignIn(o), false, `without ${k}`);
+  }
+  assert.equal(shouldRegisterAtSignIn({ ...SIGNIN, iosNotInstalled: null }), false, "iosNotInstalled null");
+});
+
+// Last successful registration 1 hour before now
+const NOW = 1_800_000_000_000;
+const REFRESH = { supported: true, permission: "granted", soundOn: true, iosNotInstalled: false, lastAtMs: NOW - 3_600_000, nowMs: NOW };
+
+test("shouldRefreshPush: everything in place and registered long enough ago gives true", () => {
+  assert.equal(shouldRefreshPush(REFRESH), true);
+});
+
+test("shouldRefreshPush: never registered (no lastAtMs) gives true", () => {
+  const { lastAtMs, ...rest } = REFRESH;
+  assert.equal(shouldRefreshPush(rest), true);
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: undefined }), true);
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: null }), true);
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: NaN }), true, "an unreadable stored time counts as never");
+});
+
+test("shouldRefreshPush: the 10 minute default gap, exactly and 1 ms short", () => {
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: NOW - 600000 }), true, "exactly 10 minutes");
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: NOW - 599999 }), false, "1 ms less");
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: NOW }), false, "just registered");
+});
+
+test("shouldRefreshPush: a given minGapMs, exactly and 1 ms short", () => {
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: NOW - 5000, minGapMs: 5000 }), true);
+  assert.equal(shouldRefreshPush({ ...REFRESH, lastAtMs: NOW - 4999, minGapMs: 5000 }), false);
+});
+
+test("shouldRefreshPush: no push support gives false", () => {
+  assert.equal(shouldRefreshPush({ ...REFRESH, supported: false }), false);
+  assert.equal(shouldRefreshPush({ ...REFRESH, supported: "yes" }), false);
+});
+
+test("shouldRefreshPush: permission not granted gives false", () => {
+  for (const permission of ["default", "denied", "unsupported", ""]) {
+    assert.equal(shouldRefreshPush({ ...REFRESH, permission }), false, permission);
+  }
+});
+
+test("shouldRefreshPush: sound (the Notifications switch) off gives false", () => {
+  assert.equal(shouldRefreshPush({ ...REFRESH, soundOn: false }), false);
+});
+
+test("shouldRefreshPush: an iPhone/iPad not installed on the Home Screen gives false", () => {
+  assert.equal(shouldRefreshPush({ ...REFRESH, iosNotInstalled: true }), false);
+});
+
+test("shouldRefreshPush: missing values give false (except lastAtMs)", () => {
+  assert.equal(shouldRefreshPush(), false);
+  assert.equal(shouldRefreshPush({}), false);
+  for (const k of ["supported", "permission", "soundOn", "iosNotInstalled", "nowMs"]) {
+    const o = { ...REFRESH };
+    delete o[k];
+    assert.equal(shouldRefreshPush(o), false, `without ${k}`);
+  }
+  assert.equal(shouldRefreshPush({ ...REFRESH, nowMs: NaN }), false, "nowMs NaN");
+  assert.equal(shouldRefreshPush({ ...REFRESH, minGapMs: "600000" }), false, "minGapMs not a number");
 });
 
 const TO = "help" + "@" + "example.org";
