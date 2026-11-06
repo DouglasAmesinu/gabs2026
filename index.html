@@ -384,7 +384,10 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .country-option.highlighted{background:#F0F4F8}
 .err-msg{background:#FEF2F2;border-left:3px solid var(--red);border-radius:8px;padding:10px 13px;font-size:13px;color:var(--red);margin-top:8px}
 .ok-msg{background:#F0FDF4;border-left:3px solid var(--green);border-radius:8px;padding:10px 13px;font-size:13px;color:var(--green);margin-top:8px}
+/* Field checks and save failures. Text contrast on white: #B91C1C 6.5:1 (5.9:1 on the #FEF2F2 box),
+   #15803D 5.0:1, var(--muted) 4.8:1. Marks are added only on an error, so nothing moves otherwise. */
 .err-msg.err-strong{color:#B91C1C;border-left-color:#B91C1C}
+.err-msg.err-strong a{color:inherit;text-decoration:underline}
 .form-inp.inp-err,.form-inp.inp-err:focus{border-color:#B91C1C}
 .fld-err{font-size:12px;color:#B91C1C;margin-top:4px}
 .fld-ok{font-size:12px;color:#15803D;margin-top:4px}
@@ -3854,7 +3857,7 @@ function showEntry(opts){
         const support=["douglas.amesinu","ghana.ahk.de"].join(String.fromCharCode(64));
         const msg=kind==="network"?esc("We couldn't reach the server. Check your connection and try again.")
           :kind==="check"?esc("Please check the highlighted fields.")
-          :`Something went wrong on our side. Please try again, or email <a href="${esc(mailtoLink({to:support}))}" style="color:inherit;text-decoration:underline">${esc(support)}</a> and we will register you.`;
+          :`Something went wrong on our side. Please try again, or email <a href="${esc(mailtoLink({to:support}))}">${esc(support)}</a> and we will register you.`;
         if(fb2)fb2.innerHTML=`<div class="err-msg err-strong" role="alert">${msg}</div>`;
         submitting=false;
         if(btn)btn.textContent="Confirm & Enter App →";
