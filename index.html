@@ -737,6 +737,51 @@ function shouldRefreshPush({supported,permission,soundOn,iosNotInstalled,lastAtM
   if(!Number.isFinite(nowMs)||!Number.isFinite(minGapMs))return false;
   return!Number.isFinite(lastAtMs)||nowMs-lastAtMs>=minGapMs;
 }
+
+// Profile text limits, the same numbers as validProfile and private/contact in firestore.rules.
+// sectorOther is stored as sector, ptypeOther as ptype.
+const LIMITS={name:120,company:120,title:120,website:200,linkedin:200,sectorOther:60,ptypeOther:40,bio:600,email:200};
+
+// field -> message for every field whose trimmed value is longer (JavaScript .length) than its limit.
+// Empty, missing and non-string values give no error.
+function fieldErrors(values){
+  const v=values&&typeof values==="object"?values:{};
+  const out={};
+  for(const k of Object.keys(LIMITS)){
+    const s=typeof v[k]==="string"?v[k].trim():"";
+    if(s.length<=LIMITS[k])continue;
+    out[k]=k==="website"||k==="linkedin"?"This link is too long. Please use a shorter address."
+      :k==="email"?"This email address is too long."
+      :`Too long: please shorten to ${LIMITS[k]} characters or fewer.`;
+  }
+  return out;
+}
+
+// "N / LIMIT" once length reaches 80 percent of limit, else "".
+function counterFor(length,limit){
+  if(!Number.isFinite(length)||!Number.isFinite(limit)||limit<=0)return"";
+  return length>=limit*0.8?`${length} / ${limit}`:"";
+}
+
+// A LinkedIn link without its "?…" / "#…" tracking tail; changed is true only when a tail was removed.
+// The value is trimmed; anything that is not a LinkedIn link is returned unchanged.
+function tidyLinkedIn(value){
+  if(typeof value!=="string")return{value,changed:false};
+  const s=value.trim();
+  if(!s.toLowerCase().includes("linkedin.com"))return{value:s,changed:false};
+  const cut=s.search(/[?#]/);
+  return cut<0?{value:s,changed:false}:{value:s.slice(0,cut),changed:true};
+}
+
+// A failed save: "network" (offline or a connection error code), "check" (the server refused the data)
+// or "other". A "service/" prefix on the code (auth/network-request-failed) is ignored.
+function classifySaveError(code,online){
+  if(online===false)return"network";
+  const c=typeof code==="string"?code.slice(code.lastIndexOf("/")+1):"";
+  if(c==="unavailable"||c==="deadline-exceeded"||c==="network-request-failed")return"network";
+  if(c==="permission-denied"||c==="invalid-argument")return"check";
+  return"other";
+}
 // END safe-helpers
 
 
