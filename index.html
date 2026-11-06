@@ -384,6 +384,12 @@ select.form-inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .country-option.highlighted{background:#F0F4F8}
 .err-msg{background:#FEF2F2;border-left:3px solid var(--red);border-radius:8px;padding:10px 13px;font-size:13px;color:var(--red);margin-top:8px}
 .ok-msg{background:#F0FDF4;border-left:3px solid var(--green);border-radius:8px;padding:10px 13px;font-size:13px;color:var(--green);margin-top:8px}
+.err-msg.err-strong{color:#B91C1C;border-left-color:#B91C1C}
+.form-inp.inp-err,.form-inp.inp-err:focus{border-color:#B91C1C}
+.fld-err{font-size:12px;color:#B91C1C;margin-top:4px}
+.fld-ok{font-size:12px;color:#15803D;margin-top:4px}
+.fld-count{margin-left:6px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--muted)}
+.fld-count.over{color:#B91C1C}
 .btn-row{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:18px}
 
 /* ── Profile footer ── */
@@ -884,6 +890,78 @@ function ptypeValue(selected,otherText){
   const other=String(otherText||"").trim().slice(0,40);
   return selected==="Other"&&other?other:(selected||"");
 }
+// Registration (prefix "c-") and Edit Profile ("ep-") share these: each field's element id is prefix + FIELD_IDS[key]
+const FIELD_IDS={name:"name",company:"company",title:"title",website:"website",linkedin:"linkedin",
+  sectorOther:"sector-other",ptypeOther:"ptype-other",bio:"bio",email:"email"};
+const COUNTED_FIELDS=["name","company","title","website","linkedin","sectorOther"];
+// The text in an "Other" box counts only while its select is on "Other"
+function profileFieldValue(prefix,k){
+  const el=document.getElementById(prefix+FIELD_IDS[k]);
+  if(!el)return"";
+  if(k==="sectorOther"&&document.getElementById(prefix+"sector")?.value!=="Other")return"";
+  if(k==="ptypeOther"&&document.getElementById(prefix+"ptype")?.value!=="Other")return"";
+  return el.value;
+}
+// A muted "N / LIMIT" beside the field's label while typing (red when over); typing is never cut off
+function bindFieldCounters(prefix){
+  for(const k of COUNTED_FIELDS){
+    const inp=document.getElementById(prefix+FIELD_IDS[k]);
+    let label=inp&&inp.previousElementSibling;
+    while(label&&!label.classList.contains("form-label"))label=label.previousElementSibling;
+    if(!inp||!label)continue;
+    const span=document.createElement("span");
+    span.className="fld-count";
+    label.appendChild(span);
+    const upd=()=>{
+      const n=profileFieldValue(prefix,k).trim().length;
+      span.textContent=counterFor(n,LIMITS[k]);
+      span.classList.toggle("over",n>LIMITS[k]);
+    };
+    inp.addEventListener("input",upd);
+    if(k==="sectorOther")document.getElementById(prefix+"sector")?.addEventListener("change",upd);
+    upd();
+  }
+}
+// On Confirm / Save, before any network call: tidy the LinkedIn link, then mark every field over its limit
+// (red border, message under it, "Please check the highlighted fields." at the top, scroll to the first).
+// Entries are kept. True when the form may be saved.
+function checkProfileFields(prefix,feedbackEl){
+  const top=document.getElementById(prefix+"top-msg");
+  document.querySelectorAll(`.fld-err[data-for^="${prefix}"]`).forEach(e=>e.remove());
+  for(const id of Object.values(FIELD_IDS)){
+    const el=document.getElementById(prefix+id);
+    if(el){el.classList.remove("inp-err");el.removeAttribute("aria-invalid");}
+  }
+  if(top)top.innerHTML="";
+  const li=document.getElementById(prefix+"linkedin");
+  if(li){
+    const t=tidyLinkedIn(li.value);
+    if(t.changed){
+      li.value=t.value;
+      li.dispatchEvent(new Event("input"));
+      if(!li.dataset.tidied){
+        li.dataset.tidied="1";
+        li.insertAdjacentHTML("afterend",`<div class="fld-ok">We removed the extra tracking part of your link.</div>`);
+      }
+    }
+  }
+  const values={};
+  for(const k of Object.keys(FIELD_IDS))values[k]=profileFieldValue(prefix,k);
+  const errs=fieldErrors(values);
+  const wrong=Object.keys(errs).map(k=>({k,el:document.getElementById(prefix+FIELD_IDS[k])})).filter(x=>x.el)
+    .sort((a,b)=>a.el.compareDocumentPosition(b.el)&Node.DOCUMENT_POSITION_FOLLOWING?-1:1);
+  if(!wrong.length)return true;
+  for(const{k,el}of wrong){
+    el.classList.add("inp-err");
+    el.setAttribute("aria-invalid","true");
+    el.insertAdjacentHTML("afterend",`<div class="fld-err" role="alert" data-for="${esc(prefix+FIELD_IDS[k])}">${esc(errs[k])}</div>`);
+  }
+  if(feedbackEl)feedbackEl.innerHTML="";
+  if(top)top.innerHTML=`<div class="err-msg err-strong" role="alert">Please check the highlighted fields.</div>`;
+  wrong[0].el.scrollIntoView({block:"center",behavior:"smooth"});
+  wrong[0].el.focus({preventScroll:true});
+  return false;
+}
 // Re-render guard: skip the DOM write when the signature of what would be shown is unchanged,
 // and keep the scroll position when it does change.
 const renderSigs=new WeakMap();
@@ -1341,6 +1419,7 @@ function showEditProfile(opts){
       <button class="btn-outline btn-sm" id="ep-close">Close</button>
     </div>
     <div class="sheet-sub">Update your details visible to other participants</div>
+    <div id="ep-top-msg"></div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div id="ep-avatar-preview" style="width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative">
         ${safePhoto(me.photoURL)
@@ -1456,6 +1535,7 @@ function showEditProfile(opts){
     if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
   });
   buildCountryPicker("ep-country-btn","ep-country-wrap",me.country||"");
+  bindFieldCounters("ep-");
 
   document.getElementById("ep-avatar-preview")?.addEventListener("click",()=>{
     document.getElementById("ep-photo-input")?.click();
@@ -1514,6 +1594,7 @@ function showEditProfile(opts){
 
 
   document.getElementById("ep-save").onclick=async()=>{
+    if(!checkProfileFields("ep-",document.getElementById("ep-feedback")))return;
     const salutation=document.getElementById("ep-salutation")?.value||"";
     const ptype=ptypeValue(document.getElementById("ep-ptype")?.value,document.getElementById("ep-ptype-other")?.value);
     const website=document.getElementById("ep-website")?.value.trim()||"";
@@ -3490,6 +3571,7 @@ function showEntry(opts){
       <div class="stage-badge">✓ Ticket verified</div>
       <div class="sheet-title">Complete your profile</div>
       <div class="sheet-sub">So other participants can find and connect with you</div>
+      <div id="c-top-msg"></div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)">
         <div id="c-photo-wrap" style="width:84px;height:84px;border-radius:50%;overflow:hidden;background:var(--navy);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;flex-shrink:0">
           <span style="color:#fff;font-size:30px">📷</span>
@@ -3658,6 +3740,7 @@ function showEntry(opts){
       if(otherInp)otherInp.style.display=e.target.value==="Other"?"block":"none";
     });
     buildCountryPicker("c-country-btn","c-country-wrap","");
+    bindFieldCounters("c-");
 
     const cPhotoWrap=document.getElementById("c-photo-wrap");
     const cPhotoInput=document.getElementById("c-photo-input");
@@ -3701,6 +3784,7 @@ function showEntry(opts){
 
     document.getElementById("c-submit")?.addEventListener("click",async()=>{
       if(!consentBox?.checked||submitting){syncConsent();return;}
+      if(!checkProfileFields("c-",document.getElementById("c-feedback")))return;
       const salutation=document.getElementById("c-salutation")?.value||"";
       const ptype=ptypeValue(document.getElementById("c-ptype")?.value,document.getElementById("c-ptype-other")?.value);
       const name=document.getElementById("c-name")?.value.trim();
