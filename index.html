@@ -3846,7 +3846,16 @@ function showEntry(opts){
         };
         if(photoFailed)setTimeout(enter,3500);else enter();
       }catch(e){
-        if(fb2)fb2.innerHTML=`<div class="err-msg">Submission failed. Please try again.</div>`;
+        const code=e&&typeof e.code==="string"?e.code:"unknown";
+        console.warn("register-fail",code);
+        let kind=classifySaveError(code,navigator.onLine);
+        if(kind==="check"&&!document.querySelector('.fld-err[data-for^="c-"]'))kind="other";
+        // Built at runtime: an address written out in the page source gets rewritten by Cloudflare
+        const support=["douglas.amesinu","ghana.ahk.de"].join(String.fromCharCode(64));
+        const msg=kind==="network"?esc("We couldn't reach the server. Check your connection and try again.")
+          :kind==="check"?esc("Please check the highlighted fields.")
+          :`Something went wrong on our side. Please try again, or email <a href="${esc(mailtoLink({to:support}))}" style="color:inherit;text-decoration:underline">${esc(support)}</a> and we will register you.`;
+        if(fb2)fb2.innerHTML=`<div class="err-msg err-strong" role="alert">${msg}</div>`;
         submitting=false;
         if(btn)btn.textContent="Confirm & Enter App →";
         syncConsent();
