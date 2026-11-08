@@ -15,11 +15,12 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
-  profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush } = loadHelpers();
+  profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
+  classifySaveError } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -614,4 +615,87 @@ test("isAnnouncementsHash refuses near misses and non-strings", () => {
   for (const h of ["announcements", "#Announcements", "#announcements ", " #announcements", "#announcements/", null, 0, {}, ["#announcements"]]) {
     assert.equal(isAnnouncementsHash(h), false, String(h));
   }
+});
+
+const TOO_LONG = "Too long: please shorten to N characters or fewer.";
+const LINK_LONG = "This link is too long. Please use a shorter address.";
+const EMAIL_LONG = "This email address is too long.";
+
+test("LIMITS match firestore.rules", () => {
+  assert.deepEqual({ ...LIMITS }, { name: 120, company: 120, title: 120, website: 200, linkedin: 200, sectorOther: 60, ptypeOther: 40, bio: 600, email: 200 });
+});
+
+test("fieldErrors: exactly at the limit is fine, one over gives the field's message", () => {
+  for (const [k, n] of Object.entries(LIMITS)) {
+    assert.deepEqual(fieldErrors({ [k]: "a".repeat(n) }), {}, `${k} at ${n}`);
+    const msg = k === "website" || k === "linkedin" ? LINK_LONG : k === "email" ? EMAIL_LONG : TOO_LONG.replace("N", String(n));
+    assert.deepEqual(fieldErrors({ [k]: "a".repeat(n + 1) }), { [k]: msg }, `${k} at ${n + 1}`);
+  }
+});
+
+test("fieldErrors measures the trimmed value with .length and reports every wrong field", () => {
+  assert.deepEqual(fieldErrors({ name: "  " + "a".repeat(120) + "\n\t " }), {});
+  assert.deepEqual(fieldErrors({ ptypeOther: "🇬🇭".repeat(10) + "a" }), { ptypeOther: TOO_LONG.replace("N", "40") }, "emoji count as UTF-16 units");
+  const out = fieldErrors({ name: "x".repeat(121), website: "x".repeat(201), email: "x".repeat(201), bio: "ok", title: "" });
+  assert.deepEqual(Object.keys(out).sort(), ["email", "name", "website"]);
+});
+
+test("fieldErrors: empty, missing, hostile and non-string values give no error", () => {
+  for (const v of [undefined, null, 0, "x", [], {}]) assert.deepEqual(fieldErrors(v), {}, String(v));
+  assert.deepEqual(fieldErrors({ name: "", company: "   ", title: null, website: undefined }), {});
+  assert.deepEqual(fieldErrors({ name: 12345, company: ["a".repeat(500)], title: { length: 999 }, bio: true, email: Symbol("e") }), {});
+  assert.deepEqual(fieldErrors({ name: IMG_ONERROR, bio: SCRIPT_BREAK }), {});
+  assert.deepEqual(fieldErrors({ unknown: "a".repeat(10000) }), {});
+  const proto = JSON.parse('{"__proto__":{"name":"' + "a".repeat(500) + '"}}');
+  assert.deepEqual(fieldErrors(proto), {}, "inherited values are not read as own fields");
+});
+
+test("counterFor shows N / LIMIT from 80 percent of the limit", () => {
+  assert.equal(counterFor(0, 120), "");
+  assert.equal(counterFor(95, 120), "");
+  assert.equal(counterFor(96, 120), "96 / 120");
+  assert.equal(counterFor(120, 120), "120 / 120");
+  assert.equal(counterFor(121, 120), "121 / 120");
+  assert.equal(counterFor(47, 60), "");
+  assert.equal(counterFor(48, 60), "48 / 60");
+  for (const [l, m] of [[NaN, 120], [100, NaN], ["100", 120], [100, "120"], [null, 120], [100, 0], [100, -5], [Infinity, 120]]) {
+    assert.equal(counterFor(l, m), "", `${String(l)}, ${String(m)}`);
+  }
+});
+
+test("tidyLinkedIn removes a query or fragment from LinkedIn links only", () => {
+  assert.deepEqual(tidyLinkedIn("https://www.linkedin.com/in/jane?utm_source=share&utm_medium=app"), { value: "https://www.linkedin.com/in/jane", changed: true });
+  assert.deepEqual(tidyLinkedIn("linkedin.com/in/jane/#experience"), { value: "linkedin.com/in/jane/", changed: true });
+  assert.deepEqual(tidyLinkedIn("  https://LinkedIn.com/in/jane#a?b  "), { value: "https://LinkedIn.com/in/jane", changed: true }, "the first ? or # wins");
+  assert.deepEqual(tidyLinkedIn("https://www.linkedin.com/in/jane"), { value: "https://www.linkedin.com/in/jane", changed: false });
+  assert.deepEqual(tidyLinkedIn("  linkedin.com/in/jane  "), { value: "linkedin.com/in/jane", changed: false }, "trimmed but not a tidy");
+});
+
+test("tidyLinkedIn leaves other links and values unchanged", () => {
+  assert.deepEqual(tidyLinkedIn("https://example.com/me?ref=x#top"), { value: "https://example.com/me?ref=x#top", changed: false });
+  assert.deepEqual(tidyLinkedIn(""), { value: "", changed: false });
+  assert.deepEqual(tidyLinkedIn(IMG_ONERROR), { value: IMG_ONERROR, changed: false });
+  for (const v of [null, undefined, 42, true]) assert.deepEqual(tidyLinkedIn(v), { value: v, changed: false }, String(v));
+  const obj = { toString: () => "linkedin.com/in/x?y" };
+  assert.equal(tidyLinkedIn(obj).changed, false);
+  assert.equal(tidyLinkedIn(obj).value, obj);
+});
+
+test("classifySaveError: network, check and other", () => {
+  for (const c of ["unavailable", "deadline-exceeded", "network-request-failed", "auth/network-request-failed", "firestore/unavailable"]) {
+    assert.equal(classifySaveError(c, true), "network", c);
+  }
+  for (const c of ["permission-denied", "invalid-argument", "firestore/permission-denied"]) {
+    assert.equal(classifySaveError(c, true), "check", c);
+  }
+  for (const c of ["internal", "unknown", "resource-exhausted", "already-exists", "", "Unavailable", "permission-denied ", undefined, null, 503, {}]) {
+    assert.equal(classifySaveError(c, true), "other", String(c));
+  }
+});
+
+test("classifySaveError: offline is always network; only online === false counts as offline", () => {
+  for (const c of ["permission-denied", "invalid-argument", "internal", undefined, null]) assert.equal(classifySaveError(c, false), "network", String(c));
+  assert.equal(classifySaveError("permission-denied", undefined), "check");
+  assert.equal(classifySaveError("internal", "false"), "other");
+  assert.equal(classifySaveError("internal", 0), "other");
 });
