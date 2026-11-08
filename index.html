@@ -167,6 +167,10 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .filter-chip{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;border:1.5px solid var(--border);background:var(--white);color:var(--muted);transition:all .15s;white-space:nowrap}
 .filter-chip.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
 .cards-list{padding:0 16px 20px;display:flex;flex-direction:column;gap:10px}
+.disc-more{display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 0 2px;font-size:12px;color:var(--muted)}
+.disc-dots{display:inline-flex;gap:4px}
+.disc-dots i{display:block;width:5px;height:5px;border-radius:50%;background:var(--muted);opacity:.7}
+#disc-sentinel{height:1px;margin-top:-10px}
 
 /* ── Participant Card ── */
 .p-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05);animation:fadeUp .22s ease both;cursor:pointer}
@@ -568,6 +572,9 @@ let participantsFailed=false; // true once the listener has used up its retries
 let discSearch="",discSectors=[],discCountry="";
 // The day the Discover order is mixed for: fixed at start, renewed only when the app comes back on another date
 let discDay=dayKey(new Date());
+// Endless scroll: cards are added DISC_PAGE at a time; discShown survives leaving and returning to the tab
+const DISC_PAGE=30;
+let discShown=DISC_PAGE,discObserver=null,discSearchTimer=null;
 let myMeetings=[];
 let schedDay=0;
 let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
@@ -1923,50 +1930,99 @@ function bindDiscover(){
         discSectors.push(s);
         chip.classList.add("on");
       }
-      refreshDisc();
+      refreshDisc(true);
     };
   });
   const cs=document.getElementById("cnt-sel");
-  if(cs)cs.onchange=e=>{discCountry=e.target.value;refreshDisc();};
+  if(cs)cs.onchange=e=>{discCountry=e.target.value;refreshDisc(true);};
   const si=document.getElementById("si");
   if(si){
+    // The list is rebuilt from the first page 150 ms after the last keystroke
     si.oninput=e=>{
       discSearch=e.target.value.toLowerCase();
-      document.querySelectorAll(".p-card").forEach(card=>{
-        const p=participants.find(x=>x.id===card.dataset.pid);
-        if(!p){card.style.display="";return;}
-        const match=!discSearch||p.name.toLowerCase().includes(discSearch)||p.company?.toLowerCase().includes(discSearch)||p.sector?.toLowerCase().includes(discSearch);
-        card.style.display=match?"":"none";
-      });
-      document.querySelector(".page-sub").textContent=discSubText();
+      if(discSearchTimer)clearTimeout(discSearchTimer);
+      discSearchTimer=setTimeout(()=>{discSearchTimer=null;refreshDisc(true);},150);
     };
   }
   bindCards();
   renderSigs.set(document.getElementById("cards-list"),discSig(discOrdered()));
+  observeDiscSentinel();
   settleListAnimations();
 }
 
 function discSig(list){
   if(!participantsLoaded)return participantsFailed?"failed":"loading";
   if(!participants.length)return"none";
-  return JSON.stringify([me?.id||"",list.map(p=>[p.id,p.salutation,p.name,p.title,p.company,p.sector,p.country,p.ptype,p.interests,p.bio,p.phone,p.linkedin,p.website,p.photoURL,p.av])]);
+  return JSON.stringify([me?.id||"",discCount(list),list.length,pageSlice(list,discCount(list)).map(p=>[p.id,p.salutation,p.name,p.title,p.company,p.sector,p.country,p.ptype,p.interests,p.bio,p.phone,p.linkedin,p.website,p.photoURL,p.av])]);
 }
 function discCardsHTML(list){
   if(!participantsLoaded&&participantsFailed)return`<div id="disc-retry" role="button" tabindex="0" style="text-align:center;padding:60px 20px;color:var(--muted);cursor:pointer;touch-action:manipulation"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-size:15px;font-weight:700;color:var(--text)">Couldn't load participants. Tap to retry.</div></div>`;
   if(!participantsLoaded)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div class="spin" style="margin:0 auto;border-color:rgba(27,58,107,.12);border-top-color:${GOLD}"></div><div style="font-size:14px;margin-top:14px">Loading participants…</div></div>`;
   if(!participants.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700;color:var(--text)">No participants yet</div><div style="font-size:13px;margin-top:6px">Register or ask your admin to upload a participant list</div></div>`;
   if(!list.length)return`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:15px;font-weight:700">No participants found</div><div style="font-size:13px;margin-top:6px">Try adjusting your filters</div></div>`;
-  return list.map(p=>pCardHTML(p)).join("");
+  const n=discCount(list);
+  return pageSlice(list,n).map(p=>pCardHTML(p)).join("")
+    +(n<list.length?`<div id="disc-more" class="disc-more" role="status"><span class="disc-dots" aria-hidden="true"><i></i><i></i><i></i></span>More people appear as you scroll</div><div id="disc-sentinel" aria-hidden="true"></div>`:"");
 }
-
-function refreshDisc(){
+// How many cards to show: discShown, or all of them where IntersectionObserver is missing
+function discCount(list){
+  return typeof IntersectionObserver==="function"?Math.min(discShown,list.length):list.length;
+}
+// Watch the end of the list inside the Discover scroll container; 600px before it comes into view, add a page
+function observeDiscSentinel(){
+  if(discObserver){discObserver.disconnect();discObserver=null;}
+  const s=document.getElementById("disc-sentinel"),root=document.getElementById("tab-content");
+  if(!s||!root||typeof IntersectionObserver!=="function")return;
+  discObserver=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting))appendDiscPage();},
+    {root,rootMargin:"0px 0px 600px 0px"});
+  discObserver.observe(s);
+}
+// The next DISC_PAGE cards, added in front of the "More people" row without touching the cards above
+function appendDiscPage(){
   const wrap=document.getElementById("cards-list");
   if(!wrap)return;
+  const list=discOrdered();
+  if(discShown>=list.length)return;
+  if(renderSigs.get(wrap)!==discSig(list)){
+    // What is on screen is out of date (an update is pending): draw it in full at the new size instead
+    discShown+=DISC_PAGE;refreshDisc();return;
+  }
+  const from=discShown;
+  discShown=Math.min(list.length,discShown+DISC_PAGE);
+  const tmp=document.createElement("div");
+  tmp.innerHTML=list.slice(from,discShown).map(p=>pCardHTML(p)).join("");
+  bindCards(tmp);
+  const frag=document.createDocumentFragment();
+  while(tmp.firstChild)frag.appendChild(tmp.firstChild);
+  const more=document.getElementById("disc-more");
+  wrap.insertBefore(frag,more&&more.parentNode===wrap?more:null);
+  renderSigs.set(wrap,discSig(list));
+  if(discShown>=list.length){
+    more?.remove();document.getElementById("disc-sentinel")?.remove();
+    if(discObserver){discObserver.disconnect();discObserver=null;}
+  }else observeDiscSentinel();
+}
+// After a new search, chip or country: back to the top of the list (the search box and the first cards)
+function scrollDiscToTop(){
+  const sc=document.getElementById("tab-content");
+  const anchor=sc&&sc.querySelector(".search-wrap");
+  if(!anchor)return;
+  const top=anchor.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;
+  if(sc.scrollTop>top)sc.scrollTop=top;
+}
+
+// reset (a new search, chip or country): start again from the first DISC_PAGE cards at the top.
+// Otherwise (live updates) only the cards already shown are redrawn and patchHTML keeps the scroll position.
+function refreshDisc(reset){
+  const wrap=document.getElementById("cards-list");
+  if(!wrap){if(discObserver){discObserver.disconnect();discObserver=null;}return;}
+  if(reset===true)discShown=DISC_PAGE;
   const list=discOrdered();
   const sub=document.querySelector(".page-sub");
   if(sub)sub.textContent=discSubText();
   if(wrap.querySelector(".p-card"))document.body.classList.add("lists-settled");
-  if(patchHTML(wrap,discSig(list),()=>discCardsHTML(list)))bindCards();
+  if(patchHTML(wrap,discSig(list),()=>discCardsHTML(list))){bindCards(wrap);observeDiscSentinel();}
+  if(reset===true)scrollDiscToTop();
   settleListAnimations();
 }
 
@@ -2029,18 +2085,18 @@ function showParticipantProfile(p){
   }
 }
 
-function bindCards(){
-  document.getElementById("disc-retry")?.addEventListener("click",retryParticipantListener);
-  document.querySelectorAll(".p-msg").forEach(b=>{
+function bindCards(root=document){
+  root.querySelector("#disc-retry")?.addEventListener("click",retryParticipantListener);
+  root.querySelectorAll(".p-msg").forEach(b=>{
     b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)openThread(p);};
   });
-  document.querySelectorAll(".p-mt").forEach(b=>{
+  root.querySelectorAll(".p-mt").forEach(b=>{
     b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);};
   });
-  document.querySelectorAll(".p-card").forEach(card=>{
+  root.querySelectorAll(".p-card").forEach(card=>{
     card.onclick=e=>{if(e.target.closest("[data-photo-id]"))return;const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
   });
-  document.getElementById("bio-nudge")?.addEventListener("click",e=>{e.stopPropagation();showEditProfile();});
+  root.querySelector("#bio-nudge")?.addEventListener("click",e=>{e.stopPropagation();showEditProfile();});
 }
 
 // ── Messages / Inbox ───────────────────────────────────────────────────────
