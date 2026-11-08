@@ -270,6 +270,8 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .edit-strip-close{width:44px;height:44px;flex-shrink:0;border-radius:50%;font-size:18px;color:var(--muted);cursor:pointer;touch-action:manipulation}
 .send-btn.save{width:44px;height:44px;font-size:20px}
 .compose-err .err-msg{margin:0 16px 8px}
+.msg-menu-item.danger{color:#B91C1C}
+.btn-danger{background:#B91C1C;color:#fff}
 
 /* ── Schedule ── */
 .sched-day-tabs{display:flex;gap:8px;padding:0 16px 16px;overflow-x:auto}
@@ -3250,6 +3252,7 @@ function openMsgMenu(bub){
   ov.className="msg-menu-ov";ov.id="msg-menu-ov";
   ov.innerHTML=`<div class="msg-menu" role="menu" aria-label="Message options">
       <button type="button" role="menuitem" class="msg-menu-item" data-msg-act="edit" data-mid="${esc(id)}">Edit message</button>
+      <button type="button" role="menuitem" class="msg-menu-item danger" data-msg-act="delete" data-mid="${esc(id)}">Delete message</button>
       <button type="button" role="menuitem" class="msg-menu-item" data-msg-act="menu-cancel">Cancel</button>
     </div>`;
   document.body.appendChild(ov);
@@ -3281,6 +3284,55 @@ function handleMsgAct(el){
   if(act==="cancel-edit"){exitEdit();return;}
   const m=threadMessages.find(x=>x.id===safeId(el.dataset.mid));
   if(act==="edit"){closeMsgMenu(false);if(m)startEdit(m);}
+  else if(act==="delete"){closeMsgMenu(false);if(m&&me&&canEditMessage(m,me.id))confirmDeleteMsg(m.id);}
+  else if(act==="del-cancel")closeDeleteDialog(true);
+  else if(act==="del-confirm")deleteMsg(safeId(el.dataset.mid),el);
+}
+// "Delete this message?" before anything is written
+function confirmDeleteMsg(id){
+  closeDeleteDialog(false);
+  msgMenuReturnId=safeId(id);
+  const ov=makeOv(true);ov.id="msg-del";
+  ov.innerHTML=`<div class="sheet pop" role="alertdialog" aria-modal="true" aria-labelledby="msg-del-title" aria-describedby="msg-del-text" style="max-width:380px">
+    <div class="sheet-title" id="msg-del-title">Delete this message?</div>
+    <div class="sheet-sub" id="msg-del-text">It will be removed for you and for the other person. You cannot undo this.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+      <button type="button" class="btn-outline" data-msg-act="del-cancel">Cancel</button>
+      <button type="button" class="btn-navy btn-danger" data-msg-act="del-confirm" data-mid="${esc(safeId(id))}">Delete</button>
+    </div>
+  </div>`;
+  ov.addEventListener("click",e=>{if(e.target===ov)closeDeleteDialog(true);});
+  ov.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closeDeleteDialog(true);return;}
+    if(e.key==="Tab"){
+      const b=[...ov.querySelectorAll("button")],i=b.indexOf(document.activeElement);
+      e.preventDefault();b[(i+(e.shiftKey?-1:1)+b.length)%b.length].focus();
+    }
+  });
+  document.body.appendChild(ov);
+  ov.querySelector('[data-msg-act="del-cancel"]').focus();
+}
+function closeDeleteDialog(restoreFocus){
+  const ov=document.getElementById("msg-del");
+  if(!ov)return;
+  ov.remove();
+  if(restoreFocus&&msgMenuReturnId)document.querySelector(`[data-msg-id="${msgMenuReturnId}"]`)?.focus({preventScroll:true});
+}
+// Delete writes only {text:"", deleted:true, deletedAt}; on failure the message stays as it was
+async function deleteMsg(id,btn){
+  const p=threadPeer();
+  if(!id||!p||!me||!window._fb||btn.disabled)return;
+  btn.disabled=true;
+  try{
+    const fb=window._fb;
+    await fb.updateDoc(fb.doc(fb.db,"threads",tid(me.id,p.id),"messages",id),{text:"",deleted:true,deletedAt:fb.serverTimestamp()});
+    closeDeleteDialog(false);
+    if(editingMsg&&editingMsg.id===id)exitEdit();
+  }catch(e){
+    console.warn("msg-delete-fail",e&&e.code);
+    closeDeleteDialog(true);
+    showToast("Couldn't delete the message. Try again.");
+  }
 }
 
 function renderMsgs(){
