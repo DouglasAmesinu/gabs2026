@@ -15,12 +15,12 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
   profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
-  classifySaveError } = loadHelpers();
+  classifySaveError, lightboxPhoto } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -698,4 +698,20 @@ test("classifySaveError: offline is always network; only online === false counts
   assert.equal(classifySaveError("permission-denied", undefined), "check");
   assert.equal(classifySaveError("internal", "false"), "other");
   assert.equal(classifySaveError("internal", 0), "other");
+});
+
+test("lightboxPhoto returns a Firebase Storage photo URL", () => {
+  assert.equal(lightboxPhoto({ photoURL: PHOTO }), PHOTO);
+  assert.equal(lightboxPhoto({ name: "x", photoURL: "https://gabs2026-4f482.firebasestorage.app/o/p.jpg" }), "https://gabs2026-4f482.firebasestorage.app/o/p.jpg");
+});
+
+test("lightboxPhoto refuses everything safePhoto refuses, and missing or odd values", () => {
+  for (const u of ["https://example.com/me.jpg", "http://firebasestorage.googleapis.com/x", "javascript:alert(1)",
+    "data:image/png;base64,iVBORw0KGgo=", "", "   ", IMG_ONERROR]) {
+    assert.equal(lightboxPhoto({ photoURL: u }), "", u);
+  }
+  for (const p of [{ photoURL: null }, { photoURL: undefined }, {}, { photoURL: 42 }, { photoURL: ["x"] }, { photoURL: { toString: () => PHOTO } }]) {
+    assert.equal(lightboxPhoto(p), "", JSON.stringify(p));
+  }
+  for (const p of [null, undefined, "", PHOTO, 0, true]) assert.equal(lightboxPhoto(p), "", String(p));
 });

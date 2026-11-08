@@ -212,6 +212,19 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .t-info{flex:1;min-width:0}
 .pv-btn{display:flex;align-items:center;min-width:44px;min-height:44px;border-radius:12px;cursor:pointer;touch-action:manipulation}
 .pv-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+/* Photo lightbox: tap a participant's photo to see it large */
+.lb-ov{position:fixed;inset:0;z-index:640;background:rgba(14,20,32,.92);display:flex;align-items:center;justify-content:center;padding:calc(56px + env(safe-area-inset-top,0px)) 16px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain}
+.lb-body{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%;text-align:center}
+.lb-frame{display:flex;align-items:center;justify-content:center;min-width:120px;min-height:120px}
+.lb-frame .spin{border-color:rgba(255,255,255,.2);border-top-color:#fff}
+.lb-img{display:block;max-width:90vw;max-height:60vh;width:auto;height:auto;object-fit:contain;border-radius:18px}
+.lb-name{color:#fff;font-size:18px;font-weight:800;line-height:1.25;margin-top:6px;overflow-wrap:anywhere}
+.lb-sub{color:rgba(255,255,255,.78);font-size:13px;overflow-wrap:anywhere}
+.lb-view{margin-top:8px;background:#fff;color:var(--navy);border:none;border-radius:999px;padding:12px 22px;min-height:44px;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation}
+.lb-close{position:absolute;top:calc(8px + env(safe-area-inset-top,0px));right:8px;width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.lb-view:focus-visible,.lb-close:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.ph-btn{display:block;flex-shrink:0;min-width:44px;min-height:44px;border-radius:50%;cursor:pointer;touch-action:manipulation}
+.ph-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .t-who{flex:1;min-width:0;gap:12px}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%);z-index:700;background:var(--text);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);pointer-events:none}
 .t-name{font-size:15px;font-weight:700;color:var(--text)}
@@ -791,6 +804,12 @@ function classifySaveError(code,online){
   if(c==="permission-denied"||c==="invalid-argument")return"check";
   return"other";
 }
+
+// The photo to show large for a participant: their photoURL when safePhoto accepts it, else "".
+function lightboxPhoto(participant){
+  if(!participant||typeof participant!=="object"||typeof participant.photoURL!=="string")return"";
+  return safePhoto(participant.photoURL);
+}
 // END safe-helpers
 
 
@@ -857,6 +876,13 @@ function avHTML(av,sz=42,photoURL=null){
   const src=safePhoto(photoURL);
   if(src)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(src)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(clip(av,3))}</div>`;
+}
+// A participant's avatar that opens the photo lightbox when they have a photo (from: "card" or "sheet");
+// initials only: exactly avHTML. The delegated listeners act on data-photo-id.
+function photoAvHTML(p,sz,from){
+  const av=avHTML(p.av||initials(p.name||"?"),sz,p.photoURL);
+  if(!lightboxPhoto(p)||!safeId(p.id))return av;
+  return`<div class="ph-btn" role="button" tabindex="0" aria-label="View photo of ${esc(p.name)}" data-photo-id="${safeId(p.id)}" data-photo-from="${from==="sheet"?"sheet":"card"}">${av}</div>`;
 }
 // Profile photos: decode, shrink to max 800px on the longest side, re-encode as JPEG
 const PHOTO_MAX_BYTES=30*1024*1024;
@@ -1234,6 +1260,66 @@ function showToast(msg){
   document.body.appendChild(t);
   setTimeout(()=>t.remove(),2500);
 }
+// Full-screen photo of a participant (only when lightboxPhoto gives a URL). opener gets the focus back on close;
+// fromSheet: opened from the profile sheet itself, so no "View profile" button.
+function showPhotoLightbox(p,opener,fromSheet){
+  const src=lightboxPhoto(p);
+  if(!src)return;
+  document.getElementById("photo-lb")?.remove();
+  const name=typeof p.name==="string"?p.name:"";
+  const sub=profileLine({company:p.company,country:p.country});
+  const ov=document.createElement("div");
+  ov.className="lb-ov";ov.id="photo-lb";
+  ov.setAttribute("role","dialog");ov.setAttribute("aria-modal","true");ov.setAttribute("aria-label","Photo of "+name);
+  ov.innerHTML=`<button type="button" class="lb-close" aria-label="Close">✕</button>
+    <div class="lb-body">
+      <div class="lb-frame"><div class="spin" role="status" aria-label="Loading photo"></div><img class="lb-img" alt="Photo of ${esc(name)}" decoding="async" style="display:none"/></div>
+      <div class="lb-name">${esc(name)}</div>
+      ${sub?`<div class="lb-sub">${esc(sub)}</div>`:""}
+      ${fromSheet?"":`<button type="button" class="lb-view">View profile</button>`}
+    </div>`;
+  // The page behind keeps its place and does not scroll while the photo is open
+  const scrollers=[document.getElementById("tab-content"),...document.querySelectorAll(".ov .sheet [style*='overflow-y:auto']")].filter(Boolean);
+  const saved=scrollers.map(el=>({el,top:el.scrollTop,ov:el.style.overflow}));
+  saved.forEach(s=>{s.el.style.overflow="hidden";});
+  const block=e=>{if(!e.target.closest(".lb-body"))e.preventDefault();};
+  ov.addEventListener("touchmove",block,{passive:false});
+  let closed=false;
+  const close=()=>{
+    if(closed)return;closed=true;
+    document.removeEventListener("keydown",onKey,true);
+    ov.remove();
+    saved.forEach(s=>{s.el.style.overflow=s.ov;s.el.scrollTop=s.top;});
+    if(opener&&opener.isConnected)opener.focus({preventScroll:true});
+  };
+  const onKey=e=>{
+    if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();close();return;}
+    if(e.key==="Tab"){
+      // Keep the focus inside the dialog
+      const f=[...ov.querySelectorAll("button")];
+      const i=f.indexOf(document.activeElement);
+      e.preventDefault();
+      f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus();
+    }
+  };
+  document.addEventListener("keydown",onKey,true);
+  ov.addEventListener("click",e=>{if(e.target===ov||e.target.classList.contains("lb-body"))close();});
+  ov.querySelector(".lb-close").onclick=close;
+  const view=ov.querySelector(".lb-view");
+  if(view)view.onclick=()=>{close();showParticipantProfile(p);};
+  const img=ov.querySelector(".lb-img");
+  img.onload=()=>{ov.querySelector(".lb-frame .spin")?.remove();img.style.display="";};
+  img.onerror=()=>{close();showToast("Photo couldn't be loaded.");};
+  document.body.appendChild(ov);
+  img.src=src;
+  ov.querySelector(".lb-close").focus();
+}
+// Discover card and profile sheet photos: open the lightbox for that participant
+function openPhotoFrom(el){
+  const id=safeId(el.dataset.photoId);
+  const p=id&&(participants.find(x=>x.id===id)||(me&&me.id===id?me:null));
+  if(p)showPhotoLightbox(p,el,el.dataset.photoFrom==="sheet");
+}
 // Inbox avatars and the chat header: open the participant's profile on top of the current view
 function openProfileFrom(el){
   const id=safeId(el.dataset.profileId);
@@ -1245,12 +1331,16 @@ document.addEventListener("keydown",e=>{
   // role="button" blocks for Settings (the bar's avatar and name, the profile card): Enter and Space
   const sb=e.target&&e.target.closest&&e.target.closest('[role="button"][data-settings]');
   if(sb){e.preventDefault();handleSettingsAction(sb);return;}
+  const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
+  if(ph){e.preventDefault();openPhotoFrom(ph);return;}
   const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(!el)return;
   e.preventDefault();openProfileFrom(el);
 });
 // Schedule's My Meetings calendar buttons and profile targets: one delegated listener, URLs built at click time
 document.addEventListener("click",e=>{
+  const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
+  if(ph){openPhotoFrom(ph);return;}
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(pv){openProfileFrom(pv);return;}
   const pb=e.target&&e.target.closest&&e.target.closest("[data-push]");
@@ -1687,7 +1777,7 @@ function pCardHTML(p){
   const hasContact=p.phone||p.linkedin;
   return`<div class="p-card${self?" self":""}" data-pid="${safeId(p.id)}">
     <div class="p-card-top">
-      ${avHTML(p.av||initials(p.name||"?"),46,p.photoURL)}
+      ${photoAvHTML(p,46,"card")}
       <div style="flex:1;min-width:0">
         <div class="p-name">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
         <div class="p-role">${esc(p.title||"")}</div>
@@ -1828,7 +1918,7 @@ function showParticipantProfile(p){
   ov.innerHTML=`<div class="sheet" style="padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">
     <div style="padding:22px 20px 16px;border-bottom:1px solid var(--border)">
       <div style="display:flex;gap:15px;align-items:center">
-        ${avHTML(p.av||initials(p.name||"?"),64,p.photoURL)}
+        ${photoAvHTML(p,64,"sheet")}
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1.2">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
           <div style="font-size:13px;color:var(--steel);font-weight:600;margin-top:3px">${esc(p.title||"")}</div>
@@ -1887,7 +1977,7 @@ function bindCards(){
     b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);};
   });
   document.querySelectorAll(".p-card").forEach(card=>{
-    card.onclick=()=>{const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
+    card.onclick=e=>{if(e.target.closest("[data-photo-id]"))return;const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
   });
   document.getElementById("bio-nudge")?.addEventListener("click",e=>{e.stopPropagation();showEditProfile();});
 }
@@ -2482,7 +2572,7 @@ async function handlePushAction(btn){
 }
 
 // ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
-const APP_VERSION=28; // Must match CACHE_NAME in sw.js: update them together on every release
+const APP_VERSION=29; // Must match CACHE_NAME in sw.js: update them together on every release
 // Put together at runtime so the addresses never appear whole in the source
 const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
 const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
