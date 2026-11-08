@@ -15,12 +15,13 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle, canEditMessage, messageView, previewText, validateEdit };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
   profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
-  classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle } = loadHelpers();
+  classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle, canEditMessage, messageView,
+  previewText, validateEdit } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -845,4 +846,71 @@ test("pageSlice returns the first count items, clamped", () => {
   assert.notEqual(pageSlice(l, 5), l, "always a new array");
   for (const c of [NaN, "3", null, undefined, {}, [3], true]) assert.deepEqual(pageSlice(l, c), [], String(c));
   for (const bad of [null, undefined, "abc", { length: 2 }]) assert.deepEqual(pageSlice(bad, 2), [], String(bad));
+});
+
+const MY = "uidMe";
+const myText = (extra = {}) => ({ fromId: MY, text: "hello", ts: { seconds: 1 }, hasMeeting: false, ...extra });
+
+test("canEditMessage: your own plain text message", () => {
+  assert.equal(canEditMessage(myText(), MY), true);
+  assert.equal(canEditMessage(myText({ text: "" }), MY), true, "an empty text is still a string");
+  assert.equal(canEditMessage(myText({ editedAt: { seconds: 2 } }), MY), true, "an edited message can be edited again");
+  assert.equal(canEditMessage({ fromId: MY, text: "no hasMeeting field" }, MY), true);
+  assert.equal(canEditMessage(myText({ meeting: null }), MY), true);
+  assert.equal(canEditMessage(myText({ deleted: false }), MY), true);
+});
+
+test("canEditMessage refuses other people, deleted messages, meeting requests and odd values", () => {
+  assert.equal(canEditMessage(myText({ fromId: "someoneElse" }), MY), false);
+  assert.equal(canEditMessage(myText({ deleted: true, text: "" }), MY), false);
+  assert.equal(canEditMessage(myText({ hasMeeting: true }), MY), false);
+  assert.equal(canEditMessage(myText({ meeting: { loc: "Hall" } }), MY), false);
+  assert.equal(canEditMessage(myText({ meeting: {} }), MY), false);
+  assert.equal(canEditMessage(myText({ meeting: "x" }), MY), false);
+  for (const t of [null, undefined, 5, {}, ["x"]]) assert.equal(canEditMessage(myText({ text: t }), MY), false, String(t));
+  assert.equal(canEditMessage({ text: "x" }, MY), false, "no fromId");
+  for (const uid of [undefined, null, "", 5, {}]) {
+    assert.equal(canEditMessage(myText({ fromId: uid }), uid), false, `uid ${String(uid)}`);
+  }
+  for (const m of [null, undefined, "hello", 5, [], true]) assert.equal(canEditMessage(m, MY), false, String(m));
+  assert.equal(canEditMessage(myText(), MY + " "), false);
+  assert.equal(canEditMessage(myText({ text: IMG_ONERROR }), MY), true, "content does not matter, only ownership");
+});
+
+test("messageView: deleted, plain and edited messages", () => {
+  assert.deepEqual(messageView({ deleted: true, text: "" }), { kind: "deleted" });
+  assert.deepEqual(messageView({ deleted: true, text: "left over" }), { kind: "deleted" });
+  assert.deepEqual(messageView({ text: "hi" }), { kind: "text", text: "hi", edited: false });
+  assert.deepEqual(messageView({ text: "hi", editedAt: { seconds: 5 } }), { kind: "text", text: "hi", edited: true });
+  assert.deepEqual(messageView({ text: "hi", editedAt: null }), { kind: "text", text: "hi", edited: false });
+  assert.deepEqual(messageView({ text: "hi", deleted: "true" }), { kind: "text", text: "hi", edited: false }, "only deleted === true counts");
+  assert.deepEqual(messageView({ text: SCRIPT_BREAK }), { kind: "text", text: SCRIPT_BREAK, edited: false }, "text is returned raw, escaped where drawn");
+  for (const m of [null, undefined, "str", 5, []]) assert.deepEqual(messageView(m), { kind: "text", text: "", edited: false }, String(m));
+  for (const t of [null, 5, {}, ["x"]]) assert.deepEqual(messageView({ text: t }), { kind: "text", text: "", edited: false }, String(t));
+});
+
+test("previewText: Message deleted or the text", () => {
+  assert.equal(previewText({ deleted: true, text: "" }), "Message deleted");
+  assert.equal(previewText({ text: "See you at 10" }), "See you at 10");
+  assert.equal(previewText({ text: "edited", editedAt: { seconds: 1 } }), "edited");
+  for (const m of [null, undefined, {}, { text: 5 }, "x"]) assert.equal(previewText(m), "", String(m));
+});
+
+test("validateEdit: every outcome", () => {
+  assert.equal(validateEdit("new", "old", 2000), "ok");
+  assert.equal(validateEdit("  new  ", "old", 2000), "ok");
+  assert.equal(validateEdit("", "old", 2000), "empty");
+  assert.equal(validateEdit("  \n\t ", "old", 2000), "empty");
+  for (const v of [null, undefined, 5, {}, ["x"], true]) assert.equal(validateEdit(v, "old", 2000), "empty", String(v));
+  assert.equal(validateEdit("old", "old", 2000), "unchanged");
+  assert.equal(validateEdit("  old\n", "old", 2000), "unchanged");
+  assert.equal(validateEdit("old", "  old  ", 2000), "unchanged");
+  assert.equal(validateEdit("x".repeat(2000), "old", 2000), "ok", "exactly maxLen");
+  assert.equal(validateEdit("x".repeat(2001), "old", 2000), "toolong");
+  assert.equal(validateEdit("  " + "x".repeat(2000) + "  ", "old", 2000), "ok", "measured after trimming");
+  assert.equal(validateEdit("", "x".repeat(5000), 2000), "empty", "empty wins over everything");
+  assert.equal(validateEdit("x".repeat(3000), "x".repeat(3000), 2000), "unchanged", "unchanged is checked before length");
+  for (const old of [null, undefined, 5, {}]) assert.equal(validateEdit("new", old, 2000), "ok", `old ${String(old)}`);
+  for (const max of [undefined, null, NaN, "10", Infinity]) assert.equal(validateEdit("x".repeat(50), "old", max), "ok", `max ${String(max)}`);
+  assert.equal(validateEdit(IMG_ONERROR, "old", 2000), "ok");
 });

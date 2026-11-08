@@ -876,6 +876,38 @@ function shouldReshuffle(hiddenAtMs,nowMs,minGapMs=1800000){
   const gap=Number.isFinite(minGapMs)?minGapMs:1800000;
   return nowMs-hiddenAtMs>=gap;
 }
+
+// True only for your own plain text message that is not deleted: msg.fromId === uid (a non-empty string),
+// no meeting object, hasMeeting not true, and a string text. Anything else, including missing values, is false.
+function canEditMessage(msg,uid){
+  if(!msg||typeof msg!=="object"||typeof uid!=="string"||uid==="")return false;
+  if(msg.fromId!==uid||msg.deleted===true||msg.hasMeeting===true)return false;
+  if(msg.meeting!==undefined&&msg.meeting!==null)return false;
+  return typeof msg.text==="string";
+}
+
+// How a message bubble is drawn: {kind:"deleted"} or {kind:"text", text, edited}. A non-string text is "".
+function messageView(msg){
+  const m=msg&&typeof msg==="object"?msg:{};
+  if(m.deleted===true)return{kind:"deleted"};
+  return{kind:"text",text:typeof m.text==="string"?m.text:"",edited:m.editedAt!==undefined&&m.editedAt!==null};
+}
+
+// The inbox preview line: "Message deleted" for a deleted message, otherwise its text ("" when not a string).
+function previewText(msg){
+  const v=messageView(msg);
+  return v.kind==="deleted"?"Message deleted":v.text;
+}
+
+// Saving an edit: "empty" (nothing left after trimming; non-strings count as empty), "unchanged" (same as the
+// old text after trimming), "toolong" (the trimmed text is longer than maxLen), otherwise "ok".
+function validateEdit(newText,oldText,maxLen){
+  const t=typeof newText==="string"?newText.trim():"";
+  if(!t)return"empty";
+  if(t===(typeof oldText==="string"?oldText.trim():""))return"unchanged";
+  if(Number.isFinite(maxLen)&&t.length>maxLen)return"toolong";
+  return"ok";
+}
 // END safe-helpers
 
 
