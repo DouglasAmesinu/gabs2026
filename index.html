@@ -918,16 +918,17 @@ function applyMeetingChange(list,change,myId){
 }
 // END inbox-helpers
 
-function avHTML(av,sz=42,photoURL=null){
+// lazy: the photo loads only near the screen (Discover cards); width and height are the displayed size
+function avHTML(av,sz=42,photoURL=null,lazy=false){
   const fs=Math.round(sz*.36);
   const src=safePhoto(photoURL);
-  if(src)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(src)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
+  if(src)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(src)}" width="${sz}" height="${sz}"${lazy===true?' loading="lazy"':""} decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(clip(av,3))}</div>`;
 }
 // A participant's avatar that opens the photo lightbox when they have a photo (from: "card" or "sheet");
 // initials only: exactly avHTML. The delegated listeners act on data-photo-id.
 function photoAvHTML(p,sz,from){
-  const av=avHTML(p.av||initials(p.name||"?"),sz,p.photoURL);
+  const av=avHTML(p.av||initials(p.name||"?"),sz,p.photoURL,from==="card");
   if(!lightboxPhoto(p)||!safeId(p.id))return av;
   return`<div class="ph-btn" role="button" tabindex="0" aria-label="View photo of ${esc(p.name)}" data-photo-id="${safeId(p.id)}" data-photo-from="${from==="sheet"?"sheet":"card"}">${av}</div>`;
 }
