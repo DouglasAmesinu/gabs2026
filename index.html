@@ -273,6 +273,11 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .msg-menu-item.danger{color:#B91C1C}
 .btn-danger{background:#B91C1C;color:#fff}
 .msg-bub.deleted{background:#F3F4F6;color:#4B5563;border:1px solid var(--border);font-style:italic}
+/* Targets of at least 44px and a visible focus ring (the gold ring of .pv-btn). Text contrast: muted 4.6:1 on
+   #F8FAFC, #B91C1C 6.5:1 on white and 5.9:1 on the hover grey, deleted text 6.9:1, white on #B91C1C 6.5:1. */
+.msg-bub[data-msg-id]{cursor:pointer;min-height:44px;touch-action:manipulation}
+.msg-bub[data-msg-id]:focus-visible,.msg-menu-item:focus-visible,.edit-strip-close:focus-visible,.send-btn.save:focus-visible,#msg-del button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.send-btn.save:disabled{opacity:.6}
 
 /* ── Schedule ── */
 .sched-day-tabs{display:flex;gap:8px;padding:0 16px 16px;overflow-x:auto}
