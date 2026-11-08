@@ -15,12 +15,12 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
   profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
-  classifySaveError, lightboxPhoto } = loadHelpers();
+  classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -714,4 +714,135 @@ test("lightboxPhoto refuses everything safePhoto refuses, and missing or odd val
     assert.equal(lightboxPhoto(p), "", JSON.stringify(p));
   }
   for (const p of [null, undefined, "", PHOTO, 0, true]) assert.equal(lightboxPhoto(p), "", String(p));
+});
+
+const people = n => Array.from({ length: n }, (_, i) => ({ id: "p" + String(i).padStart(4, "0") + "x" + ((i * 7919) % 1000) }));
+const ids = list => list.map(p => (p && typeof p === "object" ? p.id : p));
+
+test("orderMixed: the same seed always gives the same order, input untouched", () => {
+  const list = people(40);
+  const before = JSON.stringify(list);
+  const a = orderMixed(list, "seed-a");
+  assert.deepEqual(ids(orderMixed(list, "seed-a")), ids(a));
+  assert.deepEqual(ids(orderMixed(list.slice().reverse(), "seed-a")), ids(a), "input order does not matter");
+  assert.equal(JSON.stringify(list), before);
+  assert.notEqual(a, list);
+  assert.equal(a.length, 40);
+  assert.deepEqual(ids(a).slice().sort(), ids(list).slice().sort());
+});
+
+test("orderMixed: two different seeds give different orders", () => {
+  const list = people(40);
+  const a = ids(orderMixed(list, "seed-a"));
+  assert.notDeepEqual(ids(orderMixed(list, "seed-b")), a);
+  assert.notDeepEqual(ids(orderMixed(list, newSessionSeed())), ids(orderMixed(list, newSessionSeed())));
+  assert.notDeepEqual(a, ids(list), "not simply the input order");
+});
+
+test("orderMixed: the viewer is not part of the order, only the seed", () => {
+  const list = people(20);
+  assert.deepEqual(ids(orderMixed(list, "seed-a", "viewerX")), ids(orderMixed(list, "seed-a", "viewerY")));
+});
+
+test("orderMixed: adding one participant keeps the relative order of the others", () => {
+  const list = people(60);
+  const a = ids(orderMixed(list, "seed-a"));
+  const b = ids(orderMixed([...list, { id: "newcomer" }], "seed-a")).filter(id => id !== "newcomer");
+  assert.deepEqual(b, a);
+  const c = ids(orderMixed(list.slice(1), "seed-a"));
+  assert.deepEqual(c, a.filter(id => id !== list[0].id), "removing one keeps the rest too");
+});
+
+test("orderMixed: 50 seeds over 200 participants put at least 15 different people first", () => {
+  const list = people(200);
+  const firsts = new Set();
+  for (let v = 0; v < 50; v++) firsts.add(orderMixed(list, "seed-" + v)[0].id);
+  assert.ok(firsts.size >= 15, `only ${firsts.size} distinct first participants`);
+});
+
+test("orderMixed: ties by id, missing ids last, hostile and missing values", () => {
+  const dup = [{ id: "b", n: 1 }, { id: "a" }, { id: "b", n: 2 }];
+  const out = orderMixed(dup, "s");
+  assert.deepEqual(out.filter(p => p.id === "b").map(p => p.n), [1, 2], "equal ids keep their input order");
+  const odd = [{ id: 5 }, null, { id: "x" }, "y", undefined, { name: "no id" }, { id: "w" }];
+  const r = orderMixed(odd, "s");
+  assert.equal(r.length, odd.length);
+  assert.deepEqual(ids(r.slice(0, 2)).sort(), ["w", "x"]);
+  assert.deepEqual(r.slice(2), [odd[0], null, "y", undefined, odd[5]], "entries without a string id go last, in order");
+  for (const bad of [null, undefined, "abc", 42, {}, { length: 3 }]) assert.deepEqual(orderMixed(bad, "s"), [], String(bad));
+  const list = people(10);
+  for (const seed of [null, undefined, 42, {}, IMG_ONERROR, SCRIPT_BREAK, "x".repeat(10000)]) {
+    const o = orderMixed(list, seed);
+    assert.equal(o.length, 10);
+    assert.deepEqual(ids(orderMixed(list, seed)), ids(o));
+  }
+  assert.deepEqual(ids(orderMixed(list, null)), ids(orderMixed(list, "")), "a non-string seed counts as empty");
+  assert.deepEqual(orderMixed([], "s"), []);
+});
+
+test("newSessionSeed: at least 16 hex characters, different on consecutive calls", () => {
+  const seen = new Set();
+  for (let i = 0; i < 20; i++) {
+    const s = newSessionSeed();
+    assert.match(s, /^[0-9a-f]{16,}$/);
+    seen.add(s);
+  }
+  assert.equal(seen.size, 20);
+});
+
+test("newSessionSeed uses an injected source", () => {
+  let calls = 0;
+  const fake = { getRandomValues(a) { calls++; for (let i = 0; i < a.length; i++) a[i] = 0x01020304 * (i + 1); return a; } };
+  assert.equal(newSessionSeed(fake), "01020304020406080306090c04080c10");
+  assert.equal(calls, 1);
+  let n = 0;
+  const counter = { getRandomValues(a) { a.fill(++n); return a; } };
+  assert.notEqual(newSessionSeed(counter), newSessionSeed(counter));
+});
+
+test("newSessionSeed falls back to Math.random and Date.now without a usable source", () => {
+  for (const src of [null, {}, { getRandomValues: "no" }, { getRandomValues() { throw new Error("blocked"); } }]) {
+    const a = newSessionSeed(src), b = newSessionSeed(src);
+    assert.match(a, /^[0-9a-f]{16,}$/, String(src));
+    assert.notEqual(a, b);
+  }
+});
+
+test("shouldReshuffle: only after at least minGapMs hidden", () => {
+  const t = 1762560000000;
+  assert.equal(shouldReshuffle(t, t + 1800000), true, "exactly the default 30 minutes");
+  assert.equal(shouldReshuffle(t, t + 1799999), false, "one millisecond less");
+  assert.equal(shouldReshuffle(t, t + 5000, 5000), true, "exactly minGapMs");
+  assert.equal(shouldReshuffle(t, t + 4999, 5000), false, "one millisecond less than minGapMs");
+  assert.equal(shouldReshuffle(t, t + 86400000), true);
+  assert.equal(shouldReshuffle(t, t), false);
+  assert.equal(shouldReshuffle(t, t, 0), true, "a gap of 0 reshuffles at once");
+  assert.equal(shouldReshuffle(t, t - 1), false, "now before hidden");
+  assert.equal(shouldReshuffle(t, t - 1, 0), false);
+  assert.equal(shouldReshuffle(t, t + 1800000, "5000"), true, "an unusable gap uses the default");
+  assert.equal(shouldReshuffle(t, t + 1799999, NaN), false);
+});
+
+test("shouldReshuffle: missing and non-number times give false", () => {
+  const t = 1762560000000;
+  for (const [h, n] of [[undefined, t], [t, undefined], [null, t], [t, null], ["1", t + 1e7], [t, String(t + 1e7)],
+    [NaN, t], [t, NaN], [Infinity, Infinity], [-Infinity, t], [{}, t], [[t], t + 1e7]]) {
+    assert.equal(shouldReshuffle(h, n), false, `${String(h)}, ${String(n)}`);
+  }
+  assert.equal(shouldReshuffle(), false);
+});
+
+test("pageSlice returns the first count items, clamped", () => {
+  const l = [1, 2, 3, 4, 5];
+  assert.deepEqual(pageSlice(l, 3), [1, 2, 3]);
+  assert.deepEqual(pageSlice(l, 0), []);
+  assert.deepEqual(pageSlice(l, 5), l);
+  assert.deepEqual(pageSlice(l, 6), l);
+  assert.deepEqual(pageSlice(l, Infinity), l);
+  assert.deepEqual(pageSlice(l, -2), []);
+  assert.deepEqual(pageSlice(l, -Infinity), []);
+  assert.deepEqual(pageSlice(l, 2.9), [1, 2]);
+  assert.notEqual(pageSlice(l, 5), l, "always a new array");
+  for (const c of [NaN, "3", null, undefined, {}, [3], true]) assert.deepEqual(pageSlice(l, c), [], String(c));
+  for (const bad of [null, undefined, "abc", { length: 2 }]) assert.deepEqual(pageSlice(bad, 2), [], String(bad));
 });
