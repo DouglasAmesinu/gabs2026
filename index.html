@@ -223,6 +223,8 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .lb-view{margin-top:8px;background:#fff;color:var(--navy);border:none;border-radius:999px;padding:12px 22px;min-height:44px;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation}
 .lb-close{position:absolute;top:calc(8px + env(safe-area-inset-top,0px));right:8px;width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
 .lb-view:focus-visible,.lb-close:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.ph-btn{display:block;flex-shrink:0;min-width:44px;min-height:44px;border-radius:50%;cursor:pointer;touch-action:manipulation}
+.ph-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .t-who{flex:1;min-width:0;gap:12px}
 .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%);z-index:700;background:var(--text);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);pointer-events:none}
 .t-name{font-size:15px;font-weight:700;color:var(--text)}
@@ -875,6 +877,13 @@ function avHTML(av,sz=42,photoURL=null){
   if(src)return`<div class="av" style="width:${sz}px;height:${sz}px;flex-shrink:0;overflow:hidden"><img src="${esc(src)}" width="${sz}" height="${sz}" decoding="async" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/></div>`;
   return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${fs}px;flex-shrink:0">${esc(clip(av,3))}</div>`;
 }
+// A participant's avatar that opens the photo lightbox when they have a photo (from: "card" or "sheet");
+// initials only: exactly avHTML. The delegated listeners act on data-photo-id.
+function photoAvHTML(p,sz,from){
+  const av=avHTML(p.av||initials(p.name||"?"),sz,p.photoURL);
+  if(!lightboxPhoto(p)||!safeId(p.id))return av;
+  return`<div class="ph-btn" role="button" tabindex="0" aria-label="View photo of ${esc(p.name)}" data-photo-id="${safeId(p.id)}" data-photo-from="${from==="sheet"?"sheet":"card"}">${av}</div>`;
+}
 // Profile photos: decode, shrink to max 800px on the longest side, re-encode as JPEG
 const PHOTO_MAX_BYTES=30*1024*1024;
 const PHOTO_UNSUPPORTED_MSG="This photo format isn't supported. Please choose a JPEG or PNG.";
@@ -1305,6 +1314,12 @@ function showPhotoLightbox(p,opener,fromSheet){
   img.src=src;
   ov.querySelector(".lb-close").focus();
 }
+// Discover card and profile sheet photos: open the lightbox for that participant
+function openPhotoFrom(el){
+  const id=safeId(el.dataset.photoId);
+  const p=id&&(participants.find(x=>x.id===id)||(me&&me.id===id?me:null));
+  if(p)showPhotoLightbox(p,el,el.dataset.photoFrom==="sheet");
+}
 // Inbox avatars and the chat header: open the participant's profile on top of the current view
 function openProfileFrom(el){
   const id=safeId(el.dataset.profileId);
@@ -1316,12 +1331,16 @@ document.addEventListener("keydown",e=>{
   // role="button" blocks for Settings (the bar's avatar and name, the profile card): Enter and Space
   const sb=e.target&&e.target.closest&&e.target.closest('[role="button"][data-settings]');
   if(sb){e.preventDefault();handleSettingsAction(sb);return;}
+  const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
+  if(ph){e.preventDefault();openPhotoFrom(ph);return;}
   const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(!el)return;
   e.preventDefault();openProfileFrom(el);
 });
 // Schedule's My Meetings calendar buttons and profile targets: one delegated listener, URLs built at click time
 document.addEventListener("click",e=>{
+  const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
+  if(ph){openPhotoFrom(ph);return;}
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
   if(pv){openProfileFrom(pv);return;}
   const pb=e.target&&e.target.closest&&e.target.closest("[data-push]");
@@ -1758,7 +1777,7 @@ function pCardHTML(p){
   const hasContact=p.phone||p.linkedin;
   return`<div class="p-card${self?" self":""}" data-pid="${safeId(p.id)}">
     <div class="p-card-top">
-      ${avHTML(p.av||initials(p.name||"?"),46,p.photoURL)}
+      ${photoAvHTML(p,46,"card")}
       <div style="flex:1;min-width:0">
         <div class="p-name">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
         <div class="p-role">${esc(p.title||"")}</div>
@@ -1899,7 +1918,7 @@ function showParticipantProfile(p){
   ov.innerHTML=`<div class="sheet" style="padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:88vh">
     <div style="padding:22px 20px 16px;border-bottom:1px solid var(--border)">
       <div style="display:flex;gap:15px;align-items:center">
-        ${avHTML(p.av||initials(p.name||"?"),64,p.photoURL)}
+        ${photoAvHTML(p,64,"sheet")}
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1.2">${p.salutation?esc(p.salutation)+". ":""}${esc(p.name)}${self?` <span class="chip chip-you" style="font-size:10px;padding:2px 7px">You</span>`:""}</div>
           <div style="font-size:13px;color:var(--steel);font-weight:600;margin-top:3px">${esc(p.title||"")}</div>
@@ -1958,7 +1977,7 @@ function bindCards(){
     b.onclick=e=>{e.stopPropagation();const p=participants.find(x=>x.id===b.dataset.id);if(p)showMeeting(p);};
   });
   document.querySelectorAll(".p-card").forEach(card=>{
-    card.onclick=()=>{const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
+    card.onclick=e=>{if(e.target.closest("[data-photo-id]"))return;const p=participants.find(x=>x.id===card.dataset.pid);if(p)showParticipantProfile(p);};
   });
   document.getElementById("bio-nudge")?.addEventListener("click",e=>{e.stopPropagation();showEditProfile();});
 }
