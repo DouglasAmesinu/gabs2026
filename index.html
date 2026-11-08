@@ -570,8 +570,9 @@ let participantsUnsub=null;
 let participantsLoaded=false; // true once a snapshot from the server (not cache) has arrived
 let participantsFailed=false; // true once the listener has used up its retries
 let discSearch="",discSectors=[],discCountry="";
-// The day the Discover order is mixed for: fixed at start, renewed only when the app comes back on another date
-let discDay=dayKey(new Date());
+// The Discover order for this visit: a new seed on every page load, kept in memory only (never stored),
+// renewed only when the app comes back after being hidden for 30 minutes or more (shouldReshuffle)
+let discSeed=newSessionSeed(),discHiddenAt=null;
 // Endless scroll: cards are added DISC_PAGE at a time; discShown survives leaving and returning to the tab
 const DISC_PAGE=30;
 let discShown=DISC_PAGE,discObserver=null,discSearchTimer=null;
@@ -818,13 +819,6 @@ function classifySaveError(code,online){
 function lightboxPhoto(participant){
   if(!participant||typeof participant!=="object"||typeof participant.photoURL!=="string")return"";
   return safePhoto(participant.photoURL);
-}
-
-// The local date as "YYYY-MM-DD"; "" for anything that is not a valid Date.
-function dayKey(date){
-  if(!(date instanceof Date)||!Number.isFinite(date.getTime()))return"";
-  const p2=n=>String(n).padStart(2,"0");
-  return`${String(date.getFullYear()).padStart(4,"0")}-${p2(date.getMonth()+1)}-${p2(date.getDate())}`;
 }
 
 // 32-bit FNV-1a over the UTF-16 code units, followed by a final avalanche (murmur3 fmix32).
@@ -1846,7 +1840,8 @@ function filtered(){
 }
 
 // The Discover list: the filtered participants, your own card first (when it matches like any other),
-// everyone else in orderMixed order for you and discDay. Each id appears once, so your profile added
+// everyone else in orderMixed order for this visit's discSeed, so renders never reorder cards already in the
+// list and new people slot in by their hash. Each id appears once, so your profile added
 // by hand right after registering never shows twice.
 function discOrdered(){
   const myId=me&&typeof me.id==="string"?me.id:"";
@@ -1857,13 +1852,19 @@ function discOrdered(){
     if(typeof p.id==="string"){if(seen.has(p.id))continue;seen.add(p.id);}
     if(myId&&p.id===myId)mine=p;else others.push(p);
   }
-  const ordered=orderMixed(others,myId,discDay);
+  const ordered=orderMixed(others,discSeed);
   return mine?[mine,...ordered]:ordered;
 }
 document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){discHiddenAt=Date.now();return;}
   if(document.visibilityState!=="visible")return;
-  const d=dayKey(new Date());
-  if(d&&d!==discDay){discDay=d;refreshDisc();}
+  const hiddenAt=discHiddenAt;
+  discHiddenAt=null;
+  if(!shouldReshuffle(hiddenAt,Date.now()))return;
+  // Long away: a new order, from the first batch, at the top of the list (also when Discover is not open)
+  discSeed=newSessionSeed();
+  discShown=DISC_PAGE;
+  refreshDisc(true);
 });
 
 function pCardHTML(p){

@@ -15,12 +15,12 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, dayKey, orderMixed, pageSlice, newSessionSeed, shouldReshuffle };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
   profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
-  classifySaveError, lightboxPhoto, dayKey, orderMixed, pageSlice, newSessionSeed, shouldReshuffle } = loadHelpers();
+  classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -714,15 +714,6 @@ test("lightboxPhoto refuses everything safePhoto refuses, and missing or odd val
     assert.equal(lightboxPhoto(p), "", JSON.stringify(p));
   }
   for (const p of [null, undefined, "", PHOTO, 0, true]) assert.equal(lightboxPhoto(p), "", String(p));
-});
-
-test("dayKey gives the local date as YYYY-MM-DD", () => {
-  assert.equal(dayKey(new Date(2026, 10, 8, 0, 0, 0)), "2026-11-08");
-  assert.equal(dayKey(new Date(2026, 0, 1, 23, 59, 59)), "2026-01-01");
-  assert.equal(dayKey(new Date(2026, 11, 31, 12)), "2026-12-31");
-  for (const d of [undefined, null, "", "2026-11-08", 1762560000000, {}, new Date("nonsense"), new Date(NaN)]) {
-    assert.equal(dayKey(d), "", String(d));
-  }
 });
 
 const people = n => Array.from({ length: n }, (_, i) => ({ id: "p" + String(i).padStart(4, "0") + "x" + ((i * 7919) % 1000) }));
