@@ -15,12 +15,12 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, dayKey, orderMixed, pageSlice };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
   profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
-  classifySaveError, lightboxPhoto } = loadHelpers();
+  classifySaveError, lightboxPhoto, dayKey, orderMixed, pageSlice } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -714,4 +714,87 @@ test("lightboxPhoto refuses everything safePhoto refuses, and missing or odd val
     assert.equal(lightboxPhoto(p), "", JSON.stringify(p));
   }
   for (const p of [null, undefined, "", PHOTO, 0, true]) assert.equal(lightboxPhoto(p), "", String(p));
+});
+
+test("dayKey gives the local date as YYYY-MM-DD", () => {
+  assert.equal(dayKey(new Date(2026, 10, 8, 0, 0, 0)), "2026-11-08");
+  assert.equal(dayKey(new Date(2026, 0, 1, 23, 59, 59)), "2026-01-01");
+  assert.equal(dayKey(new Date(2026, 11, 31, 12)), "2026-12-31");
+  for (const d of [undefined, null, "", "2026-11-08", 1762560000000, {}, new Date("nonsense"), new Date(NaN)]) {
+    assert.equal(dayKey(d), "", String(d));
+  }
+});
+
+const people = n => Array.from({ length: n }, (_, i) => ({ id: "p" + String(i).padStart(4, "0") + "x" + ((i * 7919) % 1000) }));
+const ids = list => list.map(p => (p && typeof p === "object" ? p.id : p));
+
+test("orderMixed: same viewer and day always give the same order, input untouched", () => {
+  const list = people(40);
+  const before = JSON.stringify(list);
+  const a = orderMixed(list, "viewerA", "2026-11-08");
+  assert.deepEqual(ids(orderMixed(list, "viewerA", "2026-11-08")), ids(a));
+  assert.deepEqual(ids(orderMixed(list.slice().reverse(), "viewerA", "2026-11-08")), ids(a), "input order does not matter");
+  assert.equal(JSON.stringify(list), before);
+  assert.notEqual(a, list);
+  assert.equal(a.length, 40);
+  assert.deepEqual(ids(a).slice().sort(), ids(list).slice().sort());
+});
+
+test("orderMixed: another viewer or another day gives another order", () => {
+  const list = people(40);
+  const a = ids(orderMixed(list, "viewerA", "2026-11-08"));
+  assert.notDeepEqual(ids(orderMixed(list, "viewerB", "2026-11-08")), a);
+  assert.notDeepEqual(ids(orderMixed(list, "viewerA", "2026-11-09")), a);
+  assert.notDeepEqual(a, ids(list), "not simply the input order");
+});
+
+test("orderMixed: adding one participant keeps the relative order of the others", () => {
+  const list = people(60);
+  const a = ids(orderMixed(list, "viewerA", "2026-11-08"));
+  const b = ids(orderMixed([...list, { id: "newcomer" }], "viewerA", "2026-11-08")).filter(id => id !== "newcomer");
+  assert.deepEqual(b, a);
+  const c = ids(orderMixed(list.slice(1), "viewerA", "2026-11-08"));
+  assert.deepEqual(c, a.filter(id => id !== list[0].id), "removing one keeps the rest too");
+});
+
+test("orderMixed: 50 viewers over 200 participants put at least 15 different people first", () => {
+  const list = people(200);
+  const firsts = new Set();
+  for (let v = 0; v < 50; v++) firsts.add(orderMixed(list, "viewer-" + v, "2026-11-08")[0].id);
+  assert.ok(firsts.size >= 15, `only ${firsts.size} distinct first participants`);
+});
+
+test("orderMixed: ties by id, missing ids last, hostile and missing values", () => {
+  const dup = [{ id: "b", n: 1 }, { id: "a" }, { id: "b", n: 2 }];
+  const out = orderMixed(dup, "v", "d");
+  assert.deepEqual(out.filter(p => p.id === "b").map(p => p.n), [1, 2], "equal ids keep their input order");
+  const odd = [{ id: 5 }, null, { id: "x" }, "y", undefined, { name: "no id" }, { id: "w" }];
+  const r = orderMixed(odd, "v", "d");
+  assert.equal(r.length, odd.length);
+  assert.deepEqual(ids(r.slice(0, 2)).sort(), ["w", "x"]);
+  assert.deepEqual(r.slice(2), [odd[0], null, "y", undefined, odd[5]], "entries without a string id go last, in order");
+  for (const bad of [null, undefined, "abc", 42, {}, { length: 3 }]) assert.deepEqual(orderMixed(bad, "v", "d"), [], String(bad));
+  const list = people(10);
+  for (const [v, d] of [[null, null], [undefined, "d"], [42, {}], [IMG_ONERROR, SCRIPT_BREAK]]) {
+    const o = orderMixed(list, v, d);
+    assert.equal(o.length, 10);
+    assert.deepEqual(ids(orderMixed(list, v, d)), ids(o));
+  }
+  assert.deepEqual(ids(orderMixed(list, null, null)), ids(orderMixed(list, "", "")), "non-strings count as empty");
+  assert.deepEqual(orderMixed([], "v", "d"), []);
+});
+
+test("pageSlice returns the first count items, clamped", () => {
+  const l = [1, 2, 3, 4, 5];
+  assert.deepEqual(pageSlice(l, 3), [1, 2, 3]);
+  assert.deepEqual(pageSlice(l, 0), []);
+  assert.deepEqual(pageSlice(l, 5), l);
+  assert.deepEqual(pageSlice(l, 6), l);
+  assert.deepEqual(pageSlice(l, Infinity), l);
+  assert.deepEqual(pageSlice(l, -2), []);
+  assert.deepEqual(pageSlice(l, -Infinity), []);
+  assert.deepEqual(pageSlice(l, 2.9), [1, 2]);
+  assert.notEqual(pageSlice(l, 5), l, "always a new array");
+  for (const c of [NaN, "3", null, undefined, {}, [3], true]) assert.deepEqual(pageSlice(l, c), [], String(c));
+  for (const bad of [null, undefined, "abc", { length: 2 }]) assert.deepEqual(pageSlice(bad, 2), [], String(bad));
 });

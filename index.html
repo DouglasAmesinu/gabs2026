@@ -810,6 +810,44 @@ function lightboxPhoto(participant){
   if(!participant||typeof participant!=="object"||typeof participant.photoURL!=="string")return"";
   return safePhoto(participant.photoURL);
 }
+
+// The local date as "YYYY-MM-DD"; "" for anything that is not a valid Date.
+function dayKey(date){
+  if(!(date instanceof Date)||!Number.isFinite(date.getTime()))return"";
+  const p2=n=>String(n).padStart(2,"0");
+  return`${String(date.getFullYear()).padStart(4,"0")}-${p2(date.getMonth()+1)}-${p2(date.getDate())}`;
+}
+
+// 32-bit FNV-1a over the UTF-16 code units, followed by a final avalanche (murmur3 fmix32).
+function hash32(s){
+  let h=0x811c9dc5;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193);}
+  h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;
+  return h>>>0;
+}
+
+// A new array of the participants in a mixed order that is fixed for one viewer on one day:
+// ascending hash of viewerId|day|id, ties by id; entries without a string id go last in their
+// original order. The input is never changed; a non-array gives [].
+function orderMixed(list,viewerId,day){
+  if(!Array.isArray(list))return[];
+  const v=typeof viewerId==="string"?viewerId:"",d=typeof day==="string"?day:"";
+  const keyed=[],rest=[];
+  for(const p of list){
+    if(p&&typeof p==="object"&&typeof p.id==="string")keyed.push({p,id:p.id,h:hash32(v+"|"+d+"|"+p.id)});
+    else rest.push(p);
+  }
+  keyed.sort((a,b)=>a.h-b.h||(a.id<b.id?-1:a.id>b.id?1:0));
+  return keyed.map(x=>x.p).concat(rest);
+}
+
+// The first count items as a new array; count is clamped to 0..list.length, a non-number gives 0
+// items and a non-array gives [].
+function pageSlice(list,count){
+  if(!Array.isArray(list))return[];
+  if(typeof count!=="number"||Number.isNaN(count))return[];
+  return list.slice(0,Math.max(0,Math.min(list.length,Math.floor(count))));
+}
 // END safe-helpers
 
 
