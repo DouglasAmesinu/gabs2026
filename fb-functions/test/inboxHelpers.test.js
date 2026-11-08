@@ -123,3 +123,18 @@ test("applyMeetingChange does not mutate its input and ignores non-meetings", ()
   assert.deepEqual(applyMeetingChange([], change("added", { fromId: A, meeting }), ME), []);
   assert.deepEqual(applyMeetingChange([], change("removed", {}), ME), []);
 });
+
+test("buildInbox marks a deleted newest message and keeps edits in place", () => {
+  const inbox = buildInbox(
+    [
+      { participants: [A, ME], fromId: A, text: "", deleted: true, ts: ts(300) },
+      { participants: [A, ME], fromId: A, text: "older", ts: ts(100) },
+      { participants: [ME, Z], fromId: ME, text: "changed", editedAt: ts(900), ts: ts(200) },
+    ],
+    ME
+  );
+  assert.deepEqual(inbox[A], { text: "", ts: ts(300), fromId: A, deleted: true });
+  assert.deepEqual(inbox[Z], { text: "changed", ts: ts(200), fromId: ME }, "editedAt does not move the thread");
+  const notDeleted = buildInbox([{ participants: [A, ME], fromId: A, text: "x", deleted: "yes", ts: ts(1) }], ME);
+  assert.equal("deleted" in notDeleted[A], false, "only deleted === true counts");
+});

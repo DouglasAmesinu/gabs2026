@@ -272,6 +272,7 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .compose-err .err-msg{margin:0 16px 8px}
 .msg-menu-item.danger{color:#B91C1C}
 .btn-danger{background:#B91C1C;color:#fff}
+.msg-bub.deleted{background:#F3F4F6;color:#4B5563;border:1px solid var(--border);font-style:italic}
 
 /* ── Schedule ── */
 .sched-day-tabs{display:flex;gap:8px;padding:0 16px 16px;overflow-x:auto}
@@ -963,6 +964,7 @@ function buildInbox(messages,myId){
     const prev=out[other];
     if(prev&&tsValue(prev.ts)>=tsValue(m.ts))return;
     out[other]={text:m.text,ts:m.ts||null,fromId:m.fromId};
+    if(m.deleted===true)out[other].deleted=true;
   });
   return out;
 }
@@ -2209,7 +2211,7 @@ function renderInbox(){
       <div class="msgs-hero-title">Messages</div>
       <div class="msgs-hero-sub">${entries.length} conversation${entries.length!==1?"s":""}</div>
     </div>
-    <div class="inbox-list">${entries.map(({p,text,ts},idx)=>{
+    <div class="inbox-list">${entries.map(({p,text,ts,deleted},idx)=>{
       const unread=!readThreadIds.has(p.id);
       return`
       <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${safeId(p.id)}" style="background:${unread?"#fff":"#F8FAFC"}">
@@ -2220,7 +2222,7 @@ function renderInbox(){
         <div class="inbox-meta">
           <div class="inbox-name" style="font-weight:${unread?800:600}">${esc(p.name)}</div>
           <div class="inbox-company">${esc(p.company||"")}</div>
-          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(clip(text||"",200))}</div>
+          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(clip(previewText({text,deleted})||"",200))}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <span class="inbox-time">${fmtTime(ts)}</span>
@@ -3340,6 +3342,13 @@ function renderMsgs(){
   return threadMessages.map(m=>{
     const mine=m.fromId===me?.id;
     const cls=mine?"me":"them";
+    // Plain text messages only: a deleted one is a grey bubble without menu, link or action
+    const view=m.meeting?null:messageView(m);
+    if(view&&view.kind==="deleted")return`<div class="msg-wrap ${cls}">
+      ${!mine?`<div class="msg-sender">${esc(m.fromName||"")}</div>`:""}
+      <div class="msg-bub ${cls} deleted">This message was deleted</div>
+      <div class="msg-time">${fmtTime(m.ts)}</div>
+    </div>`;
     let respHTML="";
     if(m.meeting){
       if(!mine&&!m.resp){
@@ -3371,7 +3380,7 @@ function renderMsgs(){
         </div>`:""}
         ${respHTML}
       </div>
-      <div class="msg-time">${fmtTime(m.ts)}</div>
+      <div class="msg-time">${fmtTime(m.ts)}${view&&view.edited?" · edited":""}</div>
     </div>`;
   }).join("");
 }
@@ -3386,9 +3395,11 @@ function initThread(p){
   const tid2=tid(me.id,p.id);
   const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
   clearTimeout(threadRenderTimer);
-  let firstSnap=true;
+  let firstSnap=true,scrollNext=false;
   threadUnsub=fb.onSnapshot(q,snap=>{
     const wasFirst=firstSnap;firstSnap=false;
+    // Only edits or deletes (modified documents): redraw in place, keep the scroll position
+    if(wasFirst||snap.docChanges().some(ch=>ch.type!=="modified"))scrollNext=true;
     if(!wasFirst&&activeThreadId===p.id){
       snap.docChanges().forEach(ch=>{
         const fromId=ch.type==="added"&&ch.doc.data().fromId;
@@ -3400,7 +3411,8 @@ function initThread(p){
     threadRenderTimer=setTimeout(()=>{
       const msgs=document.getElementById("msgs");
       const html=renderMsgs();
-      if(msgs&&patchHTML(msgs,html,html)){scrollBottom();bindRespBtns(p);requestAnimationFrame(()=>scrollBottom());}
+      const doScroll=scrollNext;scrollNext=false;
+      if(msgs&&patchHTML(msgs,html,html)){if(doScroll)scrollBottom();bindRespBtns(p);if(doScroll)requestAnimationFrame(()=>scrollBottom());}
     },200);
   });
   setTimeout(scrollBottom,100);
