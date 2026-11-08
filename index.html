@@ -258,6 +258,18 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .send-btn.on{background:var(--navy);color:var(--white)}
 .send-btn.off{background:#E5E7EB;color:#9CA3AF;pointer-events:none}
 .send-btn:active{transform:scale(.88)}
+/* Your own message: menu (Edit / Delete / Cancel) and the "Editing message" strip above the composer */
+.msg-menu-ov{position:fixed;inset:0;z-index:620}
+.msg-menu{position:fixed;min-width:190px;background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;display:flex;flex-direction:column}
+.msg-menu-item{min-height:44px;padding:0 14px;text-align:left;font-size:14px;font-weight:600;color:var(--text);border-radius:8px;cursor:pointer;touch-action:manipulation}
+.msg-menu-item:hover,.msg-menu-item:focus{background:#F0F4F8}
+.edit-strip{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-top:1px solid var(--border);border-left:3px solid var(--navy);background:#F8FAFC}
+.edit-strip-txt{flex:1;min-width:0}
+.edit-strip-label{font-size:12px;font-weight:700;color:var(--navy)}
+.edit-strip-orig{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.edit-strip-close{width:44px;height:44px;flex-shrink:0;border-radius:50%;font-size:18px;color:var(--muted);cursor:pointer;touch-action:manipulation}
+.send-btn.save{width:44px;height:44px;font-size:20px}
+.compose-err .err-msg{margin:0 16px 8px}
 
 /* ── Schedule ── */
 .sched-day-tabs{display:flex;gap:8px;padding:0 16px 16px;overflow-x:auto}
@@ -562,6 +574,9 @@ let inboxData={};
 let readThreadIds=new Set();
 try{const s=localStorage.getItem("gabs_read");if(s)readThreadIds=new Set(JSON.parse(s));}catch(e){}
 let threadUnsub=null;
+// Editing one of your messages in the open chat: {id, threadId, original, savedDraft}; null otherwise
+let editingMsg=null,editSaving=false,msgMenuReturnId="";
+const MSG_MAX=2000; // the text limit of the message rules in firestore.rules
 let msgListenersStarted=false,msgListenerStops=[];
 let inboxRaw={};       // otherId -> newest {text,ts,fromId}, from buildInbox
 let meetingRecords=[]; // from applyMeetingChange; otherParticipant is linked in linkMeetings
@@ -1430,6 +1445,8 @@ document.addEventListener("keydown",e=>{
   // role="button" blocks for Settings (the bar's avatar and name, the profile card): Enter and Space
   const sb=e.target&&e.target.closest&&e.target.closest('[role="button"][data-settings]');
   if(sb){e.preventDefault();handleSettingsAction(sb);return;}
+  const mk=e.target&&e.target.closest&&e.target.closest("[data-msg-id]");
+  if(mk&&mk===e.target){e.preventDefault();openMsgMenu(mk);return;}
   const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
   if(ph){e.preventDefault();openPhotoFrom(ph);return;}
   const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
@@ -1438,6 +1455,10 @@ document.addEventListener("keydown",e=>{
 });
 // Schedule's My Meetings calendar buttons and profile targets: one delegated listener, URLs built at click time
 document.addEventListener("click",e=>{
+  const ma=e.target&&e.target.closest&&e.target.closest("[data-msg-act]");
+  if(ma){handleMsgAct(ma);return;}
+  const mb=e.target&&e.target.closest&&e.target.closest("[data-msg-id]");
+  if(mb&&!e.target.closest("a")){openMsgMenu(mb);return;}
   const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
   if(ph){openPhotoFrom(ph);return;}
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
@@ -1559,7 +1580,7 @@ function bindBottomNav(){
   document.querySelectorAll(".nav-item[data-tab]").forEach(item=>{
     item.onclick=()=>{
       if(currentTab===item.dataset.tab&&item.dataset.tab!=="messages")return;
-      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";discSectors=[];
+      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";editingMsg=null;discSectors=[];
       renderApp();
     };
   });
@@ -2302,7 +2323,7 @@ function showNotifBanner(){
       const target=bs.length===1?bs[0].p:null;
       hideNotifBanner();
       if(target){openThread(target);}
-      else{currentTab="messages";activeThreadId=null;threadMessages=[];draftText="";renderApp();}
+      else{currentTab="messages";activeThreadId=null;threadMessages=[];draftText="";editingMsg=null;renderApp();}
     };
     document.body.appendChild(notifEl);
     try{if(navigator.vibrate)navigator.vibrate(60);}catch(e){}
@@ -3145,11 +3166,121 @@ function renderThread(){
       <button class="t-meet-btn" id="t-meet">📅 Meet</button>
     </div>
     <div class="msgs-area" id="msgs">${renderMsgs()}</div>
-    <div class="compose-bar">
-      <textarea class="compose-inp" id="cinp" placeholder="Message…" rows="1">${esc(draftText)}</textarea>
-      <div class="send-btn ${draftText.trim()?"on":"off"}" id="sbtn">➤</div>
-    </div>
+    ${composeHTML()}
   </div>`;
+}
+
+// The composer under a chat: normal, or editing one of your messages (strip above it, a check-mark Save button)
+function composeHTML(){
+  if(editingMsg&&editingMsg.threadId!==activeThreadId){draftText=editingMsg.savedDraft;editingMsg=null;}
+  const ed=editingMsg;
+  return`<div id="compose-wrap" style="flex-shrink:0">
+      ${ed?`<div class="edit-strip">
+        <div class="edit-strip-txt"><div class="edit-strip-label">Editing message</div><div class="edit-strip-orig">${esc(clip(String(ed.original).replace(/\s+/g," ").trim(),200))}</div></div>
+        <button type="button" class="edit-strip-close" data-msg-act="cancel-edit" aria-label="Stop editing">✕</button>
+      </div>`:""}
+      <div class="compose-err" id="compose-err"></div>
+      <div class="compose-bar">
+      <textarea class="compose-inp" id="cinp" placeholder="Message…" rows="1"${ed?' aria-label="Edit message"':""}>${esc(draftText)}</textarea>
+      ${ed?`<button type="button" class="send-btn on save" id="sbtn" aria-label="Save">✓</button>`:`<div class="send-btn ${draftText.trim()?"on":"off"}" id="sbtn">➤</div>`}
+    </div>
+    </div>`;
+}
+function threadPeer(){return participants.find(x=>x.id===activeThreadId)||null;}
+function redrawComposer(){
+  const w=document.getElementById("compose-wrap"),p=threadPeer();
+  if(!w||!p)return;
+  w.outerHTML=composeHTML();
+  bindComposer(p);
+  const inp=document.getElementById("cinp");
+  if(inp){
+    inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";
+    inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+  }
+}
+function composeErr(msg){
+  const el=document.getElementById("compose-err");
+  if(el)el.innerHTML=msg?`<div class="err-msg err-strong" role="alert">${esc(msg)}</div>`:"";
+}
+function startEdit(m){
+  if(!me||!canEditMessage(m,me.id))return;
+  if(!editingMsg)editingMsg={id:m.id,threadId:activeThreadId,original:m.text,savedDraft:draftText};
+  else Object.assign(editingMsg,{id:m.id,original:m.text});
+  draftText=m.text;
+  redrawComposer();
+}
+function exitEdit(){
+  if(!editingMsg)return;
+  draftText=editingMsg.savedDraft;editingMsg=null;
+  redrawComposer();
+}
+// Save the edited text: only {text, editedAt}; on failure the text stays in the composer
+async function saveEdit(){
+  const ed=editingMsg,p=threadPeer();
+  if(!ed||!p||editSaving||!me||!window._fb)return;
+  const inp=document.getElementById("cinp");
+  const raw=inp?inp.value:draftText;
+  const r=validateEdit(raw,ed.original,MSG_MAX);
+  if(r==="empty"){composeErr("A message can't be empty.");return;}
+  if(r==="unchanged"){exitEdit();return;}
+  if(r==="toolong"){composeErr(`Too long: please shorten to ${MSG_MAX} characters or fewer.`);return;}
+  editSaving=true;
+  const sbt=document.getElementById("sbtn");if(sbt)sbt.disabled=true;
+  try{
+    const fb=window._fb;
+    await fb.updateDoc(fb.doc(fb.db,"threads",tid(me.id,p.id),"messages",ed.id),{text:raw.trim(),editedAt:fb.serverTimestamp()});
+    if(editingMsg===ed)exitEdit();
+  }catch(e){
+    console.warn("msg-edit-fail",e&&e.code);
+    if(editingMsg===ed)composeErr("Couldn't save your change. Try again.");
+  }finally{
+    editSaving=false;
+    const b=document.getElementById("sbtn");if(b)b.disabled=false;
+  }
+}
+
+// The small menu next to your own plain text message
+function openMsgMenu(bub){
+  const id=safeId(bub.dataset.msgId);
+  const m=id&&threadMessages.find(x=>x.id===id);
+  if(!m||!me||!canEditMessage(m,me.id))return;
+  closeMsgMenu(false);
+  msgMenuReturnId=id;
+  const ov=document.createElement("div");
+  ov.className="msg-menu-ov";ov.id="msg-menu-ov";
+  ov.innerHTML=`<div class="msg-menu" role="menu" aria-label="Message options">
+      <button type="button" role="menuitem" class="msg-menu-item" data-msg-act="edit" data-mid="${esc(id)}">Edit message</button>
+      <button type="button" role="menuitem" class="msg-menu-item" data-msg-act="menu-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const menu=ov.firstElementChild,r=bub.getBoundingClientRect();
+  const mw=menu.offsetWidth,mh=menu.offsetHeight;
+  let top=r.bottom+6;
+  if(top+mh>window.innerHeight-8)top=Math.max(8,r.top-6-mh);
+  const left=Math.min(Math.max(8,r.right-mw),window.innerWidth-mw-8);
+  menu.style.top=top+"px";menu.style.left=Math.max(8,left)+"px";
+  ov.addEventListener("click",e=>{if(e.target===ov)closeMsgMenu(true);});
+  ov.addEventListener("keydown",e=>{
+    const items=[...menu.querySelectorAll('[role="menuitem"]')];
+    const i=items.indexOf(document.activeElement);
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closeMsgMenu(true);}
+    else if(e.key==="ArrowDown"||(e.key==="Tab"&&!e.shiftKey)){e.preventDefault();items[(i+1)%items.length].focus();}
+    else if(e.key==="ArrowUp"||(e.key==="Tab"&&e.shiftKey)){e.preventDefault();items[(i-1+items.length)%items.length].focus();}
+  });
+  menu.querySelector('[role="menuitem"]').focus();
+}
+function closeMsgMenu(restoreFocus){
+  const ov=document.getElementById("msg-menu-ov");
+  if(!ov)return;
+  ov.remove();
+  if(restoreFocus&&msgMenuReturnId)document.querySelector(`[data-msg-id="${msgMenuReturnId}"]`)?.focus({preventScroll:true});
+}
+function handleMsgAct(el){
+  const act=el.dataset.msgAct;
+  if(act==="menu-cancel"){closeMsgMenu(true);return;}
+  if(act==="cancel-edit"){exitEdit();return;}
+  const m=threadMessages.find(x=>x.id===safeId(el.dataset.mid));
+  if(act==="edit"){closeMsgMenu(false);if(m)startEdit(m);}
 }
 
 function renderMsgs(){
@@ -3180,7 +3311,7 @@ function renderMsgs(){
     }
     return`<div class="msg-wrap ${cls}">
       ${!mine?`<div class="msg-sender">${esc(m.fromName||"")}</div>`:""}
-      <div class="msg-bub ${cls}">${esc(m.text)}
+      <div class="msg-bub ${cls}"${me&&canEditMessage(m,me.id)&&safeId(m.id)?` data-msg-id="${safeId(m.id)}" role="button" tabindex="0" aria-haspopup="menu"`:""}>${esc(m.text)}
         ${m.meeting?`<div class="meet-pill ${cls}">
           <div class="meet-pill-row">📅 ${esc(m.meeting.dayLabel||"")}</div>
           <div class="meet-pill-row">📍 ${esc(m.meeting.loc)}</div>
@@ -3224,14 +3355,17 @@ function initThread(p){
 }
 
 function bindCompose(p){
-  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";clearTimeout(threadRenderTimer);if(setTabHTML(renderInbox()))bindInboxRows();updateMsgBadge();});
+  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";editingMsg=null;currentTab="messages";clearTimeout(threadRenderTimer);if(setTabHTML(renderInbox()))bindInboxRows();updateMsgBadge();});
   document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
+  bindComposer(p);
+}
+function bindComposer(p){
   const inp=document.getElementById("cinp");
   const sbt=document.getElementById("sbtn");
   if(!inp||!sbt)return;
-  inp.addEventListener("input",()=>{draftText=inp.value;sbt.className=`send-btn ${draftText.trim()?"on":"off"}`;inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";});
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();doSend(p);}});
-  sbt.onclick=()=>{if(draftText.trim())doSend(p);};
+  inp.addEventListener("input",()=>{draftText=inp.value;if(!editingMsg)sbt.className=`send-btn ${draftText.trim()?"on":"off"}`;inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editingMsg)saveEdit();else doSend(p);}});
+  sbt.onclick=()=>{if(editingMsg)saveEdit();else if(draftText.trim())doSend(p);};
 }
 
 function bindRespBtns(p){
