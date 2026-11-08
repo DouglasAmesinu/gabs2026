@@ -94,6 +94,23 @@ service cloud.firestore {
           && resource.data.get('meeting', null) != null
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resp'])
           && request.resource.data.resp in ['accepted','declined','busy'];
+        // The sender may edit or delete their own plain text message (not a meeting request) while it is
+        // not deleted: edit changes only text and editedAt, delete only text (to ''), deleted and deletedAt.
+        // Every other field stays as it is; a deleted message cannot be edited or restored.
+        allow update: if inThread(tid)
+          && request.auth.uid == resource.data.fromId
+          && resource.data.get('meeting', null) == null
+          && resource.data.get('hasMeeting', false) != true
+          && resource.data.get('deleted', false) != true
+          && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','editedAt'])
+                && request.resource.data.text is string
+                && request.resource.data.text.size() >= 1
+                && request.resource.data.text.size() <= 2000
+                && request.resource.data.editedAt == request.time)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','deleted','deletedAt'])
+                && request.resource.data.deleted == true
+                && request.resource.data.text == ''
+                && request.resource.data.deletedAt == request.time));
         allow delete: if isAdmin();
       }
     }

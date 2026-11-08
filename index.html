@@ -258,6 +258,26 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .send-btn.on{background:var(--navy);color:var(--white)}
 .send-btn.off{background:#E5E7EB;color:#9CA3AF;pointer-events:none}
 .send-btn:active{transform:scale(.88)}
+/* Your own message: menu (Edit / Delete / Cancel) and the "Editing message" strip above the composer */
+.msg-menu-ov{position:fixed;inset:0;z-index:620}
+.msg-menu{position:fixed;min-width:190px;background:#fff;border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;display:flex;flex-direction:column}
+.msg-menu-item{min-height:44px;padding:0 14px;text-align:left;font-size:14px;font-weight:600;color:var(--text);border-radius:8px;cursor:pointer;touch-action:manipulation}
+.msg-menu-item:hover,.msg-menu-item:focus{background:#F0F4F8}
+.edit-strip{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-top:1px solid var(--border);border-left:3px solid var(--navy);background:#F8FAFC}
+.edit-strip-txt{flex:1;min-width:0}
+.edit-strip-label{font-size:12px;font-weight:700;color:var(--navy)}
+.edit-strip-orig{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.edit-strip-close{width:44px;height:44px;flex-shrink:0;border-radius:50%;font-size:18px;color:var(--muted);cursor:pointer;touch-action:manipulation}
+.send-btn.save{width:44px;height:44px;font-size:20px}
+.compose-err .err-msg{margin:0 16px 8px}
+.msg-menu-item.danger{color:#B91C1C}
+.btn-danger{background:#B91C1C;color:#fff}
+.msg-bub.deleted{background:#F3F4F6;color:#4B5563;border:1px solid var(--border);font-style:italic}
+/* Targets of at least 44px and a visible focus ring (the gold ring of .pv-btn). Text contrast: muted 4.6:1 on
+   #F8FAFC, #B91C1C 6.5:1 on white and 5.9:1 on the hover grey, deleted text 6.9:1, white on #B91C1C 6.5:1. */
+.msg-bub[data-msg-id]{cursor:pointer;min-height:44px;touch-action:manipulation}
+.msg-bub[data-msg-id]:focus-visible,.msg-menu-item:focus-visible,.edit-strip-close:focus-visible,.send-btn.save:focus-visible,#msg-del button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.send-btn.save:disabled{opacity:.6}
 
 /* ── Schedule ── */
 .sched-day-tabs{display:flex;gap:8px;padding:0 16px 16px;overflow-x:auto}
@@ -562,6 +582,9 @@ let inboxData={};
 let readThreadIds=new Set();
 try{const s=localStorage.getItem("gabs_read");if(s)readThreadIds=new Set(JSON.parse(s));}catch(e){}
 let threadUnsub=null;
+// Editing one of your messages in the open chat: {id, threadId, original, savedDraft}; null otherwise
+let editingMsg=null,editSaving=false,msgMenuReturnId="";
+const MSG_MAX=2000; // the text limit of the message rules in firestore.rules
 let msgListenersStarted=false,msgListenerStops=[];
 let inboxRaw={};       // otherId -> newest {text,ts,fromId}, from buildInbox
 let meetingRecords=[]; // from applyMeetingChange; otherParticipant is linked in linkMeetings
@@ -876,6 +899,38 @@ function shouldReshuffle(hiddenAtMs,nowMs,minGapMs=1800000){
   const gap=Number.isFinite(minGapMs)?minGapMs:1800000;
   return nowMs-hiddenAtMs>=gap;
 }
+
+// True only for your own plain text message that is not deleted: msg.fromId === uid (a non-empty string),
+// no meeting object, hasMeeting not true, and a string text. Anything else, including missing values, is false.
+function canEditMessage(msg,uid){
+  if(!msg||typeof msg!=="object"||typeof uid!=="string"||uid==="")return false;
+  if(msg.fromId!==uid||msg.deleted===true||msg.hasMeeting===true)return false;
+  if(msg.meeting!==undefined&&msg.meeting!==null)return false;
+  return typeof msg.text==="string";
+}
+
+// How a message bubble is drawn: {kind:"deleted"} or {kind:"text", text, edited}. A non-string text is "".
+function messageView(msg){
+  const m=msg&&typeof msg==="object"?msg:{};
+  if(m.deleted===true)return{kind:"deleted"};
+  return{kind:"text",text:typeof m.text==="string"?m.text:"",edited:m.editedAt!==undefined&&m.editedAt!==null};
+}
+
+// The inbox preview line: "Message deleted" for a deleted message, otherwise its text ("" when not a string).
+function previewText(msg){
+  const v=messageView(msg);
+  return v.kind==="deleted"?"Message deleted":v.text;
+}
+
+// Saving an edit: "empty" (nothing left after trimming; non-strings count as empty), "unchanged" (same as the
+// old text after trimming), "toolong" (the trimmed text is longer than maxLen), otherwise "ok".
+function validateEdit(newText,oldText,maxLen){
+  const t=typeof newText==="string"?newText.trim():"";
+  if(!t)return"empty";
+  if(t===(typeof oldText==="string"?oldText.trim():""))return"unchanged";
+  if(Number.isFinite(maxLen)&&t.length>maxLen)return"toolong";
+  return"ok";
+}
 // END safe-helpers
 
 
@@ -914,6 +969,7 @@ function buildInbox(messages,myId){
     const prev=out[other];
     if(prev&&tsValue(prev.ts)>=tsValue(m.ts))return;
     out[other]={text:m.text,ts:m.ts||null,fromId:m.fromId};
+    if(m.deleted===true)out[other].deleted=true;
   });
   return out;
 }
@@ -1398,6 +1454,8 @@ document.addEventListener("keydown",e=>{
   // role="button" blocks for Settings (the bar's avatar and name, the profile card): Enter and Space
   const sb=e.target&&e.target.closest&&e.target.closest('[role="button"][data-settings]');
   if(sb){e.preventDefault();handleSettingsAction(sb);return;}
+  const mk=e.target&&e.target.closest&&e.target.closest("[data-msg-id]");
+  if(mk&&mk===e.target){e.preventDefault();openMsgMenu(mk);return;}
   const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
   if(ph){e.preventDefault();openPhotoFrom(ph);return;}
   const el=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
@@ -1406,6 +1464,10 @@ document.addEventListener("keydown",e=>{
 });
 // Schedule's My Meetings calendar buttons and profile targets: one delegated listener, URLs built at click time
 document.addEventListener("click",e=>{
+  const ma=e.target&&e.target.closest&&e.target.closest("[data-msg-act]");
+  if(ma){handleMsgAct(ma);return;}
+  const mb=e.target&&e.target.closest&&e.target.closest("[data-msg-id]");
+  if(mb&&!e.target.closest("a")){openMsgMenu(mb);return;}
   const ph=e.target&&e.target.closest&&e.target.closest("[data-photo-id]");
   if(ph){openPhotoFrom(ph);return;}
   const pv=e.target&&e.target.closest&&e.target.closest("[data-profile-id]");
@@ -1527,7 +1589,7 @@ function bindBottomNav(){
   document.querySelectorAll(".nav-item[data-tab]").forEach(item=>{
     item.onclick=()=>{
       if(currentTab===item.dataset.tab&&item.dataset.tab!=="messages")return;
-      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";discSectors=[];
+      currentTab=item.dataset.tab;activeThreadId=null;threadMessages=[];draftText="";editingMsg=null;discSectors=[];
       renderApp();
     };
   });
@@ -2154,7 +2216,7 @@ function renderInbox(){
       <div class="msgs-hero-title">Messages</div>
       <div class="msgs-hero-sub">${entries.length} conversation${entries.length!==1?"s":""}</div>
     </div>
-    <div class="inbox-list">${entries.map(({p,text,ts},idx)=>{
+    <div class="inbox-list">${entries.map(({p,text,ts,deleted},idx)=>{
       const unread=!readThreadIds.has(p.id);
       return`
       <div class="inbox-row${idx%2===0?"":" inbox-row-alt"}" data-id="${safeId(p.id)}" style="background:${unread?"#fff":"#F8FAFC"}">
@@ -2165,7 +2227,7 @@ function renderInbox(){
         <div class="inbox-meta">
           <div class="inbox-name" style="font-weight:${unread?800:600}">${esc(p.name)}</div>
           <div class="inbox-company">${esc(p.company||"")}</div>
-          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(clip(text||"",200))}</div>
+          <div class="inbox-prev" style="color:${unread?"var(--text)":"var(--muted)"};font-weight:${unread?500:400}">${esc(clip(previewText({text,deleted})||"",200))}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <span class="inbox-time">${fmtTime(ts)}</span>
@@ -2270,7 +2332,7 @@ function showNotifBanner(){
       const target=bs.length===1?bs[0].p:null;
       hideNotifBanner();
       if(target){openThread(target);}
-      else{currentTab="messages";activeThreadId=null;threadMessages=[];draftText="";renderApp();}
+      else{currentTab="messages";activeThreadId=null;threadMessages=[];draftText="";editingMsg=null;renderApp();}
     };
     document.body.appendChild(notifEl);
     try{if(navigator.vibrate)navigator.vibrate(60);}catch(e){}
@@ -2716,7 +2778,7 @@ async function handlePushAction(btn){
 }
 
 // ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
-const APP_VERSION=31; // Must match CACHE_NAME in sw.js: update them together on every release
+const APP_VERSION=32; // Must match CACHE_NAME in sw.js: update them together on every release
 // Put together at runtime so the addresses never appear whole in the source
 const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
 const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
@@ -3113,11 +3175,171 @@ function renderThread(){
       <button class="t-meet-btn" id="t-meet">📅 Meet</button>
     </div>
     <div class="msgs-area" id="msgs">${renderMsgs()}</div>
-    <div class="compose-bar">
-      <textarea class="compose-inp" id="cinp" placeholder="Message…" rows="1">${esc(draftText)}</textarea>
-      <div class="send-btn ${draftText.trim()?"on":"off"}" id="sbtn">➤</div>
+    ${composeHTML()}
+  </div>`;
+}
+
+// The composer under a chat: normal, or editing one of your messages (strip above it, a check-mark Save button)
+function composeHTML(){
+  if(editingMsg&&editingMsg.threadId!==activeThreadId){draftText=editingMsg.savedDraft;editingMsg=null;}
+  const ed=editingMsg;
+  return`<div id="compose-wrap" style="flex-shrink:0">
+      ${ed?`<div class="edit-strip">
+        <div class="edit-strip-txt"><div class="edit-strip-label">Editing message</div><div class="edit-strip-orig">${esc(clip(String(ed.original).replace(/\s+/g," ").trim(),200))}</div></div>
+        <button type="button" class="edit-strip-close" data-msg-act="cancel-edit" aria-label="Stop editing">✕</button>
+      </div>`:""}
+      <div class="compose-err" id="compose-err"></div>
+      <div class="compose-bar">
+      <textarea class="compose-inp" id="cinp" placeholder="Message…" rows="1"${ed?' aria-label="Edit message"':""}>${esc(draftText)}</textarea>
+      ${ed?`<button type="button" class="send-btn on save" id="sbtn" aria-label="Save">✓</button>`:`<div class="send-btn ${draftText.trim()?"on":"off"}" id="sbtn">➤</div>`}
+    </div>
+    </div>`;
+}
+function threadPeer(){return participants.find(x=>x.id===activeThreadId)||null;}
+function redrawComposer(){
+  const w=document.getElementById("compose-wrap"),p=threadPeer();
+  if(!w||!p)return;
+  w.outerHTML=composeHTML();
+  bindComposer(p);
+  const inp=document.getElementById("cinp");
+  if(inp){
+    inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";
+    inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+  }
+}
+function composeErr(msg){
+  const el=document.getElementById("compose-err");
+  if(el)el.innerHTML=msg?`<div class="err-msg err-strong" role="alert">${esc(msg)}</div>`:"";
+}
+function startEdit(m){
+  if(!me||!canEditMessage(m,me.id))return;
+  if(!editingMsg)editingMsg={id:m.id,threadId:activeThreadId,original:m.text,savedDraft:draftText};
+  else Object.assign(editingMsg,{id:m.id,original:m.text});
+  draftText=m.text;
+  redrawComposer();
+}
+function exitEdit(){
+  if(!editingMsg)return;
+  draftText=editingMsg.savedDraft;editingMsg=null;
+  redrawComposer();
+}
+// Save the edited text: only {text, editedAt}; on failure the text stays in the composer
+async function saveEdit(){
+  const ed=editingMsg,p=threadPeer();
+  if(!ed||!p||editSaving||!me||!window._fb)return;
+  const inp=document.getElementById("cinp");
+  const raw=inp?inp.value:draftText;
+  const r=validateEdit(raw,ed.original,MSG_MAX);
+  if(r==="empty"){composeErr("A message can't be empty.");return;}
+  if(r==="unchanged"){exitEdit();return;}
+  if(r==="toolong"){composeErr(`Too long: please shorten to ${MSG_MAX} characters or fewer.`);return;}
+  editSaving=true;
+  const sbt=document.getElementById("sbtn");if(sbt)sbt.disabled=true;
+  try{
+    const fb=window._fb;
+    await fb.updateDoc(fb.doc(fb.db,"threads",tid(me.id,p.id),"messages",ed.id),{text:raw.trim(),editedAt:fb.serverTimestamp()});
+    if(editingMsg===ed)exitEdit();
+  }catch(e){
+    console.warn("msg-edit-fail",e&&e.code);
+    if(editingMsg===ed)composeErr("Couldn't save your change. Try again.");
+  }finally{
+    editSaving=false;
+    const b=document.getElementById("sbtn");if(b)b.disabled=false;
+  }
+}
+
+// The small menu next to your own plain text message
+function openMsgMenu(bub){
+  const id=safeId(bub.dataset.msgId);
+  const m=id&&threadMessages.find(x=>x.id===id);
+  if(!m||!me||!canEditMessage(m,me.id))return;
+  closeMsgMenu(false);
+  msgMenuReturnId=id;
+  const ov=document.createElement("div");
+  ov.className="msg-menu-ov";ov.id="msg-menu-ov";
+  ov.innerHTML=`<div class="msg-menu" role="menu" aria-label="Message options">
+      <button type="button" role="menuitem" class="msg-menu-item" data-msg-act="edit" data-mid="${esc(id)}">Edit message</button>
+      <button type="button" role="menuitem" class="msg-menu-item danger" data-msg-act="delete" data-mid="${esc(id)}">Delete message</button>
+      <button type="button" role="menuitem" class="msg-menu-item" data-msg-act="menu-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const menu=ov.firstElementChild,r=bub.getBoundingClientRect();
+  const mw=menu.offsetWidth,mh=menu.offsetHeight;
+  let top=r.bottom+6;
+  if(top+mh>window.innerHeight-8)top=Math.max(8,r.top-6-mh);
+  const left=Math.min(Math.max(8,r.right-mw),window.innerWidth-mw-8);
+  menu.style.top=top+"px";menu.style.left=Math.max(8,left)+"px";
+  ov.addEventListener("click",e=>{if(e.target===ov)closeMsgMenu(true);});
+  ov.addEventListener("keydown",e=>{
+    const items=[...menu.querySelectorAll('[role="menuitem"]')];
+    const i=items.indexOf(document.activeElement);
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closeMsgMenu(true);}
+    else if(e.key==="ArrowDown"||(e.key==="Tab"&&!e.shiftKey)){e.preventDefault();items[(i+1)%items.length].focus();}
+    else if(e.key==="ArrowUp"||(e.key==="Tab"&&e.shiftKey)){e.preventDefault();items[(i-1+items.length)%items.length].focus();}
+  });
+  menu.querySelector('[role="menuitem"]').focus();
+}
+function closeMsgMenu(restoreFocus){
+  const ov=document.getElementById("msg-menu-ov");
+  if(!ov)return;
+  ov.remove();
+  if(restoreFocus&&msgMenuReturnId)document.querySelector(`[data-msg-id="${msgMenuReturnId}"]`)?.focus({preventScroll:true});
+}
+function handleMsgAct(el){
+  const act=el.dataset.msgAct;
+  if(act==="menu-cancel"){closeMsgMenu(true);return;}
+  if(act==="cancel-edit"){exitEdit();return;}
+  const m=threadMessages.find(x=>x.id===safeId(el.dataset.mid));
+  if(act==="edit"){closeMsgMenu(false);if(m)startEdit(m);}
+  else if(act==="delete"){closeMsgMenu(false);if(m&&me&&canEditMessage(m,me.id))confirmDeleteMsg(m.id);}
+  else if(act==="del-cancel")closeDeleteDialog(true);
+  else if(act==="del-confirm")deleteMsg(safeId(el.dataset.mid),el);
+}
+// "Delete this message?" before anything is written
+function confirmDeleteMsg(id){
+  closeDeleteDialog(false);
+  msgMenuReturnId=safeId(id);
+  const ov=makeOv(true);ov.id="msg-del";
+  ov.innerHTML=`<div class="sheet pop" role="alertdialog" aria-modal="true" aria-labelledby="msg-del-title" aria-describedby="msg-del-text" style="max-width:380px">
+    <div class="sheet-title" id="msg-del-title">Delete this message?</div>
+    <div class="sheet-sub" id="msg-del-text">It will be removed for you and for the other person. You cannot undo this.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+      <button type="button" class="btn-outline" data-msg-act="del-cancel">Cancel</button>
+      <button type="button" class="btn-navy btn-danger" data-msg-act="del-confirm" data-mid="${esc(safeId(id))}">Delete</button>
     </div>
   </div>`;
+  ov.addEventListener("click",e=>{if(e.target===ov)closeDeleteDialog(true);});
+  ov.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();closeDeleteDialog(true);return;}
+    if(e.key==="Tab"){
+      const b=[...ov.querySelectorAll("button")],i=b.indexOf(document.activeElement);
+      e.preventDefault();b[(i+(e.shiftKey?-1:1)+b.length)%b.length].focus();
+    }
+  });
+  document.body.appendChild(ov);
+  ov.querySelector('[data-msg-act="del-cancel"]').focus();
+}
+function closeDeleteDialog(restoreFocus){
+  const ov=document.getElementById("msg-del");
+  if(!ov)return;
+  ov.remove();
+  if(restoreFocus&&msgMenuReturnId)document.querySelector(`[data-msg-id="${msgMenuReturnId}"]`)?.focus({preventScroll:true});
+}
+// Delete writes only {text:"", deleted:true, deletedAt}; on failure the message stays as it was
+async function deleteMsg(id,btn){
+  const p=threadPeer();
+  if(!id||!p||!me||!window._fb||btn.disabled)return;
+  btn.disabled=true;
+  try{
+    const fb=window._fb;
+    await fb.updateDoc(fb.doc(fb.db,"threads",tid(me.id,p.id),"messages",id),{text:"",deleted:true,deletedAt:fb.serverTimestamp()});
+    closeDeleteDialog(false);
+    if(editingMsg&&editingMsg.id===id)exitEdit();
+  }catch(e){
+    console.warn("msg-delete-fail",e&&e.code);
+    closeDeleteDialog(true);
+    showToast("Couldn't delete the message. Try again.");
+  }
 }
 
 function renderMsgs(){
@@ -3125,6 +3347,13 @@ function renderMsgs(){
   return threadMessages.map(m=>{
     const mine=m.fromId===me?.id;
     const cls=mine?"me":"them";
+    // Plain text messages only: a deleted one is a grey bubble without menu, link or action
+    const view=m.meeting?null:messageView(m);
+    if(view&&view.kind==="deleted")return`<div class="msg-wrap ${cls}">
+      ${!mine?`<div class="msg-sender">${esc(m.fromName||"")}</div>`:""}
+      <div class="msg-bub ${cls} deleted">This message was deleted</div>
+      <div class="msg-time">${fmtTime(m.ts)}</div>
+    </div>`;
     let respHTML="";
     if(m.meeting){
       if(!mine&&!m.resp){
@@ -3148,7 +3377,7 @@ function renderMsgs(){
     }
     return`<div class="msg-wrap ${cls}">
       ${!mine?`<div class="msg-sender">${esc(m.fromName||"")}</div>`:""}
-      <div class="msg-bub ${cls}">${esc(m.text)}
+      <div class="msg-bub ${cls}"${me&&canEditMessage(m,me.id)&&safeId(m.id)?` data-msg-id="${safeId(m.id)}" role="button" tabindex="0" aria-haspopup="menu"`:""}>${esc(m.text)}
         ${m.meeting?`<div class="meet-pill ${cls}">
           <div class="meet-pill-row">📅 ${esc(m.meeting.dayLabel||"")}</div>
           <div class="meet-pill-row">📍 ${esc(m.meeting.loc)}</div>
@@ -3156,7 +3385,7 @@ function renderMsgs(){
         </div>`:""}
         ${respHTML}
       </div>
-      <div class="msg-time">${fmtTime(m.ts)}</div>
+      <div class="msg-time">${fmtTime(m.ts)}${view&&view.edited?" · edited":""}</div>
     </div>`;
   }).join("");
 }
@@ -3171,9 +3400,11 @@ function initThread(p){
   const tid2=tid(me.id,p.id);
   const q=fb.query(fb.collection(fb.db,"threads",tid2,"messages"),fb.orderBy("ts","asc"));
   clearTimeout(threadRenderTimer);
-  let firstSnap=true;
+  let firstSnap=true,scrollNext=false;
   threadUnsub=fb.onSnapshot(q,snap=>{
     const wasFirst=firstSnap;firstSnap=false;
+    // Only edits or deletes (modified documents): redraw in place, keep the scroll position
+    if(wasFirst||snap.docChanges().some(ch=>ch.type!=="modified"))scrollNext=true;
     if(!wasFirst&&activeThreadId===p.id){
       snap.docChanges().forEach(ch=>{
         const fromId=ch.type==="added"&&ch.doc.data().fromId;
@@ -3185,21 +3416,25 @@ function initThread(p){
     threadRenderTimer=setTimeout(()=>{
       const msgs=document.getElementById("msgs");
       const html=renderMsgs();
-      if(msgs&&patchHTML(msgs,html,html)){scrollBottom();bindRespBtns(p);requestAnimationFrame(()=>scrollBottom());}
+      const doScroll=scrollNext;scrollNext=false;
+      if(msgs&&patchHTML(msgs,html,html)){if(doScroll)scrollBottom();bindRespBtns(p);if(doScroll)requestAnimationFrame(()=>scrollBottom());}
     },200);
   });
   setTimeout(scrollBottom,100);
 }
 
 function bindCompose(p){
-  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";currentTab="messages";clearTimeout(threadRenderTimer);if(setTabHTML(renderInbox()))bindInboxRows();updateMsgBadge();});
+  document.getElementById("t-back")?.addEventListener("click",()=>{if(threadUnsub){threadUnsub();threadUnsub=null;}activeThreadId=null;threadMessages=[];draftText="";editingMsg=null;currentTab="messages";clearTimeout(threadRenderTimer);if(setTabHTML(renderInbox()))bindInboxRows();updateMsgBadge();});
   document.getElementById("t-meet")?.addEventListener("click",()=>showMeeting(p,true));
+  bindComposer(p);
+}
+function bindComposer(p){
   const inp=document.getElementById("cinp");
   const sbt=document.getElementById("sbtn");
   if(!inp||!sbt)return;
-  inp.addEventListener("input",()=>{draftText=inp.value;sbt.className=`send-btn ${draftText.trim()?"on":"off"}`;inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";});
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();doSend(p);}});
-  sbt.onclick=()=>{if(draftText.trim())doSend(p);};
+  inp.addEventListener("input",()=>{draftText=inp.value;if(!editingMsg)sbt.className=`send-btn ${draftText.trim()?"on":"off"}`;inp.style.height="auto";inp.style.height=Math.min(inp.scrollHeight,96)+"px";});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editingMsg)saveEdit();else doSend(p);}});
+  sbt.onclick=()=>{if(editingMsg)saveEdit();else if(draftText.trim())doSend(p);};
 }
 
 function bindRespBtns(p){
