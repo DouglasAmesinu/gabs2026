@@ -835,15 +835,32 @@ function hash32(s){
   return h>>>0;
 }
 
-// A new array of the participants in a mixed order that is fixed for one viewer on one day:
-// ascending hash of viewerId|day|id, ties by id; entries without a string id go last in their
-// original order. The input is never changed; a non-array gives [].
-function orderMixed(list,viewerId,day){
+// A random seed for one visit: at least 16 hex characters (here 32) from randomSource.getRandomValues,
+// by default globalThis.crypto; without a usable source (null, or no getRandomValues), from Math.random
+// and Date.now().
+function newSessionSeed(randomSource=globalThis.crypto){
+  const hex=n=>(n>>>0).toString(16).padStart(8,"0");
+  try{
+    if(randomSource&&typeof randomSource.getRandomValues==="function"){
+      const a=new Uint32Array(4);
+      randomSource.getRandomValues(a);
+      return Array.from(a,hex).join("");
+    }
+  }catch(e){}
+  let s="";
+  for(let i=0;i<3;i++)s+=hex(Math.floor(Math.random()*0x100000000));
+  return s+hex(Date.now()%0x100000000);
+}
+
+// A new array of the participants in a mixed order fixed by seed: ascending hash of seed|id, ties by id;
+// entries without a string id go last in their original order. The input is never changed; a non-array
+// gives []; a non-string seed counts as "".
+function orderMixed(list,seed){
   if(!Array.isArray(list))return[];
-  const v=typeof viewerId==="string"?viewerId:"",d=typeof day==="string"?day:"";
+  const s=typeof seed==="string"?seed:"";
   const keyed=[],rest=[];
   for(const p of list){
-    if(p&&typeof p==="object"&&typeof p.id==="string")keyed.push({p,id:p.id,h:hash32(v+"|"+d+"|"+p.id)});
+    if(p&&typeof p==="object"&&typeof p.id==="string")keyed.push({p,id:p.id,h:hash32(s+"|"+p.id)});
     else rest.push(p);
   }
   keyed.sort((a,b)=>a.h-b.h||(a.id<b.id?-1:a.id>b.id?1:0));
@@ -856,6 +873,14 @@ function pageSlice(list,count){
   if(!Array.isArray(list))return[];
   if(typeof count!=="number"||Number.isNaN(count))return[];
   return list.slice(0,Math.max(0,Math.min(list.length,Math.floor(count))));
+}
+
+// Coming back to the app: a new order only after it was hidden for at least minGapMs (default 30 minutes).
+// Both times must be finite numbers and nowMs not before hiddenAtMs; anything else gives false.
+function shouldReshuffle(hiddenAtMs,nowMs,minGapMs=1800000){
+  if(!Number.isFinite(hiddenAtMs)||!Number.isFinite(nowMs)||nowMs<hiddenAtMs)return false;
+  const gap=Number.isFinite(minGapMs)?minGapMs:1800000;
+  return nowMs-hiddenAtMs>=gap;
 }
 // END safe-helpers
 
