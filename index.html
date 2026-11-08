@@ -791,6 +791,12 @@ function classifySaveError(code,online){
   if(c==="permission-denied"||c==="invalid-argument")return"check";
   return"other";
 }
+
+// The photo to show large for a participant: their photoURL when safePhoto accepts it, else "".
+function lightboxPhoto(participant){
+  if(!participant||typeof participant!=="object"||typeof participant.photoURL!=="string")return"";
+  return safePhoto(participant.photoURL);
+}
 // END safe-helpers
 
 
