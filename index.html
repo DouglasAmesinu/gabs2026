@@ -566,6 +566,8 @@ let participantsUnsub=null;
 let participantsLoaded=false; // true once a snapshot from the server (not cache) has arrived
 let participantsFailed=false; // true once the listener has used up its retries
 let discSearch="",discSectors=[],discCountry="";
+// The day the Discover order is mixed for: fixed at start, renewed only when the app comes back on another date
+let discDay=dayKey(new Date());
 let myMeetings=[];
 let schedDay=0;
 let bookedSlots={};try{const s=localStorage.getItem("gabs_slots");if(s)bookedSlots=JSON.parse(s);}catch(e){}
@@ -1810,6 +1812,27 @@ function filtered(){
   );
 }
 
+// The Discover list: the filtered participants, your own card first (when it matches like any other),
+// everyone else in orderMixed order for you and discDay. Each id appears once, so your profile added
+// by hand right after registering never shows twice.
+function discOrdered(){
+  const myId=me&&typeof me.id==="string"?me.id:"";
+  const seen=new Set();
+  let mine=null;
+  const others=[];
+  for(const p of filtered()){
+    if(typeof p.id==="string"){if(seen.has(p.id))continue;seen.add(p.id);}
+    if(myId&&p.id===myId)mine=p;else others.push(p);
+  }
+  const ordered=orderMixed(others,myId,discDay);
+  return mine?[mine,...ordered]:ordered;
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible")return;
+  const d=dayKey(new Date());
+  if(d&&d!==discDay){discDay=d;refreshDisc();}
+});
+
 function pCardHTML(p){
   const self=me&&p.id===me.id;
   const hasContact=p.phone||p.linkedin;
@@ -1852,7 +1875,7 @@ function discSubText(){
 }
 
 function renderDiscover(){
-  const list=filtered();
+  const list=discOrdered();
   const secs=[...new Set(participants.map(p=>p.sector).filter(Boolean))].sort();
   return`<div>
     <div class="disc-hero">
@@ -1919,7 +1942,7 @@ function bindDiscover(){
     };
   }
   bindCards();
-  renderSigs.set(document.getElementById("cards-list"),discSig(filtered()));
+  renderSigs.set(document.getElementById("cards-list"),discSig(discOrdered()));
   settleListAnimations();
 }
 
@@ -1939,7 +1962,7 @@ function discCardsHTML(list){
 function refreshDisc(){
   const wrap=document.getElementById("cards-list");
   if(!wrap)return;
-  const list=filtered();
+  const list=discOrdered();
   const sub=document.querySelector(".page-sub");
   if(sub)sub.textContent=discSubText();
   if(wrap.querySelector(".p-card"))document.body.classList.add("lists-settled");
