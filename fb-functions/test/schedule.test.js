@@ -127,6 +127,12 @@ test("f: no tbc, Sulemani, Residency, Dr Augusto or Mr. names, and the Tuesday 1
   assert.equal(s.people.length, 4);
 });
 
+test("both lunch sessions are titled exactly Lunch Break", () => {
+  const lunches = SCHEDULE.flatMap((d) => d.sessions.filter((s) => s.type === "lunch").map((s) => [d.date, s]));
+  assert.deepEqual(lunches.map(([date, s]) => `${date} ${s.time}`), ["Tue 24 Nov 12:00–14:00", "Wed 25 Nov 12:00–14:00"]);
+  for (const [date, s] of lunches) assert.equal(s.title, "Lunch Break", `${date} lunch title`);
+});
+
 test("g: collapsed lines list names only, grouped, never a role", () => {
   for (const s of allSessions()) {
     const lines = sessionNameLines(s.people);
