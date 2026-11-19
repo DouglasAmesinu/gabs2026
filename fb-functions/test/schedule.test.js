@@ -20,6 +20,43 @@ function loadSchedule() {
 
 const { SC, SCHEDULE, sessionGroups, sessionNameLines } = loadSchedule();
 
+// schedTime12 lives in the safe-helpers block of index.html
+function loadTimeHelper() {
+  const html = fs.readFileSync(path.join(__dirname, "..", "..", "index.html"), "utf8");
+  const start = html.indexOf("// BEGIN safe-helpers");
+  const end = html.indexOf("// END safe-helpers");
+  assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
+  // eslint-disable-next-line no-new-func
+  return new Function(`${html.slice(start, end)}\nreturn schedTime12;`)();
+}
+const schedTime12 = loadTimeHelper();
+
+// Stored 24-hour time -> 12-hour display text. Covers every example in the spec and every time in SCHEDULE.
+const TIME_TABLE = [
+  ["09:00", "9:00 am"],
+  ["14:00", "2:00 pm"],
+  ["18:30", "6:30 pm"],
+  ["12:00", "12:00 pm"],
+  ["21:30", "9:30 pm"],
+  ["17:30", "5:30 pm"],
+  ["19:00", "7:00 pm"],
+  ["00:15", "12:15 am"],
+  ["09:00–09:40", "9:00 – 9:40 am"],
+  ["12:00–14:00", "12:00 – 2:00 pm"],
+  ["18:30–22:00", "6:30 – 10:00 pm"],
+  ["11:00–12:00", "11:00 am – 12:00 pm"],
+  ["09:40–10:40", "9:40 – 10:40 am"],
+  ["10:40–11:00", "10:40 – 11:00 am"],
+  ["11:00–11:20", "11:00 – 11:20 am"],
+  ["11:20–12:00", "11:20 am – 12:00 pm"],
+  ["14:00–15:00", "2:00 – 3:00 pm"],
+  ["15:15–16:15", "3:15 – 4:15 pm"],
+  ["16:30–17:00", "4:30 – 5:00 pm"],
+  ["17:00–18:00", "5:00 – 6:00 pm"],
+  ["09:30–10:30", "9:30 – 10:30 am"],
+  ["10:45–11:45", "10:45 – 11:45 am"],
+];
+
 const KINDS = ["Speaker", "Facilitator", "Master of Ceremony"];
 const TIME = /^([01]\d|2[0-3]):[0-5]\d(–([01]\d|2[0-3]):[0-5]\d)?$/; // HH:MM or HH:MM–HH:MM (en dash)
 const startMin = (t) => { const [h, m] = t.slice(0, 5).split(":").map(Number); return h * 60 + m; };
@@ -131,6 +168,32 @@ test("both lunch sessions are titled exactly Lunch Break", () => {
   const lunches = SCHEDULE.flatMap((d) => d.sessions.filter((s) => s.type === "lunch").map((s) => [d.date, s]));
   assert.deepEqual(lunches.map(([date, s]) => `${date} ${s.time}`), ["Tue 24 Nov 12:00–14:00", "Wed 25 Nov 12:00–14:00"]);
   for (const [date, s] of lunches) assert.equal(s.title, "Lunch Break", `${date} lunch title`);
+});
+
+test("schedTime12 converts the conversion table", () => {
+  assert.ok(TIME_TABLE.length >= 12);
+  for (const [stored, shown] of TIME_TABLE) assert.equal(schedTime12(stored), shown, stored);
+});
+
+test("schedTime12 table includes every distinct time in SCHEDULE", () => {
+  const inTable = new Set(TIME_TABLE.map(([stored]) => stored));
+  for (const t of new Set(allSessions().map((s) => s.time))) assert.ok(inTable.has(t), `${t} is missing from TIME_TABLE`);
+});
+
+test("every rendered schedule time is 12-hour and says am or pm", () => {
+  for (const s of allSessions()) {
+    const shown = schedTime12(s.time);
+    assert.doesNotMatch(shown, /1[3-9]:|2[0-3]:|00:/, `${s.time} shown as ${shown}`);
+    assert.match(shown, /am|pm/, `${s.time} shown as ${shown}`);
+  }
+});
+
+test("schedTime12 returns unparseable input unchanged and never throws", () => {
+  for (const v of ["", "tbd", "9:00", "09:00-10:00", "24:00", "09:60", "09:00–25:00", "09:00 – 10:00", " 09:00", "09:00–"]) {
+    assert.equal(schedTime12(v), v, JSON.stringify(v));
+  }
+  for (const v of [undefined, null, 900, {}]) assert.doesNotThrow(() => schedTime12(v));
+  assert.equal(schedTime12(undefined), undefined);
 });
 
 test("g: collapsed lines list names only, grouped, never a role", () => {

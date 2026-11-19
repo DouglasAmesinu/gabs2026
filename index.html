@@ -1055,6 +1055,20 @@ function validateEdit(newText,oldText,maxLen){
   if(Number.isFinite(maxLen)&&t.length>maxLen)return"toolong";
   return"ok";
 }
+// A stored programme time ("09:00" or "09:00–09:40", 24-hour) as 12-hour display text: "9:00 am", "9:00 – 9:40 am",
+// "11:00 am – 12:00 pm". Anything that does not parse comes back unchanged; never throws. Plain text: escape before use.
+function schedTime12(raw){
+  if(typeof raw!=="string")return raw;
+  const m=/^(\d{2}):(\d{2})(?:–(\d{2}):(\d{2}))?$/.exec(raw);
+  if(!m)return raw;
+  const part=(h,mi)=>{const H=Number(h),M=Number(mi);return H<=23&&M<=59?{t:`${H%12||12}:${mi}`,ap:H<12?"am":"pm"}:null;};
+  const a=part(m[1],m[2]);
+  if(!a)return raw;
+  if(m[3]===undefined)return`${a.t} ${a.ap}`;
+  const b=part(m[3],m[4]);
+  if(!b)return raw;
+  return a.ap===b.ap?`${a.t} – ${b.t} ${b.ap}`:`${a.t} ${a.ap} – ${b.t} ${b.ap}`;
+}
 // END safe-helpers
 
 
@@ -3695,7 +3709,7 @@ function renderSchedule(){
         const dotC=typeColors[s.type]||"#9CA3AF";
         return`<div class="sesh-card ${isDark?"dark":"light"}">
           <div class="sesh-top">
-            <span class="sesh-time">${esc(s.time)}</span>
+            <span class="sesh-time">${esc(schedTime12(s.time))}</span>
             <span class="sesh-badge" style="background:${badgeBg};color:${badgeC}"><span style="width:7px;height:7px;border-radius:50%;background:${dotC};display:inline-block"></span>${esc(s.type)}</span>
           </div>
           <div class="sesh-title">${esc(s.title)}</div>
