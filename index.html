@@ -541,6 +541,7 @@ const INTERESTS=[
   "Policy & Regulatory Insight",
   "Talent & Recruitment",
 ];
+// BEGIN schedule-data (loaded by fb-functions/test/schedule.test.js: keep it free of DOM and other globals)
 const SC={
   plenary:{bg:"#DBEAFE",c:"#1E40AF",dot:"#3B82F6"},
   panel:{bg:"#E0F2FE",c:"#075985",dot:"#0EA5E9"},
@@ -692,6 +693,7 @@ function sessionGroups(people){
 function sessionNameLines(people){
   return sessionGroups(people).map(g=>`${g.label}: ${g.people.map(p=>p.name.trim()).join(", ")}`);
 }
+// END schedule-data
 
 // ── State ──────────────────────────────────────────────────────────────────
 let me=null;try{const s=localStorage.getItem("gabs_me");if(s)me=JSON.parse(s);}catch(e){}
