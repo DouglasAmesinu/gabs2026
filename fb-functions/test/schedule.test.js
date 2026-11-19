@@ -110,10 +110,15 @@ test("e: removed sessions stay removed and the key facts hold", () => {
   assert.ok(mon.sessions[0].people.some((p) => p.name === "Hon. Samuel Okudzeto Ablakwa"), "Monday is missing Hon. Samuel Okudzeto Ablakwa");
 });
 
-test("f: no tbc, nobody named Sulemani, and the Tuesday 15:15 panel has 3 Speakers and 1 Facilitator", () => {
+test("f: no tbc, Sulemani, Residency, Dr Augusto or Mr. names, and the Tuesday 15:15 panel has 3 Speakers and 1 Facilitator", () => {
   for (const [at, v] of allStrings(SCHEDULE)) {
     assert.doesNotMatch(v, /tbc/i, `tbc at ${at}`);
     assert.doesNotMatch(v, /sulemani/i, `Sulemani at ${at}`);
+    assert.ok(!v.includes("Residency"), `Residency at ${at}`);
+    assert.ok(!v.includes("Dr Augusto"), `Dr Augusto at ${at}`);
+  }
+  for (const s of allSessions()) {
+    for (const p of s.people || []) assert.ok(!p.name.startsWith("Mr."), `name starts with Mr.: ${p.name}`);
   }
   const s = dayByDate("Tue 24 Nov").sessions.find((x) => x.time.startsWith("15:15"));
   assert.ok(s, "no Tuesday session at 15:15");
