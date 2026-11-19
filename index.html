@@ -304,6 +304,21 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .sesh-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;flex-shrink:0}
 .sesh-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:6px}
 .sesh-loc{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+/* Speaker lines and tap-to-expand details, in the muted style of the location line */
+.sesh-ppl{font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:4px;overflow-wrap:anywhere}
+.sesh-card.dark .sesh-ppl{color:rgba(255,255,255,.9)}
+.sesh-more{display:block;min-height:44px;margin-top:4px;padding:10px 0;background:none;border:none;font:inherit;font-size:12px;font-weight:700;color:var(--navy);text-decoration:underline;text-align:left;cursor:pointer;touch-action:manipulation}
+.sesh-card.dark .sesh-more{color:#fff}
+.sesh-more:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:4px}
+.sesh-details{padding-top:10px;border-top:1px solid var(--border);font-size:13px;color:var(--text);line-height:1.45;overflow-wrap:anywhere}
+.sesh-card.dark .sesh-details{color:#fff;border-top-color:rgba(255,255,255,.35)}
+.sesh-desc{margin-bottom:6px}
+.sesh-grp{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:10px 0 4px}
+.sesh-card.dark .sesh-grp{color:rgba(255,255,255,.85)}
+.sesh-person{margin-bottom:8px}
+.sesh-person b{display:block;font-weight:700}
+.sesh-role{display:block;font-size:12px;color:var(--muted)}
+.sesh-card.dark .sesh-role{color:rgba(255,255,255,.9)}
 
 /* ── Overlays ── */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(4px);padding:10px}
@@ -664,6 +679,19 @@ const SCHEDULE=[
     {time:"19:00",title:"educataGhana Kickoff (see separate programme)",loc:"Moevenpick Hotel / Piazza",type:"social"},
   ]},
 ];
+// A session's people grouped by kind in a fixed order. Entries without a known kind or a name are left out.
+const SESSION_KINDS=[["Speaker","Speakers"],["Facilitator","Facilitators"],["Master of Ceremony","Master of Ceremony"]];
+function sessionGroups(people){
+  const list=Array.isArray(people)?people.filter(p=>p&&typeof p.name==="string"&&p.name.trim()):[];
+  return SESSION_KINDS.map(([kind,plural])=>{
+    const ps=list.filter(p=>p.kind===kind);
+    return{kind,label:ps.length===1?kind:plural,people:ps};
+  }).filter(g=>g.people.length);
+}
+// Collapsed card lines: names only, one line per group, e.g. "Speakers: A, B". Plain text: escape before use.
+function sessionNameLines(people){
+  return sessionGroups(people).map(g=>`${g.label}: ${g.people.map(p=>p.name.trim()).join(", ")}`);
+}
 
 // ── State ──────────────────────────────────────────────────────────────────
 let me=null;try{const s=localStorage.getItem("gabs_me");if(s)me=JSON.parse(s);}catch(e){}
@@ -1572,6 +1600,8 @@ document.addEventListener("click",e=>{
   if(sb){handleSettingsAction(sb);return;}
   const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
   if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
+  const st=e.target&&e.target.closest&&e.target.closest("[data-sesh-toggle]");
+  if(st){toggleSessionDetails(st);return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
   if(!btn||!me)return;
   const m=myMeetings.find(x=>x.id===btn.dataset.id);
@@ -3667,11 +3697,33 @@ function renderSchedule(){
             <span class="sesh-badge" style="background:${badgeBg};color:${badgeC}"><span style="width:7px;height:7px;border-radius:50%;background:${dotC};display:inline-block"></span>${esc(s.type)}</span>
           </div>
           <div class="sesh-title">${esc(s.title)}</div>
+          ${sessionNameLines(s.people).map(line=>`<div class="sesh-ppl">${esc(line)}</div>`).join("")}
           <div class="sesh-loc">📍 ${esc(s.loc)}</div>
+          ${sessionDetailsHTML(s,`sesh-d-${schedDay}-${si}`)}
         </div>`;
       }).join("")}
     </div>
   </div>`;
+}
+// The "Show roles and details" button and its hidden panel; nothing for a session with no people and no description.
+// Every field goes through esc(). Open or closed lives only in the DOM: a re-render closes it again.
+function sessionDetailsHTML(s,id){
+  const desc=typeof s.desc==="string"?s.desc.trim():"";
+  const groups=sessionGroups(s.people);
+  if(!desc&&!groups.length)return"";
+  return`<button type="button" class="sesh-more" data-sesh-toggle="1" aria-expanded="false" aria-controls="${esc(id)}">Show roles and details</button>
+          <div class="sesh-details" id="${esc(id)}" hidden>
+            ${desc?`<div class="sesh-desc">${esc(desc)}</div>`:""}
+            ${groups.map(g=>`<div class="sesh-grp">${esc(g.label)}</div>${g.people.map(p=>`<div class="sesh-person"><b>${esc(p.name.trim())}</b>${typeof p.role==="string"&&p.role.trim()?`<span class="sesh-role">${esc(p.role.trim())}</span>`:""}</div>`).join("")}`).join("")}
+          </div>`;
+}
+function toggleSessionDetails(btn){
+  const panel=document.getElementById(btn.getAttribute("aria-controls")||"");
+  if(!panel)return;
+  const open=btn.getAttribute("aria-expanded")!=="true";
+  btn.setAttribute("aria-expanded",open?"true":"false");
+  panel.hidden=!open;
+  btn.textContent=open?"Hide details":"Show roles and details";
 }
 
 function bindSchedule(){
