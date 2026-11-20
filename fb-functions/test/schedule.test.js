@@ -147,10 +147,20 @@ test("e: removed sessions stay removed and the key facts hold", () => {
   assert.ok(mon.sessions[0].people.some((p) => p.name === "Hon. Samuel Okudzeto Ablakwa"), "Monday is missing Hon. Samuel Okudzeto Ablakwa");
 });
 
-test("f: no tbc, Sulemani, Residency, Dr Augusto or Mr. names, and the Tuesday 15:15 panel has 3 Speakers and 1 Facilitator", () => {
+test("f: tbc only on Sulemani's role, no Residency, Dr Augusto or Mr. names, and the Tuesday 15:15 panel has 4 Speakers and 1 Facilitator", () => {
+  // The only "tbc" allowed is at the end of Hon. Amin Amidu Sulemani's role
+  let allowed = null;
+  SCHEDULE.forEach((d, di) => d.sessions.forEach((x, si) => (x.people || []).forEach((p, pi) => {
+    if (p.name === "Hon. Amin Amidu Sulemani") {
+      assert.equal(allowed, null, "Hon. Amin Amidu Sulemani appears more than once");
+      allowed = `SCHEDULE[${di}].sessions[${si}].people[${pi}].role`;
+      assert.ok(p.role.endsWith("(tbc)"), `Sulemani's role must end with (tbc): ${p.role}`);
+    }
+  })));
+  assert.ok(allowed, "Hon. Amin Amidu Sulemani not found");
   for (const [at, v] of allStrings(SCHEDULE)) {
-    assert.doesNotMatch(v, /tbc/i, `tbc at ${at}`);
-    assert.doesNotMatch(v, /sulemani/i, `Sulemani at ${at}`);
+    if (at !== allowed) assert.doesNotMatch(v, /tbc/i, `tbc at ${at}`);
+    else assert.equal(v.match(/tbc/gi).length, 1, `more than one tbc at ${at}`);
     assert.ok(!v.includes("Residency"), `Residency at ${at}`);
     assert.ok(!v.includes("Dr Augusto"), `Dr Augusto at ${at}`);
   }
@@ -159,9 +169,12 @@ test("f: no tbc, Sulemani, Residency, Dr Augusto or Mr. names, and the Tuesday 1
   }
   const s = dayByDate("Tue 24 Nov").sessions.find((x) => x.time.startsWith("15:15"));
   assert.ok(s, "no Tuesday session at 15:15");
-  assert.equal(s.people.filter((p) => p.kind === "Speaker").length, 3);
+  assert.deepEqual(
+    s.people.filter((p) => p.kind === "Speaker").map((p) => p.name),
+    ["Stefan Rouenhoff", "Stefan Müller", "Hon. Amin Amidu Sulemani", "Sheila Khama"],
+  );
   assert.equal(s.people.filter((p) => p.kind === "Facilitator").length, 1);
-  assert.equal(s.people.length, 4);
+  assert.equal(s.people.length, 5);
 });
 
 test("both lunch sessions are titled exactly Lunch Break", () => {
