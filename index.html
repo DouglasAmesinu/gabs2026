@@ -304,6 +304,21 @@ button,input,select,textarea{font-family:inherit;-webkit-appearance:none;appeara
 .sesh-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;flex-shrink:0}
 .sesh-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:6px}
 .sesh-loc{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+/* Speaker lines and tap-to-expand details, in the muted style of the location line */
+.sesh-ppl{font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:4px;overflow-wrap:anywhere}
+.sesh-card.dark .sesh-ppl{color:rgba(255,255,255,.9)}
+.sesh-more{display:block;min-height:44px;margin-top:4px;padding:10px 0;background:none;border:none;font:inherit;font-size:12px;font-weight:700;color:var(--navy);text-decoration:underline;text-align:left;cursor:pointer;touch-action:manipulation}
+.sesh-card.dark .sesh-more{color:#fff}
+.sesh-more:focus-visible{outline:2px solid currentColor;outline-offset:2px;border-radius:4px}
+.sesh-details{padding-top:10px;border-top:1px solid var(--border);font-size:13px;color:var(--text);line-height:1.45;overflow-wrap:anywhere}
+.sesh-card.dark .sesh-details{color:#fff;border-top-color:rgba(255,255,255,.35)}
+.sesh-desc{margin-bottom:6px}
+.sesh-grp{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:10px 0 4px}
+.sesh-card.dark .sesh-grp{color:rgba(255,255,255,.85)}
+.sesh-person{margin-bottom:8px}
+.sesh-person b{display:block;font-weight:700}
+.sesh-role{display:block;font-size:12px;color:var(--muted)}
+.sesh-card.dark .sesh-role{color:rgba(255,255,255,.9)}
 
 /* ── Overlays ── */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(4px);padding:10px}
@@ -526,6 +541,7 @@ const INTERESTS=[
   "Policy & Regulatory Insight",
   "Talent & Recruitment",
 ];
+// BEGIN schedule-data (loaded by fb-functions/test/schedule.test.js: keep it free of DOM and other globals)
 const SC={
   plenary:{bg:"#DBEAFE",c:"#1E40AF",dot:"#3B82F6"},
   panel:{bg:"#E0F2FE",c:"#075985",dot:"#0EA5E9"},
@@ -542,34 +558,143 @@ const SC={
 };
 const SCHEDULE=[
   {day:"MON 23 NOV 2026 · INFORMAL OPENING",dayShort:"Day 0",date:"Mon 23 Nov",sessions:[
-    {time:"19:00–22:00",title:"Welcome Reception",loc:"Garden & Reception Hall",type:"social"},
+    {time:"18:30–22:00",title:"Welcome Reception",loc:"Garden & Reception Hall",type:"social",people:[
+      {kind:"Speaker",name:"Heike Bergmann",role:"Senior Vice President Sales Africa, Voith Hydro and Vice Chair, Sub-Saharan Africa Initiative of German Business (SAFRI)"},
+      {kind:"Speaker",name:"Dr. Bärbel Kofler",role:"Parliamentary State Secretary, Federal Ministry for Economic Cooperation and Development, Germany"},
+      {kind:"Speaker",name:"Nathanael Liminski",role:"Head of the State Chancellery and Minister for Federal, European and International Affairs and the Media, North Rhine-Westphalia, Germany"},
+      {kind:"Speaker",name:"Hon. Samuel Okudzeto Ablakwa",role:"Minister of Foreign Affairs, Ghana"},
+      {kind:"Master of Ceremony",name:"Eddy Micah Jr.",role:"Editor and News Anchor, Deutsche Welle"},
+    ]},
   ]},
   {day:"TUE 24 NOV 2026 · DAY ONE",dayShort:"Day 1",date:"Tue 24 Nov",sessions:[
-    {time:"09:00",title:"Opening by VIP Speakers",loc:"Main Hall",type:"plenary"},
-    {time:"10:00",title:"The future of African German Business Relations in a changing world: More Opportunities than Challenges",loc:"Main Hall",type:"panel"},
-    {time:"11:00",title:"VIP Speaker: Business Key Note",loc:"Main Hall",type:"plenary"},
-    {time:"11:20",title:"Fireside Chat: How we can change the world — The perspective of young entrepreneurs from Africa and Germany",loc:"Main Hall",type:"fireside"},
-    {time:"12:00",title:"Lunch Break for all participants / Visit to the Startup Villages",loc:"Asana Bar & Restaurant",type:"lunch"},
-    {time:"14:00",title:"Africa in the World of Tomorrow — How is the continent preparing technologically for the future? Rapid digitalisation, AI and automation are reshaping global industry and power structures.",loc:"Main Hall",type:"panel"},
-    {time:"15:15",title:"How Can Africa's Resources Power the Next Era of Industrial Growth?",loc:"Main Hall",type:"panel"},
-    {time:"16:30",title:"Fireside Chat with VIP speaker",loc:"Main Hall",type:"fireside"},
-    {time:"17:00–18:00",title:"Transfer to the residence of the German Ambassador for a dinner reception (by invitation only)",loc:"German Ambassador Residence",type:"logistics"},
-    {time:"18:30",title:"Dinner Reception hosted by the German Ambassador",loc:"German Ambassador Residence",type:"social"},
+    {time:"09:00–09:40",title:"Welcome Remarks",loc:"Main Hall",type:"plenary",people:[
+      {kind:"Speaker",name:"Thomas Schäfer",role:"Chairman, Sub-Saharan Africa Initiative of German Business (SAFRI)"},
+      {kind:"Speaker",name:"Stefan Rouenhoff",role:"Parliamentary State Secretary, Federal Ministry for Economic Affairs and Energy, Germany"},
+      {kind:"Speaker",name:"Hon. Elizabeth Ofosu-Adjare",role:"Minister of Trade, Agribusiness and Industry, Ghana"},
+      {kind:"Master of Ceremony",name:"Eddy Micah Jr.",role:"Editor and News Anchor, Deutsche Welle"},
+    ]},
+    {time:"09:40–10:40",title:"The Future of African-German Business Relations in a Changing World: More Opportunities than Challenges",loc:"Main Hall",type:"panel",
+      desc:"As geopolitical rivalries intensify and global value chains are being redrawn, Africa is moving from the margins to the centre of strategic economic thinking. This panel explores how African and German leaders can turn this moment into stronger investment, industrialization and trade partnerships while navigating a more fragmented world economy.",
+      people:[
+      {kind:"Speaker",name:"Kader Olivier Coulibaly",role:"Board Member, DHL Express, Côte d’Ivoire"},
+      {kind:"Speaker",name:"Agnes Mwagiru",role:"Strategic Partnerships & Business Development Lead, Middle East & Africa – Siemens Healthineers"},
+      {kind:"Speaker",name:"Amina Mukalazi",role:"Minister of State for Privatization and Investment, Uganda"},
+      {kind:"Speaker",name:"Martina Engelhardt-Kopf",role:"Parliamentary State Secretary, Federal Ministry of Agriculture, Food and Regional Identity, Germany"},
+      {kind:"Facilitator",name:"Prof. Dr. Philipp von Carlowitz",role:"Strategic and International Management, ESB Business School"},
+    ]},
+    {time:"10:40–11:00",title:"High-Level Dialogue: Doing Business in Africa: What Does Business Need, and What Can Government Deliver?",loc:"Main Hall",type:"plenary",people:[
+      {kind:"Speaker",name:"John Steenhuisen",role:"Deputy Minister of Trade, Industry and Competition, South Africa"},
+      {kind:"Speaker",name:"Sabine Dall’Omo",role:"CEO Siemens Sub-Saharan Africa, Chairperson, German-African Business Association and Vice Chair, Sub-Saharan Africa Initiative of German Business (SAFRI)"},
+      {kind:"Master of Ceremony",name:"Eddy Micah Jr.",role:"Editor and News Anchor, Deutsche Welle"},
+    ]},
+    {time:"11:00–11:20",title:"Presidential Opening Addresses",loc:"Main Hall",type:"plenary",people:[
+      {kind:"Speaker",name:"Thomas Schäfer",role:"Chairman, Sub-Saharan Africa Initiative of German Business (SAFRI)"},
+      {kind:"Speaker",name:"H.E. Dr. Frank-Walter Steinmeier",role:"President of the Federal Republic of Germany"},
+      {kind:"Speaker",name:"H.E. John Dramani Mahama",role:"President of the Republic of Ghana"},
+      {kind:"Master of Ceremony",name:"Eddy Micah Jr.",role:"Editor and News Anchor, Deutsche Welle"},
+    ]},
+    {time:"11:20–12:00",title:"Fireside Chat: Start-ups Without Borders – Scaling to a New Continent",loc:"Main Hall",type:"fireside",
+      desc:"This fireside chat brings together founders with senior government representatives from Ghana and Germany to talk about what it takes to scale across continents. They will share breakthroughs, lessons learned, how to find reliable partners and capital, and to navigate different regulatory and business environments. Then two founders take the stage: one start-up from Ghana and one from Germany pitch solutions they are building to challenges our societies face today.",
+      people:[
+      {kind:"Speaker",name:"Dr. Bärbel Kofler",role:"Parliamentary State Secretary, Federal Ministry for Economic Cooperation and Development (BMZ), Germany"},
+      {kind:"Speaker",name:"Stefan Rouenhoff",role:"Parliamentary State Secretary, Federal Ministry for Economic Affairs and Energy (BMWE), Germany"},
+      {kind:"Speaker",name:"Oluwatosin Abdulsalam",role:"Head of Innovation, agriBIOME, Germany"},
+      {kind:"Speaker",name:"Samuel B. Opoku",role:"Co-Founder and Chief Operating Officer, Kutana Pay, Ghana"},
+      {kind:"Speaker",name:"Dr. Derrick Edem Akpalu",role:"Co-Founder and Chief Executive Officer, Revna Biosciences, Ghana"},
+      {kind:"Speaker",name:"Jana Heinemann",role:"Founder and Chief Executive Officer, IMPARI, Germany"},
+      {kind:"Facilitator",name:"Anna Sophie Herken",role:"Managing Director, Deutsche Gesellschaft für Internationale Zusammenarbeit (GIZ), Germany"},
+      {kind:"Facilitator",name:"Meike Neitz",role:"Founder, embassidy, Germany"},
+    ]},
+    {time:"12:00–14:00",title:"Lunch Break",loc:"Asana Bar & Restaurant",type:"lunch"},
+    {time:"14:00–15:00",title:"The AI Moment: Can Africa Seize the Opportunity?",loc:"Main Hall",type:"panel",
+      desc:"Rapid digitalization, artificial intelligence and automation are reshaping global industry and power structures. Africa’s role depends on digital infrastructure, skills and positioning in key value chains such as semiconductors, offering new partnership and investment opportunities for German industry.",
+      people:[
+      {kind:"Speaker",name:"Prof. Dr. Hubertus Bardt",role:"Managing Director, German Economic Institute (IW)"},
+      {kind:"Speaker",name:"Prof. Brando Okolo",role:"Head of Science, Technology and Innovation, African Union Development Agency-NEPAD"},
+      {kind:"Speaker",name:"Osman Issah",role:"Strategic Advisor - Digital Infrastructure, Programs and Scale-up Initiatives, Smart Africa"},
+      {kind:"Speaker",name:"Christian Ruckteschler",role:"Chief Operating Officer, AmaliTech"},
+      {kind:"Speaker",name:"Martina Vollmer",role:"Director Digital Business Development, Siemens"},
+      {kind:"Facilitator",name:"Wolfgang Niedermark",role:"Member of the Executive Board, Federation of German Industries (BDI)"},
+    ]},
+    {time:"15:15–16:15",title:"How Can Africa’s Resources Power the Next Era of Industrial Growth?",loc:"Main Hall",type:"panel",
+      desc:"This panel explores how Africa’s critical resources can drive local value creation, industrialization and resilient global supply chains. Leaders from business and government in Europe and Africa will discuss investment conditions, beneficiation and the partnerships needed to turn resource wealth into shared growth.",
+      people:[
+      {kind:"Speaker",name:"Stefan Rouenhoff",role:"Parliamentary State Secretary, Federal Ministry for Economic Affairs and Energy, Germany"},
+      {kind:"Speaker",name:"Stefan Müller",role:"CEO, Bravura Lithium GmbH and DGWA"},
+      {kind:"Speaker",name:"Hon. Amin Amidu Sulemani",role:"Commissioner for Infrastructure, Energy and Digitalisation, ECOWAS Commission (tbc)"},
+      {kind:"Speaker",name:"Sheila Khama",role:"Former CEO, De Beers Botswana; former World Bank and African Development Bank Adviser on Natural Resources Governance"},
+      {kind:"Facilitator",name:"Melanie Vogelbach",role:"Managing Director for International Economic Policy and Foreign Trade Law, German Chamber of Commerce and Industry (DIHK)"},
+    ]},
+    {time:"16:30–17:00",title:"Below the Surface: What Does It Take to Develop Mining Projects in Africa?",loc:"Main Hall",type:"fireside",
+      desc:"What does it take to turn mineral deposits into projects that create value, jobs and industrial capacity on the continent? Following the panel, this fireside chat draws on hands-on experience from the field.",
+      people:[
+      {kind:"Speaker",name:"Dr. Augusto Mavuvele",role:"Chief Geologist, Bravura"},
+      {kind:"Master of Ceremony",name:"Eddy Micah Jr.",role:"Editor and News Anchor, Deutsche Welle"},
+    ]},
+    {time:"17:00–18:00",title:"Transfer to the Residence of the German Ambassador for a Reception (By Invitation Only)",loc:"German Ambassador Residence",type:"logistics"},
+    {time:"18:30",title:"Reception at the Residence of the German Ambassador",loc:"German Ambassador Residence",type:"social"},
     {time:"21:30",title:"Transfer back to Hotels",loc:"Various Hotels",type:"logistics"},
   ]},
   {day:"WED 25 NOV 2026 · DAY TWO",dayShort:"Day 2",date:"Wed 25 Nov",sessions:[
-    {time:"08:00",title:"Breakfast Meeting with German Ambassadors in Africa and Investment Promotion Agencies from African countries",loc:"Garden / Asana Bar",type:"breakfast"},
-    {time:"09:30",title:"Trade Finance, Risk Mitigation and Investment: What Will it Take to Finance and Scale Trade, Trade and Growth Between Germany and Africa?",loc:"Main Hall",type:"panel"},
-    {time:"10:45",title:"New African-German Partnerships: Are the Rules Fit for Purpose?",loc:"Main Hall",type:"panel"},
-    {time:"12:00",title:"From Borders to Business: How AfCFTA shapes African Trade — Fireside Chat with VIP Speaker: AfCFTA",loc:"Main Hall",type:"fireside"},
-    {time:"12:30",title:"Lunch Break",loc:"Asana Bar & Restaurant & separate Board Room",type:"lunch"},
-    {time:"14:00",title:"German-African Automotive Panel: Tackling Growth Barriers, Creating Value",loc:"Main Hall",type:"panel"},
-    {time:"15:15",title:"Made in Africa — Made by Germany: German Investment on the Rise",loc:"Main Hall",type:"panel"},
-    {time:"16:30",title:"Closing Remarks and Farewell Drinks",loc:"Main Hall",type:"closing"},
+    {time:"09:30–10:30",title:"Trade Finance, Risk Mitigation and Investment: What Will It Take to Finance and Scale Trust, Trade and Growth Between Germany and Africa?",loc:"Main Hall",type:"panel",
+      desc:"Trade, investment and industrial partnerships between Germany and Africa are entering a new phase. Yet ambitious projects require more than political will; they require financing solutions that match the scale of opportunity. As public resources become more constrained, closer cooperation between private banks, export credit agencies, development finance institutions and African financial institutions is becoming increasingly important. How can trade finance, guarantees and risk-mitigation instruments be deployed more effectively to unlock investment? How can German and African institutions build complementary financing structures rather than parallel ones? And how can innovative partnerships between commercial, development and multilateral financiers strengthen trust and accelerate trade and investment between Germany and Africa?",
+      people:[
+      {kind:"Speaker",name:"Wola Asase",role:"Deputy Director, Head of Syndications, Africa Finance Corporation (AFC)"},
+      {kind:"Speaker",name:"Eva Miriam Fuchs",role:"Director, German Business and Connect Programmes, DEG"},
+      {kind:"Speaker",name:"Yewande Giwa",role:"Senior Country Officer, International Finance Corporation"},
+      {kind:"Speaker",name:"Ingo Schwutke",role:"Senior Underwriting Manager, Africa, Euler Hermes Aktiengesellschaft"},
+      {kind:"Speaker",name:"Dirk Besdziek",role:"Senior Trade Adviser, Commerzbank"},
+      {kind:"Speaker",name:"Anna Sophie Herken",role:"Managing Director, GIZ"},
+      {kind:"Facilitator",name:"Khadi Camara",role:"Deputy CEO, German-African Business Association (Afrika-Verein)"},
+    ]},
+    {time:"10:45–11:45",title:"New African-German Partnerships: Are the Rules Fit for Purpose?",loc:"Main Hall",type:"panel",
+      desc:"As German-African economic relations deepen and new partnerships emerge, one question is becoming increasingly urgent: are existing legal and regulatory frameworks still fit for purpose? From investment conditions and trade facilitation to local value creation, market access and supply-chain regulation, businesses on both continents face growing expectations, but also persistent barriers. This panel brings together policymakers and business leaders to discuss how regulatory frameworks can enable rather than hinder partnerships, strengthen certainty, and create the conditions for sustainable growth and resilient supply chains.",
+      people:[
+      {kind:"Speaker",name:"Rasmus Woermann",role:"Managing Partner, C. Woermann GmbH & Co. KG and Vice Chair, Sub-Saharan Africa Initiative of German Business (SAFRI)"},
+      {kind:"Speaker",name:"Dr. Andrea Hauser",role:"Head of the Africa and Latin America Department, KfW Development Bank"},
+      {kind:"Speaker",name:"Emmanuel Ampadu",role:"COO and Co-Founder, Pure and Just Food"},
+      {kind:"Speaker",name:"Yvonne Aki-Sawyerr",role:"Mayor of Freetown (Sierra Leone) and Laureate of the German Africa Prize 2024"},
+      {kind:"Facilitator",name:"Marcus Schwenke",role:"Head of Foreign Trade Policy, Federation of German Wholesale, Foreign Trade and Services, BGA"},
+      {kind:"Facilitator",name:"Dr. Julia Bellinghausen",role:"Head of the Import Promotion Desk, IPD"},
+    ]},
+    {time:"12:00–14:00",title:"Lunch Break",loc:"Asana Bar & Restaurant & separate Board Room",type:"lunch"},
+    {time:"14:00–15:00",title:"German-African Automotive Panel: Tackling Growth Barriers, Creating Value",loc:"Main Hall",type:"panel",
+      desc:"Automotive is a heavyweight of German-African trade and industrial cooperation and a key sector for investment, and value creation across the continent. A critical window of opportunity opens as rules for intra-African automotive trade evolve, integrated regional value chains develop, and e-mobility creates new entry points for African manufacturers. Can Germany and African countries shape the next generation of automotive value chains, create intra-African supply lines and deepen EU-African markets? Business leaders, policy makers and development cooperation experts discuss.",
+      people:[
+      {kind:"Speaker",name:"Katharina Stasch",role:"Director-General for Global Alliances, European Union and Economic Development, Federal Ministry for Economic Cooperation and Development (BMZ), Germany"},
+      {kind:"Speaker",name:"Eugenia Ingabire",role:"Trade Policy Officer, Private Sector Unit (PSU), AfCFTA Secretariat"},
+      {kind:"Speaker",name:"Jeffrey Peprah",role:"Chief Executive Officer, Volkswagen Ghana"},
+      {kind:"Speaker",name:"Lamia Fourati",role:"Chief Strategy Officer Onetech Group & Vice President Tunisian Automotive Association (TAA)"},
+      {kind:"Speaker",name:"Victoria Backhaus-Jerling",role:"Chief Executive Officer, African Association of Automotive Manufacturers (AAAM)"},
+      {kind:"Facilitator",name:"Marius Ochel",role:"Team Lead Division Foreign Trade & Customs, German Association of the Automotive Industry (VDA)"},
+    ]},
+    {time:"15:15–16:15",title:"Investment Showcase: Made in Africa – Made by Germany: German Investment on the Rise",loc:"Main Hall",type:"panel",
+      desc:"Africa’s investment story is increasingly being written on factory floors, along logistics corridors and in innovation hubs rather than in strategy papers. This session brings together companies and institutions presenting tangible investment opportunities and ongoing projects, showcasing where German business is already expanding its footprint and where the next waves of growth are likely to emerge.",
+      people:[
+      {kind:"Facilitator",name:"Dr. Volker Treier",role:"Member of the Executive Board, German Chamber of Commerce and Industry (DIHK)"},
+      {kind:"Facilitator",name:"Simon Madjie",role:"CEO, Ghana Investment Promotion Centre"},
+    ]},
+    {time:"16:30–17:00",title:"Closing Remarks",loc:"Main Hall",type:"closing",people:[
+      {kind:"Speaker",name:"Dr. Michael Blank",role:"Delegate of German Industry and Commerce in Ghana, AHK Ghana"},
+    ]},
     {time:"17:30",title:"Buses leaving for Moevenpick Hotel",loc:"Moevenpick Hotel",type:"logistics"},
     {time:"19:00",title:"educataGhana Kickoff (see separate programme)",loc:"Moevenpick Hotel / Piazza",type:"social"},
   ]},
 ];
+// A session's people grouped by kind in a fixed order. Entries without a known kind or a name are left out.
+const SESSION_KINDS=[["Speaker","Speakers"],["Facilitator","Facilitators"],["Master of Ceremony","Master of Ceremony"]];
+function sessionGroups(people){
+  const list=Array.isArray(people)?people.filter(p=>p&&typeof p.name==="string"&&p.name.trim()):[];
+  return SESSION_KINDS.map(([kind,plural])=>{
+    const ps=list.filter(p=>p.kind===kind);
+    return{kind,label:ps.length===1?kind:plural,people:ps};
+  }).filter(g=>g.people.length);
+}
+// Collapsed card lines: names only, one line per group, e.g. "Speakers: A, B". Plain text: escape before use.
+function sessionNameLines(people){
+  return sessionGroups(people).map(g=>`${g.label}: ${g.people.map(p=>p.name.trim()).join(", ")}`);
+}
+// END schedule-data
 
 // ── State ──────────────────────────────────────────────────────────────────
 let me=null;try{const s=localStorage.getItem("gabs_me");if(s)me=JSON.parse(s);}catch(e){}
@@ -930,6 +1055,20 @@ function validateEdit(newText,oldText,maxLen){
   if(t===(typeof oldText==="string"?oldText.trim():""))return"unchanged";
   if(Number.isFinite(maxLen)&&t.length>maxLen)return"toolong";
   return"ok";
+}
+// A stored programme time ("09:00" or "09:00–09:40", 24-hour) as 12-hour display text: "9:00 am", "9:00 – 9:40 am",
+// "11:00 am – 12:00 pm". Anything that does not parse comes back unchanged; never throws. Plain text: escape before use.
+function schedTime12(raw){
+  if(typeof raw!=="string")return raw;
+  const m=/^(\d{2}):(\d{2})(?:–(\d{2}):(\d{2}))?$/.exec(raw);
+  if(!m)return raw;
+  const part=(h,mi)=>{const H=Number(h),M=Number(mi);return H<=23&&M<=59?{t:`${H%12||12}:${mi}`,ap:H<12?"am":"pm"}:null;};
+  const a=part(m[1],m[2]);
+  if(!a)return raw;
+  if(m[3]===undefined)return`${a.t} ${a.ap}`;
+  const b=part(m[3],m[4]);
+  if(!b)return raw;
+  return a.ap===b.ap?`${a.t} – ${b.t} ${b.ap}`:`${a.t} ${a.ap} – ${b.t} ${b.ap}`;
 }
 // END safe-helpers
 
@@ -1478,6 +1617,8 @@ document.addEventListener("click",e=>{
   if(sb){handleSettingsAction(sb);return;}
   const ann=e.target&&e.target.closest&&e.target.closest("[data-ann-all],[data-ann-dismiss]");
   if(ann){if(ann.dataset.annDismiss)dismissAnnouncement(ann.dataset.annDismiss);else showAnnouncementsSheet();return;}
+  const st=e.target&&e.target.closest&&e.target.closest("[data-sesh-toggle]");
+  if(st){toggleSessionDetails(st);return;}
   const btn=e.target&&e.target.closest&&e.target.closest("[data-cal]");
   if(!btn||!me)return;
   const m=myMeetings.find(x=>x.id===btn.dataset.id);
@@ -2778,7 +2919,7 @@ async function handlePushAction(btn){
 }
 
 // ── Settings sheet (the gear in the bottom bar) ─────────────────────────────
-const APP_VERSION=32; // Must match CACHE_NAME in sw.js: update them together on every release
+const APP_VERSION=33; // Must match CACHE_NAME in sw.js: update them together on every release
 // Put together at runtime so the addresses never appear whole in the source
 const supportAddress=()=>["douglas.amesinu","@","ghana.ahk.de"].join("");
 const deletionAddress=()=>"flurina.graf"+"@"+"ghana.ahk.de";
@@ -3569,15 +3710,37 @@ function renderSchedule(){
         const dotC=typeColors[s.type]||"#9CA3AF";
         return`<div class="sesh-card ${isDark?"dark":"light"}">
           <div class="sesh-top">
-            <span class="sesh-time">${esc(s.time)}</span>
+            <span class="sesh-time">${esc(schedTime12(s.time))}</span>
             <span class="sesh-badge" style="background:${badgeBg};color:${badgeC}"><span style="width:7px;height:7px;border-radius:50%;background:${dotC};display:inline-block"></span>${esc(s.type)}</span>
           </div>
           <div class="sesh-title">${esc(s.title)}</div>
+          ${sessionNameLines(s.people).map(line=>`<div class="sesh-ppl">${esc(line)}</div>`).join("")}
           <div class="sesh-loc">📍 ${esc(s.loc)}</div>
+          ${sessionDetailsHTML(s,`sesh-d-${schedDay}-${si}`)}
         </div>`;
       }).join("")}
     </div>
   </div>`;
+}
+// The "Show roles and details" button and its hidden panel; nothing for a session with no people and no description.
+// Every field goes through esc(). Open or closed lives only in the DOM: a re-render closes it again.
+function sessionDetailsHTML(s,id){
+  const desc=typeof s.desc==="string"?s.desc.trim():"";
+  const groups=sessionGroups(s.people);
+  if(!desc&&!groups.length)return"";
+  return`<button type="button" class="sesh-more" data-sesh-toggle="1" aria-expanded="false" aria-controls="${esc(id)}">Show roles and details</button>
+          <div class="sesh-details" id="${esc(id)}" hidden>
+            ${desc?`<div class="sesh-desc">${esc(desc)}</div>`:""}
+            ${groups.map(g=>`<div class="sesh-grp">${esc(g.label)}</div>${g.people.map(p=>`<div class="sesh-person"><b>${esc(p.name.trim())}</b>${typeof p.role==="string"&&p.role.trim()?`<span class="sesh-role">${esc(p.role.trim())}</span>`:""}</div>`).join("")}`).join("")}
+          </div>`;
+}
+function toggleSessionDetails(btn){
+  const panel=document.getElementById(btn.getAttribute("aria-controls")||"");
+  if(!panel)return;
+  const open=btn.getAttribute("aria-expanded")!=="true";
+  btn.setAttribute("aria-expanded",open?"true":"false");
+  panel.hidden=!open;
+  btn.textContent=open?"Hide details":"Show roles and details";
 }
 
 function bindSchedule(){
