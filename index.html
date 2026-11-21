@@ -1070,6 +1070,38 @@ function schedTime12(raw){
   if(!b)return raw;
   return a.ap===b.ap?`${a.t} – ${b.t} ${b.ap}`:`${a.t} ${a.ap} – ${b.t} ${b.ap}`;
 }
+// Announcement body as HTML: every text piece through esc(), each lowercase https:// address as a link that opens
+// in a new tab. The raw text is split first, then each piece escaped, so & inside an address stays one &.
+// An address ends at whitespace or < > " ' `; trailing . , ; : ! ? and unmatched ) ] } are left outside it.
+// Only addresses up to 2000 characters that safeUrl accepts (no user:password) are linked; the rest stays text.
+const ANN_URL_MAX=2000;
+function annTrimUrl(u){
+  const pairs={")":"(","]":"[","}":"{"};
+  const count=(s,c)=>s.split(c).length-1;
+  for(;;){
+    const last=u.slice(-1);
+    if(".,;:!?".includes(last)&&last)u=u.slice(0,-1);
+    else if(pairs[last]&&count(u,pairs[last])<count(u,last))u=u.slice(0,-1);
+    else return u;
+  }
+}
+function annLinkify(raw){
+  if(raw===null||raw===undefined)return"";
+  const s=String(raw);
+  const re=/https:\/\/[^\s<>"'`]+/g;
+  let out="",last=0,m;
+  while((m=re.exec(s))!==null){
+    const start=m.index;
+    // Not in the middle of a word, e.g. "xhttps://..." stays text
+    if(start>0&&/[A-Za-z0-9]/.test(s[start-1]))continue;
+    const url=annTrimUrl(m[0]);
+    if(url.length<=8||url.length>ANN_URL_MAX||!safeUrl(url,{protocols:["https:"]}))continue;
+    out+=esc(s.slice(last,start))+`<a class="ann-url" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`;
+    last=start+url.length;
+    re.lastIndex=last;
+  }
+  return out+esc(s.slice(last));
+}
 // END safe-helpers
 
 
