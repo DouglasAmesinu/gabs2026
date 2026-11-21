@@ -15,13 +15,13 @@ function loadHelpers() {
   assert.ok(start > -1 && end > start, "safe-helpers markers not found in index.html");
   const block = html.slice(start, end);
   // eslint-disable-next-line no-new-func
-  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle, canEditMessage, messageView, previewText, validateEdit };`)();
+  return new Function(`${block}\nreturn { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine, profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn, classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle, canEditMessage, messageView, previewText, validateEdit, annLinkify };`)();
 }
 
 const { esc, safeId, safeUrl, safePhoto, clip, parseTicketHash, parseChatHash, clampBadge, isAnnouncementsHash, soundFor, mailtoLink, notifLine,
   profileLine, gapFor, lowerBarFor, shouldRegisterAtSignIn, shouldRefreshPush, LIMITS, fieldErrors, counterFor, tidyLinkedIn,
   classifySaveError, lightboxPhoto, orderMixed, pageSlice, newSessionSeed, shouldReshuffle, canEditMessage, messageView,
-  previewText, validateEdit } = loadHelpers();
+  previewText, validateEdit, annLinkify } = loadHelpers();
 
 const IMG_ONERROR = '"><img src=x onerror=alert(1)>';
 const SQ_HANDLER = "' onmouseover='alert(1)";
@@ -913,4 +913,102 @@ test("validateEdit: every outcome", () => {
   for (const old of [null, undefined, 5, {}]) assert.equal(validateEdit("new", old, 2000), "ok", `old ${String(old)}`);
   for (const max of [undefined, null, NaN, "10", Infinity]) assert.equal(validateEdit("x".repeat(50), "old", max), "ok", `max ${String(max)}`);
   assert.equal(validateEdit(IMG_ONERROR, "old", 2000), "ok");
+});
+
+// annLinkify: announcement body text -> HTML with https:// addresses as links
+const annA = (href, text = href) => `<a class="ann-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
+const unHtml = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#96;/g, "`").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const annHrefs = (html) => [...html.matchAll(/<a class="ann-url" href="([^"]*)"/g)].map((m) => m[1]);
+const annTexts = (html) => [...html.matchAll(/<a [^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
+
+test("annLinkify a: a plain https address becomes a new-tab anchor", () => {
+  const out = annLinkify("Register at https://example.com/register today");
+  assert.equal(out, `Register at ${annA("https://example.com/register")} today`);
+  assert.match(out, / target="_blank" rel="noopener noreferrer"/);
+});
+
+test("annLinkify b: a Google Forms address keeps every & as one escaped &", () => {
+  const url = "https://docs.google.com/forms/d/e/1FAIpQLSdExample/viewform?usp=pp_url&entry.123=A&entry.456=B";
+  const out = annLinkify(`Feedback: ${url}`);
+  assert.equal(out, `Feedback: ${annA(url)}`);
+  const [href] = annHrefs(out);
+  assert.equal((href.match(/&amp;/g) || []).length, 2);
+  assert.equal((href.match(/&/g) || []).length, 2, "no &amp;amp; and no bare &");
+  assert.equal(unHtml(href), url);
+  assert.equal(unHtml(annTexts(out)[0]), url, "visible text is the address as typed");
+});
+
+test("annLinkify c: forms.gle short links work", () => {
+  assert.equal(annLinkify("https://forms.gle/AbC123"), annA("https://forms.gle/AbC123"));
+});
+
+test("annLinkify d: trailing . , ! ? ; : stay outside the link", () => {
+  for (const p of [".", ",", "!", "?", ";", ":", "?!", "..."]) {
+    assert.equal(annLinkify(`Go to https://example.com/a${p} now`), `Go to ${annA("https://example.com/a")}${esc(p)} now`, p);
+  }
+  assert.equal(annLinkify("https://example.com/a?b=1."), `${annA("https://example.com/a?b=1")}.`, "a ? inside the address stays");
+});
+
+test("annLinkify e: unmatched closing brackets stay outside, matched ones stay inside", () => {
+  assert.equal(annLinkify("(see https://example.com/a)"), `(see ${annA("https://example.com/a")})`);
+  assert.equal(annLinkify("(see https://example.com/a)."), `(see ${annA("https://example.com/a")}).`);
+  assert.equal(annLinkify("https://en.wikipedia.org/wiki/Foo_(bar)"), annA("https://en.wikipedia.org/wiki/Foo_(bar)"));
+  assert.equal(annLinkify("[https://example.com/x]"), `[${annA("https://example.com/x")}]`);
+  assert.equal(annLinkify("{https://example.com/x}"), `{${annA("https://example.com/x")}}`);
+});
+
+test("annLinkify f: two links in one body, text between them escaped", () => {
+  const out = annLinkify("A https://a.example/1 & <b> https://b.example/2 end");
+  assert.equal(out, `A ${annA("https://a.example/1")} &amp; &lt;b&gt; ${annA("https://b.example/2")} end`);
+  assert.equal(annHrefs(out).length, 2);
+});
+
+test("annLinkify g: anything other than lowercase https:// with an address stays plain text", () => {
+  for (const s of ["www.example.com", "example.com", "http://example.com", "javascript:alert(1)", "mailto:a@b.c",
+    "data:text/html,x", "https://", "https:// example.com", "HTTPS://example.com", "Https://example.com",
+    "xhttps://example.com", "https://user:pass@example.com/", "https://.", "see https://!"]) {
+    assert.equal(annLinkify(s), esc(s), s);
+    assert.doesNotMatch(annLinkify(s), /<a /, s);
+  }
+});
+
+test("annLinkify h: HTML in the text is escaped and a quote ends the address", () => {
+  const out1 = annLinkify("<script>alert(1)</script> https://example.com");
+  assert.equal(out1, `&lt;script&gt;alert(1)&lt;/script&gt; ${annA("https://example.com")}`);
+  assert.equal((out1.match(/<a /g) || []).length, 1);
+  assert.doesNotMatch(out1, /<script/);
+
+  const out2 = annLinkify('https://example.com/a"onmouseover="x');
+  assert.equal(out2, `${annA("https://example.com/a")}&quot;onmouseover=&quot;x`);
+  assert.doesNotMatch(out2, /"onmouseover/, "no attribute breakout");
+  for (const q of ["'", "`", "<", ">"]) {
+    const out = annLinkify(`https://example.com/a${q}b`);
+    assert.equal(out, `${annA("https://example.com/a")}${esc(q)}b`, q);
+  }
+  // The only tags in any output are the anchors the helper builds
+  for (const s of [IMG_ONERROR, SQ_HANDLER, SCRIPT_BREAK, `https://example.com/${IMG_ONERROR}`]) {
+    const tags = annLinkify(s).match(/<[^>]*>/g) || [];
+    for (const t of tags) assert.match(t, /^(<a class="ann-url" href="[^"<>]*" target="_blank" rel="noopener noreferrer">|<\/a>)$/, t);
+  }
+});
+
+test("annLinkify i: an address longer than 2000 characters stays plain text", () => {
+  const long = "https://example.com/" + "a".repeat(2001 - 20);
+  assert.equal(long.length, 2001);
+  assert.equal(annLinkify(`x ${long} y`), esc(`x ${long} y`));
+  const ok = "https://example.com/" + "a".repeat(2000 - 20);
+  assert.equal(annLinkify(ok), annA(ok), "exactly 2000 is still linked");
+});
+
+test("annLinkify j: empty, null and undefined give an empty string", () => {
+  assert.equal(annLinkify(""), "");
+  assert.equal(annLinkify(null), "");
+  assert.equal(annLinkify(undefined), "");
+});
+
+test("annLinkify k: newlines are kept exactly as esc() kept them", () => {
+  const plain = "Line one\nLine two\r\n\nLine four";
+  assert.equal(annLinkify(plain), esc(plain));
+  assert.equal(annLinkify("Form:\nhttps://forms.gle/AbC123\nThanks"), `Form:\n${annA("https://forms.gle/AbC123")}\nThanks`);
+  assert.equal(annLinkify("https://a.example/x\n\nhttps://b.example/y"), `${annA("https://a.example/x")}\n\n${annA("https://b.example/y")}`);
 });
