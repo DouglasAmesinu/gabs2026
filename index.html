@@ -353,6 +353,8 @@ html.ios-home.ios-low #profile-bar .settings-pill svg{width:15px;height:15px}
 .ann-card .ann-body{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
 .ann-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--muted)}
 .ann-link{background:none;border:none;padding:4px 0;font:inherit;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer}
+/* Links in announcement bodies (annLinkify): long addresses wrap instead of widening the card */
+.ann-url{color:var(--navy);text-decoration:underline;font-size:inherit;overflow-wrap:anywhere;word-break:break-word}
 .ann-x{position:absolute;top:4px;right:4px;width:36px;height:36px;border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:8px}
 .ann-item{padding:14px 0;border-bottom:1px solid var(--border)}
 .ann-item:last-child{border-bottom:none}
@@ -1635,6 +1637,8 @@ document.addEventListener("keydown",e=>{
 });
 // Schedule's My Meetings calendar buttons and profile targets: one delegated listener, URLs built at click time
 document.addEventListener("click",e=>{
+  // A link in an announcement body opens in a new tab and does nothing else here
+  if(e.target&&e.target.closest&&e.target.closest("a.ann-url"))return;
   const ma=e.target&&e.target.closest&&e.target.closest("[data-msg-act]");
   if(ma){handleMsgAct(ma);return;}
   const mb=e.target&&e.target.closest&&e.target.closest("[data-msg-id]");
@@ -2615,7 +2619,7 @@ function annCardHTML(){
     <button class="ann-x" data-ann-dismiss="${esc(a.id)}" aria-label="Dismiss announcement">✕</button>
     <div class="ann-eyebrow">📢 Announcement</div>
     <div class="ann-title">${esc(a.title)}</div>
-    ${a.body?`<div class="ann-body">${esc(a.body)}</div>`:""}
+    ${a.body?`<div class="ann-body">${annLinkify(a.body)}</div>`:""}
     <div class="ann-meta"><span>${esc(fmtAnnTime(a.createdMs))}</span><button class="ann-link" data-ann-all="1">See all</button></div>
   </div>`;
 }
@@ -2625,7 +2629,7 @@ function annListHTML(){
   return list.map(a=>`<div class="ann-item">
     ${a.pinned?`<div class="ann-eyebrow">📌 Pinned</div>`:""}
     <div class="ann-title">${esc(a.title)}</div>
-    ${a.body?`<div class="ann-body">${esc(a.body)}</div>`:""}
+    ${a.body?`<div class="ann-body">${annLinkify(a.body)}</div>`:""}
     <div class="ann-meta"><span>${esc(fmtAnnTime(a.createdMs))}</span></div>
   </div>`).join("");
 }
