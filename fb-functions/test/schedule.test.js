@@ -177,6 +177,16 @@ test("f: tbc only on Sulemani's role, no Residency, Dr Augusto or Mr. names, and
   assert.equal(s.people.length, 5);
 });
 
+test("Tuesday 16:30 fireside: exact title, one Speaker, one Facilitator, no Master of Ceremony", () => {
+  const s = dayByDate("Tue 24 Nov").sessions.find((x) => x.time.startsWith("16:30"));
+  assert.ok(s, "no Tuesday session at 16:30");
+  assert.equal(s.title, "Fireside Chat: Below the Surface – What Does It Take to Develop Mining Projects in Africa?");
+  assert.ok(!s.title.includes("Below the Surface:"), "title still has Below the Surface: with a colon");
+  assert.deepEqual(s.people.filter((p) => p.kind === "Speaker").map((p) => p.name), ["Dr. Augusto Mavuvele"]);
+  assert.deepEqual(s.people.filter((p) => p.kind === "Facilitator").map((p) => p.name), ["Selleen Sewpershad"]);
+  assert.equal(s.people.filter((p) => p.kind === "Master of Ceremony").length, 0);
+});
+
 test("both lunch sessions are titled exactly Lunch Break", () => {
   const lunches = SCHEDULE.flatMap((d) => d.sessions.filter((s) => s.type === "lunch").map((s) => [d.date, s]));
   assert.deepEqual(lunches.map(([date, s]) => `${date} ${s.time}`), ["Tue 24 Nov 12:00–14:00", "Wed 25 Nov 12:00–14:00"]);
